@@ -9,7 +9,7 @@ from planetarble.acquisition import (
 from planetarble.core import AssetManifest, AssetSource, ProcessingConfig, TileMetadata
 from planetarble.packaging import PackagingManager
 from planetarble.processing import DataProcessor, ProcessingManager
-from planetarble.tiling import TileGenerator
+from planetarble.tiling import TileGenerator, TilingManager
 
 __all__ = [
     "AcquisitionManager",
@@ -21,6 +21,7 @@ __all__ = [
     "ProcessingManager",
     "DownloadManager",
     "TileGenerator",
+    "TilingManager",
     "PackagingManager",
     "ProcessingConfig",
     "TileMetadata",

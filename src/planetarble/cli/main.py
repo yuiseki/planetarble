@@ -9,8 +9,11 @@ from typing import Iterable
 
 from planetarble.acquisition import AcquisitionManager
 from planetarble.config import load_config
+from planetarble.core.models import TileMetadata
 from planetarble.logging import configure_logging, get_logger
+from planetarble.packaging import PackagingManager
 from planetarble.processing import ProcessingManager
+from planetarble.tiling import TilingManager
 
 LOGGER = get_logger(__name__)
 
@@ -63,6 +66,56 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print commands without executing them",
     )
+
+    tile = subcommands.add_parser("tile", help="Generate MBTiles output")
+    tile.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Path to pipeline configuration file (YAML or JSON)",
+    )
+    tile.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print tiling commands without executing",
+    )
+    tile.add_argument(
+        "--max-zoom",
+        type=int,
+        default=None,
+        help="Override maximum zoom level",
+    )
+    tile.add_argument(
+        "--tile-format",
+        choices=["JPEG", "WEBP"],
+        default=None,
+        help="Override tile image format",
+    )
+    tile.add_argument(
+        "--quality",
+        type=int,
+        default=None,
+        help="Override tile encoding quality",
+    )
+
+    package = subcommands.add_parser("package", help="Create PMTiles distribution")
+    package.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Path to pipeline configuration file (YAML or JSON)",
+    )
+    package.add_argument(
+        "--pmtiles-name",
+        type=str,
+        default=None,
+        help="Filename for the PMTiles archive (defaults to world_<year>.pmtiles)",
+    )
+    package.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print packaging commands without executing",
+    )
     return parser
 
 
@@ -76,6 +129,8 @@ def main(argv: Iterable[str] | None = None) -> int:
         return _handle_acquire(args)
     if args.command == "process":
         return _handle_process(args)
+    if args.command == "tile":
+        return _handle_tile(args)
     parser.error("Unknown command")
     return 1
 
@@ -148,6 +203,106 @@ def _handle_process(args: argparse.Namespace) -> int:
         "hillshade": str(hillshade),
         "masks": str(masks_dir),
         "cog": str(cog_path),
+    })
+    return 0
+
+
+def _handle_tile(args: argparse.Namespace) -> int:
+    config_path = _resolve_config_path(args.config)
+    cfg = load_config(config_path)
+
+    if args.max_zoom is not None:
+        cfg.processing.max_zoom = args.max_zoom
+    if args.tile_format is not None:
+        cfg.processing.tile_format = args.tile_format
+    if args.quality is not None:
+        cfg.processing.tile_quality = args.quality
+
+    manager = TilingManager(
+        cfg.processing,
+        temp_dir=cfg.temp_dir,
+        output_dir=cfg.output_dir,
+        dry_run=args.dry_run,
+    )
+
+    processing_dir = (cfg.output_dir / "processing").resolve()
+    if not processing_dir.exists():
+        raise SystemExit(f"Processing directory not found: {processing_dir}")
+
+    source_candidates = sorted(processing_dir.glob("*_normalized_cog.tif"))
+    if not source_candidates:
+        raise SystemExit("No normalized COG raster found; run the process stage first")
+    source_raster = source_candidates[0]
+
+    reprojected = manager.reproject_to_webmercator(source_raster)
+    mbtiles_path = manager.create_mbtiles(reprojected)
+
+    LOGGER.info("tiling outputs", extra={
+        "source": str(source_raster),
+        "reprojected": str(reprojected),
+        "mbtiles": str(mbtiles_path),
+    })
+    return 0
+
+
+def _handle_package(args: argparse.Namespace) -> int:
+    config_path = _resolve_config_path(args.config)
+    cfg = load_config(config_path)
+
+    tiling_dir = (cfg.output_dir / "tiling").resolve()
+    if not tiling_dir.exists():
+        raise SystemExit(f"Tiling directory not found: {tiling_dir}")
+    mbtiles_candidates = sorted(tiling_dir.glob("*.mbtiles"))
+    if not mbtiles_candidates:
+        raise SystemExit("No MBTiles archive found; run the tile stage first")
+    mbtiles_path = mbtiles_candidates[0]
+
+    pmtiles_name = args.pmtiles_name or f"world_{cfg.processing.gebco_year}.pmtiles"
+    pmtiles_destination = tiling_dir / pmtiles_name
+
+    packaging = PackagingManager(dry_run=args.dry_run)
+    pmtiles_path = packaging.convert_to_pmtiles(mbtiles_path, destination=pmtiles_destination)
+
+    metadata = TileMetadata(
+        name=f"Planetarble {cfg.processing.gebco_year}",
+        description="Global basemap composed from NASA BMNG and GEBCO bathymetry.",
+        version=str(cfg.processing.gebco_year),
+        bounds=(-180.0, -85.0511, 180.0, 85.0511),
+        center=(0.0, 0.0, 2),
+        minzoom=0,
+        maxzoom=cfg.processing.max_zoom,
+        attribution=(
+            "Imagery: NASA Blue Marble (2004). Bathymetry: GEBCO 2024. "
+            "Masks: Natural Earth 10m."
+        ),
+        format=cfg.processing.tile_format,
+    )
+    tilejson_path = packaging.generate_tilejson(pmtiles_path, metadata)
+
+    manifest_path = (cfg.output_dir / "MANIFEST.json").resolve()
+    license_text = (
+        "Planetarble Distribution\n\n"
+        "Data Sources:\n"
+        "- NASA Blue Marble Next Generation (2004).\n"
+        "- GEBCO 2024 Global Bathymetry Grid.\n"
+        "- Natural Earth 1:10m land/ocean/coastline layers.\n\n"
+        "Attribution:\n"
+        "Imagery © NASA Earth Observatory. Bathymetry courtesy of GEBCO Compilation Group. "
+        "Natural Earth data is in the public domain."
+    )
+    package_dir = packaging.create_distribution_package(
+        pmtiles_path,
+        tilejson_path=tilejson_path,
+        manifest_path=manifest_path,
+        license_text=license_text,
+        destination=cfg.output_dir / "distribution",
+    )
+
+    LOGGER.info("packaging outputs", extra={
+        "mbtiles": str(mbtiles_path),
+        "pmtiles": str(pmtiles_path),
+        "tilejson": str(tilejson_path),
+        "distribution": str(package_dir),
     })
     return 0
 

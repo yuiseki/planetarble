@@ -32,6 +32,12 @@ planetarble process --config configs/base/pipeline.yaml
 
 # preview commands without executing
 planetarble process --config configs/base/pipeline.yaml --dry-run
+
+# generate MBTiles pyramid (requires gdal_translate/gdaladdo)
+planetarble tile --config configs/base/pipeline.yaml
+
+# convert to PMTiles and assemble distribution bundle (requires pmtiles CLI)
+planetarble package --config configs/base/pipeline.yaml
 ```
 
 The default configuration stores raw data in `data/`, temporary artifacts in `tmp/`, and final outputs in `output/`. Adjust paths and parameters by copying `configs/base/pipeline.yaml` and editing as needed. Expect roughly 4.5 GB of downloads on the first run (BMNG 500 m panels, GEBCO netCDF, Natural Earth archives); on an 80 Mbps connection the acquisition step typically completes in about 10 minutes.

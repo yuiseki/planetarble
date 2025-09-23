@@ -1,0 +1,119 @@
+version: 1
+assets:
+  bmng_2004_aug_500m_a1:
+    name: Blue Marble Next Generation (Aug 2004, 500m, panel A1)
+    description: Upper-left panel of the BMNG August 2004 topo+bathy composite (500 m).
+    urls:
+      - https://neo.gsfc.nasa.gov/archive/bluemarble/bmng/world_500m/world.topo.bathy.200408.3x21600x21600.A1_geo.tif
+    destination: bmng/500m/world.topo.bathy.200408.A1_geo.tif
+    license: "NASA Earth Observatory — credit NASA"
+    attribution: "Image courtesy NASA Earth Observatory"
+    media_type: raster
+  bmng_2004_aug_500m_a2:
+    name: Blue Marble Next Generation (Aug 2004, 500m, panel A2)
+    description: Lower-left panel of the BMNG August 2004 topo+bathy composite (500 m).
+    urls:
+      - https://neo.gsfc.nasa.gov/archive/bluemarble/bmng/world_500m/world.topo.bathy.200408.3x21600x21600.A2_geo.tif
+    destination: bmng/500m/world.topo.bathy.200408.A2_geo.tif
+    license: "NASA Earth Observatory — credit NASA"
+    attribution: "Image courtesy NASA Earth Observatory"
+    media_type: raster
+  bmng_2004_aug_500m_b1:
+    name: Blue Marble Next Generation (Aug 2004, 500m, panel B1)
+    description: Upper-left center panel of the BMNG August 2004 topo+bathy composite (500 m).
+    urls:
+      - https://neo.gsfc.nasa.gov/archive/bluemarble/bmng/world_500m/world.topo.bathy.200408.3x21600x21600.B1_geo.tif
+    destination: bmng/500m/world.topo.bathy.200408.B1_geo.tif
+    license: "NASA Earth Observatory — credit NASA"
+    attribution: "Image courtesy NASA Earth Observatory"
+    media_type: raster
+  bmng_2004_aug_500m_b2:
+    name: Blue Marble Next Generation (Aug 2004, 500m, panel B2)
+    description: Lower-left center panel of the BMNG August 2004 topo+bathy composite (500 m).
+    urls:
+      - https://neo.gsfc.nasa.gov/archive/bluemarble/bmng/world_500m/world.topo.bathy.200408.3x21600x21600.B2_geo.tif
+    destination: bmng/500m/world.topo.bathy.200408.B2_geo.tif
+    license: "NASA Earth Observatory — credit NASA"
+    attribution: "Image courtesy NASA Earth Observatory"
+    media_type: raster
+  bmng_2004_aug_500m_c1:
+    name: Blue Marble Next Generation (Aug 2004, 500m, panel C1)
+    description: Upper-right center panel of the BMNG August 2004 topo+bathy composite (500 m).
+    urls:
+      - https://neo.gsfc.nasa.gov/archive/bluemarble/bmng/world_500m/world.topo.bathy.200408.3x21600x21600.C1_geo.tif
+    destination: bmng/500m/world.topo.bathy.200408.C1_geo.tif
+    license: "NASA Earth Observatory — credit NASA"
+    attribution: "Image courtesy NASA Earth Observatory"
+    media_type: raster
+  bmng_2004_aug_500m_c2:
+    name: Blue Marble Next Generation (Aug 2004, 500m, panel C2)
+    description: Lower-right center panel of the BMNG August 2004 topo+bathy composite (500 m).
+    urls:
+      - https://neo.gsfc.nasa.gov/archive/bluemarble/bmng/world_500m/world.topo.bathy.200408.3x21600x21600.C2_geo.tif
+    destination: bmng/500m/world.topo.bathy.200408.C2_geo.tif
+    license: "NASA Earth Observatory — credit NASA"
+    attribution: "Image courtesy NASA Earth Observatory"
+    media_type: raster
+  bmng_2004_aug_500m_d1:
+    name: Blue Marble Next Generation (Aug 2004, 500m, panel D1)
+    description: Upper-right panel of the BMNG August 2004 topo+bathy composite (500 m).
+    urls:
+      - https://neo.gsfc.nasa.gov/archive/bluemarble/bmng/world_500m/world.topo.bathy.200408.3x21600x21600.D1_geo.tif
+    destination: bmng/500m/world.topo.bathy.200408.D1_geo.tif
+    license: "NASA Earth Observatory — credit NASA"
+    attribution: "Image courtesy NASA Earth Observatory"
+    media_type: raster
+  bmng_2004_aug_500m_d2:
+    name: Blue Marble Next Generation (Aug 2004, 500m, panel D2)
+    description: Lower-right panel of the BMNG August 2004 topo+bathy composite (500 m).
+    urls:
+      - https://neo.gsfc.nasa.gov/archive/bluemarble/bmng/world_500m/world.topo.bathy.200408.3x21600x21600.D2_geo.tif
+    destination: bmng/500m/world.topo.bathy.200408.D2_geo.tif
+    license: "NASA Earth Observatory — credit NASA"
+    attribution: "Image courtesy NASA Earth Observatory"
+    media_type: raster
+  bmng_2004_aug_2km_global:
+    name: Blue Marble Next Generation (Aug 2004, ~2km global)
+    description: Single-frame BMNG August 2004 topo+bathy composite at ~2 km per pixel.
+    urls:
+      - https://eoimages.gsfc.nasa.gov/images/imagerecords/73000/73776/world.topo.bathy.200408.3x5400x2700.jpg
+    destination: bmng/2km/world.topo.bathy.200408.jpg
+    license: "NASA Earth Observatory — credit NASA"
+    attribution: "Image courtesy NASA Earth Observatory"
+    media_type: raster
+  gebco_latest_grid:
+    name: GEBCO Global Grid (2025, netCDF)
+    description: GEBCO 2025 global bathymetry/topography grid in netCDF format.
+    urls:
+      - https://download.gebco.net/data/GEBCO_2025/GEBCO_2025.nc
+    destination: gebco/GEBCO_2025.nc
+    license: "GEBCO Compilation Group (2025) — public domain"
+    attribution: "GEBCO Compilation Group (2025)"
+    media_type: raster
+  natural_earth_land_10m:
+    name: Natural Earth Land (10m)
+    description: Global land polygons at 1:10m scale.
+    urls:
+      - https://naciscdn.org/naturalearth/10m/physical/ne_10m_land.zip
+    destination: natural_earth/ne_10m_land.zip
+    license: "Public Domain"
+    attribution: "Natural Earth"
+    media_type: vector
+  natural_earth_ocean_10m:
+    name: Natural Earth Ocean (10m)
+    description: Global ocean polygons at 1:10m scale.
+    urls:
+      - https://naciscdn.org/naturalearth/10m/physical/ne_10m_ocean.zip
+    destination: natural_earth/ne_10m_ocean.zip
+    license: "Public Domain"
+    attribution: "Natural Earth"
+    media_type: vector
+  natural_earth_coastline_10m:
+    name: Natural Earth Coastline (10m)
+    description: Global coastline lines at 1:10m scale.
+    urls:
+      - https://naciscdn.org/naturalearth/10m/physical/ne_10m_coastline.zip
+    destination: natural_earth/ne_10m_coastline.zip
+    license: "Public Domain"
+    attribution: "Natural Earth"
+    media_type: vector

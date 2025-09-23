@@ -16,5 +16,8 @@ dependencies = [
   "PyYAML>=6.0"
 ]
 
+[project.scripts]
+planetarble = "planetarble.cli.main:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]

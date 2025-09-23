@@ -11,13 +11,13 @@ from planetarble.core.models import AssetManifest
 class DataAcquisition(Protocol):
     """Interface for downloading and validating source datasets."""
 
-    def download_bmng(self, resolution: str = "500m") -> Path:
+    def download_bmng(self, resolution: str = "500m", force: bool = False) -> Path:
         """Download NASA BMNG imagery at the requested resolution."""
 
-    def download_gebco(self, year: int = 2025) -> Path:
+    def download_gebco(self, year: int = 2025, force: bool = False) -> Path:
         """Download the GEBCO bathymetry grid for the specified year."""
 
-    def download_natural_earth(self, scale: str = "10m") -> Path:
+    def download_natural_earth(self, scale: str = "10m", force: bool = False) -> Path:
         """Download Natural Earth coastline and mask data at the given scale."""
 
     def verify_checksums(self, manifest: AssetManifest) -> bool:

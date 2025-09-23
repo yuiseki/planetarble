@@ -1,17 +1,34 @@
 {
     "cSpell.words": [
+        "basemap",
+        "basemaps",
+        "bathy",
+        "bathymetric",
         "BMNG",
+        "checkpointing",
+        "checksumming",
+        "downloaders",
         "EPSG",
+        "GDAL",
         "GEBCO",
+        "geospatial",
         "hillshade",
         "hillshading",
         "maxzoom",
         "minzoom",
+        "MODIS",
+        "noxfile",
         "planetarble",
         "pmtiles",
+        "pyproject",
+        "Reproject",
+        "reprojection",
         "setuptools",
         "sublicensable",
         "tilejson",
-        "tilestore"
+        "tilestore",
+        "topo",
+        "Typer",
+        "VIIRS"
     ]
 }

@@ -1,0 +1,15 @@
+# Local data workspaces (not version-controlled)
+data/
+tmp/
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+ENV/

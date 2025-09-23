@@ -74,6 +74,7 @@ class TilingManager(TileGenerator):
             "20037508.342789244",
             "-te_srs",
             "EPSG:3857",
+            "-overwrite",
             "-of",
             "VRT",
             str(input_path),

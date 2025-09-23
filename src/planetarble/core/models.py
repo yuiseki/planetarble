@@ -34,7 +34,7 @@ class ProcessingConfig:
     """Configuration options that control raster processing."""
 
     bmng_resolution: str = "500m"
-    gebco_year: int = 2025
+    gebco_year: int = 2024
     natural_earth_scale: str = "10m"
     color_enhancement: float = 1.05
     hillshade_opacity: float = 0.15

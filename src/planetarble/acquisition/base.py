@@ -14,7 +14,7 @@ class DataAcquisition(Protocol):
     def download_bmng(self, resolution: str = "500m", force: bool = False) -> Path:
         """Download NASA BMNG imagery at the requested resolution."""
 
-    def download_gebco(self, year: int = 2025, force: bool = False) -> Path:
+    def download_gebco(self, year: int = 2024, force: bool = False) -> Path:
         """Download the GEBCO bathymetry grid for the specified year."""
 
     def download_natural_earth(self, scale: str = "10m", force: bool = False) -> Path:

@@ -42,6 +42,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Force re-download even if files already exist",
     )
+    acquire.add_argument(
+        "--no-aria2",
+        action="store_true",
+        help="Disable aria2c integration and use built-in downloader",
+    )
     return parser
 
 
@@ -69,7 +74,11 @@ def _handle_acquire(args: argparse.Namespace) -> int:
     manifest_path = args.manifest or (cfg.output_dir / "MANIFEST.json")
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
 
-    manager = AcquisitionManager(cfg.data_dir, manifest_path=manifest_path)
+    manager = AcquisitionManager(
+        cfg.data_dir,
+        manifest_path=manifest_path,
+        use_aria2=not args.no_aria2,
+    )
     manager.download_bmng(args.bmng_resolution, force=args.force)
     manager.download_gebco(force=args.force)
     manager.download_natural_earth(force=args.force)

@@ -25,10 +25,15 @@ class AcquisitionManager(DataAcquisition):
         *,
         catalog: Optional[AssetCatalog] = None,
         manifest_path: Optional[Path] = None,
+        use_aria2: bool = False,
     ) -> None:
         self._data_directory = data_directory
         self._catalog = catalog or AssetCatalog.load_default()
-        self._downloader = DownloadManager(data_directory, self._catalog)
+        self._downloader = DownloadManager(
+            data_directory,
+            self._catalog,
+            use_aria2=use_aria2,
+        )
         self._manifest_path = manifest_path
 
     def download_bmng(self, resolution: str = "500m", force: bool = False) -> Path:
@@ -51,7 +56,7 @@ class AcquisitionManager(DataAcquisition):
         result = self._downloader.download("bmng_2004_aug_2km_global", force=force)
         return result.path
 
-    def download_gebco(self, year: int = 2025, force: bool = False) -> Path:
+    def download_gebco(self, year: int = 2024, force: bool = False) -> Path:
         # Latest grid is keyed as gebco_latest_grid regardless of year to allow catalog updates.
         result = self._downloader.download("gebco_latest_grid", force=force)
         return result.path

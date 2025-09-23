@@ -82,13 +82,13 @@ assets:
     attribution: "Image courtesy NASA Earth Observatory"
     media_type: raster
   gebco_latest_grid:
-    name: GEBCO Global Grid (2025, netCDF)
-    description: GEBCO 2025 global bathymetry/topography grid in netCDF format.
+    name: GEBCO Global Grid (2024, NetCDF)
+    description: GEBCO 2024 global bathymetry/topography grid as CF-compliant NetCDF.
     urls:
-      - https://download.gebco.net/data/GEBCO_2025/GEBCO_2025.nc
-    destination: gebco/GEBCO_2025.nc
-    license: "GEBCO Compilation Group (2025) — public domain"
-    attribution: "GEBCO Compilation Group (2025)"
+      - https://dap.ceda.ac.uk/bodc/gebco/global/gebco_2024/ice_surface_elevation/netcdf/GEBCO_2024_CF.nc
+    destination: gebco/GEBCO_2024_CF.nc
+    license: "GEBCO Compilation Group (2024) — public domain"
+    attribution: "GEBCO Compilation Group (2024)"
     media_type: raster
   natural_earth_land_10m:
     name: Natural Earth Land (10m)

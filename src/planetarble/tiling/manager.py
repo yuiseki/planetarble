@@ -104,6 +104,10 @@ class TilingManager(TileGenerator):
             "MINZOOM=0",
             "-co",
             f"MAXZOOM={max_zoom}",
+            "-co",
+            "ZOOM_LEVEL_STRATEGY=LOWER",
+            "-co",
+            "RESOLUTION=AVERAGE",
             str(pyramid_path),
             str(mbtiles_path),
         ]

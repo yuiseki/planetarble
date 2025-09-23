@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import subprocess
+import zipfile
 from pathlib import Path
 from typing import Sequence
-import zipfile
 
 from planetarble.core.models import ProcessingConfig
 from planetarble.logging import get_logger
@@ -49,12 +49,52 @@ class ProcessingManager(DataProcessor):
         self._config = config
         self._temp_dir = temp_dir
         self._output_dir = output_dir
+        self._processing_dir = self._output_dir / "processing"
         self._runner = CommandRunner(dry_run=dry_run)
         self._temp_dir.mkdir(parents=True, exist_ok=True)
         self._output_dir.mkdir(parents=True, exist_ok=True)
+        self._processing_dir.mkdir(parents=True, exist_ok=True)
+
+    def compose_bmng_panels(self, panel_dir: Path) -> Path:
+        """Build a single raster from BMNG panels if multiple files are present."""
+
+        tif_files = sorted(panel_dir.glob("*.tif"))
+        if not tif_files:
+            raise FileNotFoundError(f"No TIFF panels found in {panel_dir}")
+        if len(tif_files) == 1:
+            LOGGER.info("single BMNG panel detected; skipping mosaic")
+            return tif_files[0]
+
+        panel_list = self._temp_dir / "bmng_panels.txt"
+        panel_list.write_text("\n".join(str(path) for path in tif_files), encoding="utf-8")
+        vrt_path = self._temp_dir / "bmng_panels.vrt"
+        self._runner.run(
+            [
+                "gdalbuildvrt",
+                "-input_file_list",
+                str(panel_list),
+                str(vrt_path),
+            ],
+            description="assemble BMNG panels into VRT",
+        )
+
+        mosaic_path = self._processing_dir / "bmng_mosaic.tif"
+        self._runner.run(
+            [
+                "gdal_translate",
+                str(vrt_path),
+                str(mosaic_path),
+                "-co",
+                "TILED=YES",
+                "-co",
+                "COMPRESS=DEFLATE",
+            ],
+            description="convert BMNG VRT mosaic to GeoTIFF",
+        )
+        return mosaic_path
 
     def normalize_bmng(self, input_path: Path) -> Path:
-        output = self._temp_dir / f"{input_path.stem}_normalized.tif"
+        output = self._processing_dir / f"{input_path.stem}_normalized.tif"
         command = [
             "gdal_translate",
             "-of",
@@ -72,7 +112,7 @@ class ProcessingManager(DataProcessor):
         return output
 
     def generate_hillshade(self, gebco_path: Path) -> Path:
-        output = self._temp_dir / f"{gebco_path.stem}_hillshade.tif"
+        output = self._processing_dir / f"{gebco_path.stem}_hillshade.tif"
         command = [
             "gdaldem",
             "hillshade",
@@ -101,7 +141,7 @@ class ProcessingManager(DataProcessor):
         return destination
 
     def create_cog(self, raster_path: Path) -> Path:
-        output = self._output_dir / f"{raster_path.stem}_cog.tif"
+        output = self._processing_dir / f"{raster_path.stem}_cog.tif"
         command = [
             "gdal_translate",
             "-of",
@@ -116,7 +156,7 @@ class ProcessingManager(DataProcessor):
 
     def blend_layers(self, base: Path, overlay: Path, opacity: float) -> Path:
         opacity = max(0.0, min(opacity, 1.0))
-        output = self._temp_dir / f"{base.stem}_blended.tif"
+        output = self._processing_dir / f"{base.stem}_blended.tif"
         command = [
             "gdal_calc.py",
             "-A",

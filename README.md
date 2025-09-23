@@ -26,6 +26,12 @@ PYTHONPATH=src python -m planetarble.cli.main acquire --config configs/base/pipe
 # resume-friendly downloads are enabled by default when aria2c is in PATH
 # disable aria2c only if required
 planetarble acquire --config configs/base/pipeline.yaml --no-aria2
+
+# preprocess rasters (mosaic BMNG, hillshade GEBCO, unpack Natural Earth)
+planetarble process --config configs/base/pipeline.yaml
+
+# preview commands without executing
+planetarble process --config configs/base/pipeline.yaml --dry-run
 ```
 
 The default configuration stores raw data in `data/`, temporary artifacts in `tmp/`, and final outputs in `output/`. Adjust paths and parameters by copying `configs/base/pipeline.yaml` and editing as needed. Expect roughly 4.5 GB of downloads on the first run (BMNG 500 m panels, GEBCO netCDF, Natural Earth archives); on an 80 Mbps connection the acquisition step typically completes in about 10 minutes.

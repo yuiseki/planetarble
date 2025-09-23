@@ -1,6 +1,9 @@
 # Local data workspaces (not version-controlled)
 data/
 tmp/
+configs/base/data/
+configs/base/tmp/
+configs/base/output/
 
 # Python build artifacts
 __pycache__/

@@ -12,7 +12,9 @@ license = { text = "CC0-1.0" }
 authors = [
   { name = "Planetarble Contributors" }
 ]
-dependencies = []
+dependencies = [
+  "PyYAML>=6.0"
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

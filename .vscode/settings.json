@@ -1,7 +1,17 @@
 {
     "cSpell.words": [
+        "BMNG",
+        "EPSG",
+        "GEBCO",
+        "hillshade",
+        "hillshading",
+        "maxzoom",
+        "minzoom",
         "planetarble",
+        "pmtiles",
         "setuptools",
-        "sublicensable"
+        "sublicensable",
+        "tilejson",
+        "tilestore"
     ]
 }

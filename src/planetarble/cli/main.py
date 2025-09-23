@@ -131,6 +131,8 @@ def main(argv: Iterable[str] | None = None) -> int:
         return _handle_process(args)
     if args.command == "tile":
         return _handle_tile(args)
+    if args.command == "package":
+        return _handle_package(args)
     parser.error("Unknown command")
     return 1
 

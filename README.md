@@ -57,6 +57,8 @@ The default configuration stores raw data in `data/`, temporary artifacts in `tm
 ## Roadmap
 
 - Support higher-resolution outputs across the entire basemap without compromising reproducibility.
+- Evaluate MODIS MCD43A4 (NBAR, 500 m) composites as an earlier alternative imagery source before Sentinel-2 experiments.
+- Experiment with VIIRS Corrected Reflectance swaths (375–500 m) ahead of any Sentinel-2 ingestion to validate processing throughput.
 - Ingest Sentinel-2 acquisitions via Copernicus services to unlock higher zoom levels where source data allows.
 - Offer selective high-zoom coverage so priority regions can receive detailed tiles while keeping the global bundle lean.
 - Provide region-scoped refresh workflows that update only the areas requiring newer imagery.

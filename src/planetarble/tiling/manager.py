@@ -59,6 +59,7 @@ class TilingManager(TileGenerator):
         output = self._temp_dir / f"{input_path.stem}_3857.vrt"
         if output.exists() and not self._dry_run:
             output.unlink()
+        tile_dimension = 256 * (2 ** self._config.max_zoom)
         command = [
             "gdalwarp",
             "-t_srs",
@@ -74,6 +75,9 @@ class TilingManager(TileGenerator):
             "20037508.342789244",
             "-te_srs",
             "EPSG:3857",
+            "-ts",
+            str(tile_dimension),
+            str(tile_dimension),
             "-overwrite",
             "-of",
             "VRT",
@@ -117,7 +121,7 @@ class TilingManager(TileGenerator):
 
     def optimize_overviews(self, mbtiles_path: Path) -> None:
         # Build overviews for better rendering performance at low zooms
-        overview_levels = ["2", "4", "6", "8", "10", "12", "16", "32", "64"]
+        overview_levels = ["2", "4", "8", "16", "32", "64", "128", "256", "512", "1024"]
         command = ["gdaladdo", "-r", "average", str(mbtiles_path), *overview_levels]
         try:
             self._runner.run(command, description="build MBTiles overviews")

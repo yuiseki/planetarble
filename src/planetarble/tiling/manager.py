@@ -120,10 +120,18 @@ class TilingManager(TileGenerator):
         return mbtiles_path
 
     def optimize_overviews(self, mbtiles_path: Path) -> None:
-        # Build overviews for better rendering performance at low zooms
-        overview_levels = ["2", "4", "8", "16", "32", "64", "128", "256", "512", "1024"]
+        if self._dry_run:
+            return
+
+        overview_levels = self._compute_overview_factors()
+        if not overview_levels:
+            LOGGER.debug("no overview levels requested; skipping gdaladdo")
+            return
+
         command = ["gdaladdo", "-r", "average", str(mbtiles_path), *overview_levels]
-        try:
-            self._runner.run(command, description="build MBTiles overviews")
-        except TileCommandError:
-            LOGGER.warning("gdaladdo overviews skipped (command failed)")
+        self._runner.run(command, description="build MBTiles overviews")
+
+    def _compute_overview_factors(self) -> list[str]:
+        # Overviews are powers of two down to zoom level 0.
+        max_zoom = max(0, self._config.max_zoom)
+        return [str(2**level) for level in range(1, max_zoom + 1)]

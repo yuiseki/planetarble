@@ -13,7 +13,8 @@ authors = [
   { name = "Planetarble Contributors" }
 ]
 dependencies = [
-  "PyYAML>=6.0"
+  "PyYAML>=6.0",
+  "requests>=2.32.0"
 ]
 
 [project.scripts]

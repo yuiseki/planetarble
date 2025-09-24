@@ -74,7 +74,10 @@ class ConfigLoader:
         temp_dir = Path(payload.get("temp_dir", "tmp"))
         output_dir = Path(payload.get("output_dir", "output"))
         processing_payload = payload.get("processing", {})
-        processing = ProcessingConfig(**processing_payload)
+        processing_data = dict(processing_payload)
+        if "modis_tiles" in processing_data:
+            processing_data["modis_tiles"] = tuple(processing_data.get("modis_tiles") or [])
+        processing = ProcessingConfig(**processing_data)
         return PipelineConfig(
             data_dir=data_dir,
             temp_dir=temp_dir,

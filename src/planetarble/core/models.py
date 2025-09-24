@@ -41,6 +41,10 @@ class ProcessingConfig:
     max_zoom: int = 10
     tile_format: str = "JPEG"
     tile_quality: int = 95
+    modis_enabled: bool = False
+    modis_doy: Optional[str] = None
+    modis_tiles: Tuple[str, ...] = field(default_factory=tuple)
+    modis_tile_source: str = "bmng"
 
 
 @dataclass

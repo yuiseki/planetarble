@@ -117,3 +117,51 @@ assets:
     license: "Public Domain"
     attribution: "Natural Earth"
     media_type: vector
+  modis_mcd43a4_2025233_h27v04:
+    name: MODIS MCD43A4 (2025-08-21, h27v04)
+    description: MODIS Terra/Aqua BRDF-corrected surface reflectance at 500 m for tile h27v04.
+    urls: []
+    destination: modis_mcd43a4/2025233/h27v04.zip
+    license: "NASA EOSDIS — unrestricted"
+    attribution: "NASA LP DAAC"
+    media_type: raster
+  modis_mcd43a4_2025233_h28v04:
+    name: MODIS MCD43A4 (2025-08-21, h28v04)
+    description: MODIS Terra/Aqua BRDF-corrected surface reflectance at 500 m for tile h28v04.
+    urls: []
+    destination: modis_mcd43a4/2025233/h28v04.zip
+    license: "NASA EOSDIS — unrestricted"
+    attribution: "NASA LP DAAC"
+    media_type: raster
+  modis_mcd43a4_2025233_h28v05:
+    name: MODIS MCD43A4 (2025-08-21, h28v05)
+    description: MODIS Terra/Aqua BRDF-corrected surface reflectance at 500 m for tile h28v05.
+    urls: []
+    destination: modis_mcd43a4/2025233/h28v05.zip
+    license: "NASA EOSDIS — unrestricted"
+    attribution: "NASA LP DAAC"
+    media_type: raster
+  modis_mcd43a4_2025233_h29v05:
+    name: MODIS MCD43A4 (2025-08-21, h29v05)
+    description: MODIS Terra/Aqua BRDF-corrected surface reflectance at 500 m for tile h29v05.
+    urls: []
+    destination: modis_mcd43a4/2025233/h29v05.zip
+    license: "NASA EOSDIS — unrestricted"
+    attribution: "NASA LP DAAC"
+    media_type: raster
+  modis_mcd43a4_2025233_h29v06:
+    name: MODIS MCD43A4 (2025-08-21, h29v06)
+    description: MODIS Terra/Aqua BRDF-corrected surface reflectance at 500 m for tile h29v06.
+    urls: []
+    destination: modis_mcd43a4/2025233/h29v06.zip
+    license: "NASA EOSDIS — unrestricted"
+    attribution: "NASA LP DAAC"
+    media_type: raster
+  modis_mcd43a4_2025233_h30v05:
+    name: MODIS MCD43A4 (2025-08-21, h30v05)
+    description: MODIS Terra/Aqua BRDF-corrected surface reflectance at 500 m for tile h30v05.
+    urls: []
+    destination: modis_mcd43a4/2025233/h30v05.zip
+    license: "NASA EOSDIS — unrestricted"
+    attribution: "NASA LP DAAC"
+    media_type: raster

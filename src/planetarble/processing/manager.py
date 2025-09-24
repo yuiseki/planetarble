@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 import zipfile
 from pathlib import Path
-from typing import Sequence
+from typing import Dict, List, Sequence
 
 from planetarble.core.models import ProcessingConfig
 from planetarble.logging import get_logger
@@ -147,7 +147,9 @@ class ProcessingManager(DataProcessor):
             "-of",
             "COG",
             "-co",
-            "COMPRESS=DEFLATE",
+            "COMPRESS=JPEG",
+            "-co",
+            "QUALITY=95",
             str(raster_path),
             str(output),
         ]
@@ -183,3 +185,92 @@ class ProcessingManager(DataProcessor):
         )
         with zipfile.ZipFile(archive) as bundle:
             bundle.extractall(destination)
+
+    def prepare_modis_rgb(
+        self,
+        modis_root: Path,
+        *,
+        tiles: Sequence[str],
+        date_code: str,
+    ) -> Path:
+        if not tiles:
+            raise ValueError("No MODIS tiles provided for processing")
+
+        band_map: Dict[str, str] = {
+            "red": "Nadir_Reflectance_Band1",
+            "green": "Nadir_Reflectance_Band4",
+            "blue": "Nadir_Reflectance_Band3",
+        }
+
+        band_files: Dict[str, List[Path]] = {key: [] for key in band_map}
+
+        for tile in tiles:
+            tile_dir = modis_root / tile
+            if not tile_dir.exists():
+                raise FileNotFoundError(f"MODIS tile directory not found: {tile_dir}")
+            candidates = sorted(p for p in tile_dir.glob("MCD43A4.061_*") if p.is_dir())
+            if not candidates:
+                raise FileNotFoundError(f"No MODIS data bundle found under {tile_dir}")
+            data_dir = candidates[0]
+
+            for key, band_name in band_map.items():
+                pattern = f"*{band_name}_doy{date_code}*.tif"
+                matches = list((data_dir if data_dir.is_dir() else tile_dir).glob(pattern))
+                if not matches:
+                    raise FileNotFoundError(
+                        f"Band {band_name} not found in {data_dir} for tile {tile}"
+                    )
+                band_files[key].extend(matches)
+
+        vrt_paths: Dict[str, Path] = {}
+        for key, files in band_files.items():
+            list_path = self._temp_dir / f"modis_{key}_tiles.txt"
+            list_path.write_text("\n".join(str(path) for path in files), encoding="utf-8")
+            vrt_path = self._temp_dir / f"modis_{key}_mosaic.vrt"
+            command = [
+                "gdalbuildvrt",
+                "-input_file_list",
+                str(list_path),
+                str(vrt_path),
+            ]
+            self._runner.run(command, description=f"mosaic MODIS {key} band")
+            vrt_paths[key] = vrt_path
+
+        rgb_vrt = self._temp_dir / "modis_rgb.vrt"
+        command = [
+            "gdalbuildvrt",
+            "-separate",
+            str(rgb_vrt),
+            str(vrt_paths["red"]),
+            str(vrt_paths["green"]),
+            str(vrt_paths["blue"]),
+        ]
+        self._runner.run(command, description="combine MODIS bands into RGB VRT")
+
+        rgb_tif = self._processing_dir / f"modis_{date_code}_rgb.tif"
+        command = [
+            "gdal_translate",
+            "-of",
+            "GTiff",
+            "-co",
+            "TILED=YES",
+            "-co",
+            "COMPRESS=DEFLATE",
+            "-co",
+            "PHOTOMETRIC=RGB",
+            "-ot",
+            "Byte",
+            "-scale",
+            "0",
+            "10000",
+            "0",
+            "255",
+            "-a_nodata",
+            "0",
+            str(rgb_vrt),
+            str(rgb_tif),
+        ]
+        self._runner.run(command, description="convert MODIS RGB mosaic to GeoTIFF")
+
+        cog_path = self.create_cog(rgb_tif)
+        return cog_path

@@ -8,6 +8,7 @@
         "checkpointing",
         "checksumming",
         "downloaders",
+        "earthdata",
         "EPSG",
         "GDAL",
         "gdaladdo",

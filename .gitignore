@@ -1,3 +1,5 @@
+.env
+
 # Local data workspaces (not version-controlled)
 data/
 tmp/

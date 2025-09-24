@@ -2,7 +2,9 @@
 
 [![Image from Gyazo](https://i.gyazo.com/aefeffdeb3c3575ff02037a8509c4d7c.png)](https://gyazo.com/aefeffdeb3c3575ff02037a8509c4d7c)
 
-Planetarble builds a fully open global raster basemap and packages it as a single PMTiles archive for offline distribution. The project orchestrates three core phases:
+Planetarble builds a fully open global raster basemap and packages it as a single PMTiles archive for offline distribution.
+
+The project orchestrates three core phases:
 
 1. **Acquire** the required datasets (NASA BMNG 2004, GEBCO 2024 Global Grid, Natural Earth 10 m layers) with integrity checks.
 2. **Process** the rasters into a blended Web Mercator tile pyramid covering zoom levels 0–10.
@@ -54,6 +56,10 @@ The default configuration stores raw data in `data/`, temporary artifacts in `tm
 
 ## Roadmap
 
+- Support higher-resolution outputs across the entire basemap without compromising reproducibility.
+- Ingest Sentinel-2 acquisitions via Copernicus services to unlock higher zoom levels where source data allows.
+- Offer selective high-zoom coverage so priority regions can receive detailed tiles while keeping the global bundle lean.
+- Provide region-scoped refresh workflows that update only the areas requiring newer imagery.
 - Implement the preprocessing pipeline (`ProcessingManager`) to normalize BMNG imagery, generate GEBCO hillshade, unpack Natural Earth masks, and convert merged rasters to Cloud Optimized GeoTIFFs.
 - Add commands for tiling, PMTiles conversion, and output verification.
 

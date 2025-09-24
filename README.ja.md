@@ -65,7 +65,9 @@ planetarble package --config configs/base/pipeline.yaml
 
 ## 必要要件
 
-- GDAL 3.x 以上と PMTiles CLI がローカルにインストールされている必要があります。
+- GDAL 3.x 以上がローカルに必要です（`gdalbuildvrt`、`gdal_translate`、`gdaldem`、`gdalwarp`、`gdaladdo` などを利用します）。
+- 最終的な `world_YYYY.pmtiles` を生成するために PMTiles CLI（`pmtiles convert`）が必要です。
+- 既定の取得ワークフローでは aria2c を使ってレジューム付きダウンロードを行う想定です。見つからない場合は Python 標準のダウンローダーにフォールバックしますが、転送中断を避けるためにインストールしておくことを推奨します。
 - Python 依存関係は `pyproject.toml` に記録されています（設定読み込みには PyYAML が必要）。
 
 ## 参考

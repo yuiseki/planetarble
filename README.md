@@ -65,5 +65,7 @@ The default configuration stores raw data in `data/`, temporary artifacts in `tm
 
 ## Requirements
 
-- GDAL ≥ 3.x and the PMTiles CLI must be installed locally for processing steps.
+- GDAL ≥ 3.x must be installed locally to run the processing and tiling commands (`gdalbuildvrt`, `gdal_translate`, `gdaldem`, `gdalwarp`, `gdaladdo`).
+- The PMTiles CLI (`pmtiles convert`) is required to produce the final `world_YYYY.pmtiles` artifact.
+- aria2c is expected for the default acquisition workflow so downloads can resume cleanly; the CLI falls back to Python’s downloader if aria2c is missing, but installing it avoids broken transfers.
 - Python dependencies are recorded in `pyproject.toml` (PyYAML is required for configuration loading).

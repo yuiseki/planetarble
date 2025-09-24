@@ -1,6 +1,6 @@
 # Planetarble
 
-[![Image from Gyazo](https://i.gyazo.com/aefeffdeb3c3575ff02037a8509c4d7c.png)](https://gyazo.com/aefeffdeb3c3575ff02037a8509c4d7c)
+[![Image from Gyazo](https://i.gyazo.com/aefeffdeb3c3575ff02037a8509c4d7c.png)](https://pmtiles.io/#url=https%3A%2F%2Fz.yuiseki.net%2Fstatic%2Fplanetarble%2Fplanet.pmtiles&map=1.88/0/0)
 
 Planetarble builds a fully open global raster basemap and packages it as a single PMTiles archive for offline distribution.
 
@@ -69,5 +69,5 @@ The default configuration stores raw data in `data/`, temporary artifacts in `tm
 
 - GDAL ≥ 3.x must be installed locally to run the processing and tiling commands (`gdalbuildvrt`, `gdal_translate`, `gdaldem`, `gdalwarp`, `gdaladdo`).
 - The PMTiles CLI (`pmtiles convert`) is required to produce the final `world_YYYY.pmtiles` artifact.
-- aria2c is expected for the default acquisition workflow so downloads can resume cleanly; the CLI falls back to Python’s downloader if aria2c is missing, but installing it avoids broken transfers.
+- `aria2c` is expected for the default acquisition workflow so downloads can resume cleanly; the CLI falls back to Python’s downloader if aria2c is missing, but installing it avoids broken transfers.
 - Python dependencies are recorded in `pyproject.toml` (PyYAML is required for configuration loading).

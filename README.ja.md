@@ -1,6 +1,6 @@
 # Planetarble
 
-[![Image from Gyazo](https://i.gyazo.com/aefeffdeb3c3575ff02037a8509c4d7c.png)](https://gyazo.com/aefeffdeb3c3575ff02037a8509c4d7c)
+[![Image from Gyazo](https://i.gyazo.com/aefeffdeb3c3575ff02037a8509c4d7c.png)](https://pmtiles.io/#url=https%3A%2F%2Fz.yuiseki.net%2Fstatic%2Fplanetarble%2Fplanet.pmtiles&map=1.88/0/0)
 
 Planetarble は、完全にオープンな地球規模のラスター地図タイルを生成し、オフライン配布可能な単一の PMTiles アーカイブにまとめるプロジェクトです。
 

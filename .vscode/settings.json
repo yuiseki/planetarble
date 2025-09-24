@@ -1,14 +1,20 @@
 {
     "cSpell.words": [
+        "APPEEARS",
         "basemap",
         "basemaps",
         "bathy",
         "bathymetric",
         "BMNG",
+        "BRDF",
         "checkpointing",
         "checksumming",
+        "DAAC",
         "downloaders",
+        "dstalpha",
         "earthdata",
+        "EEARS",
+        "EOSDIS",
         "EPSG",
         "GDAL",
         "gdaladdo",
@@ -17,11 +23,13 @@
         "gdalwarp",
         "GEBCO",
         "geospatial",
+        "geotiff",
         "Gyazo",
         "hillshade",
         "hillshading",
         "maxzoom",
         "Mbps",
+        "MBTILES",
         "minzoom",
         "MODIS",
         "NBAR",
@@ -31,6 +39,7 @@
         "pyproject",
         "PYTHONPATH",
         "Reproject",
+        "reprojected",
         "reprojection",
         "setuptools",
         "sublicensable",
@@ -38,6 +47,8 @@
         "tilestore",
         "topo",
         "Typer",
-        "VIIRS"
+        "VIIRS",
+        "webmercator",
+        "yday"
     ]
 }

@@ -40,7 +40,7 @@ class ProcessingConfig:
     hillshade_opacity: float = 0.15
     max_zoom: int = 10
     tile_format: str = "JPEG"
-    tile_quality: int = 80
+    tile_quality: int = 95
 
 
 @dataclass

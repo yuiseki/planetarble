@@ -42,9 +42,18 @@ planetarble tile --config configs/base/pipeline.yaml
 
 # PMTiles への変換と配布バンドルの組み立て（pmtiles CLI が必要）
 planetarble package --config configs/base/pipeline.yaml
+
+# 品質を上げたい場合は JPEG 品質や WebP に切り替え可能
+planetarble tile --config configs/base/pipeline.yaml --quality 95 --tile-format WEBP
 ```
 
 既定の構成では生データは `data/`、一時成果物は `tmp/`、最終成果物は `output/` に保存されます。`configs/base/pipeline.yaml` をコピーして編集することでパスやパラメータを調整できます。初回実行時のダウンロード量は約 4.5 GB（BMNG 500 m パネル、GEBCO netCDF、Natural Earth アーカイブ）で、80 Mbps の回線ではダウンロードフェーズにおおよそ 10 分かかります。
+
+## 品質調整
+
+- `configs/base/pipeline.yaml` の `processing.tile_quality` は既定で 95 に設定されています。ファイルサイズと画質のバランスに応じて値を上げ下げしてください。
+- 実行時に `planetarble tile --quality 95 --tile-format WEBP` のように指定すれば、設定ファイルを変更せずに品質やフォーマットを切り替えられます。
+- パラメータを変えた後は、`planetarble tile` と `planetarble package`（必要に応じて `planetarble process`）を再実行して成果物をリビルドしてください。
 
 ## キャッシュと再ダウンロード方針
 

@@ -10,4 +10,4 @@ processing:
   hillshade_opacity: 0.15
   max_zoom: 10
   tile_format: "JPEG"
-  tile_quality: 80
+  tile_quality: 95

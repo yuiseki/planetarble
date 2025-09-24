@@ -111,7 +111,7 @@ class TilingManager(TileGenerator):
             "-co",
             "ZOOM_LEVEL_STRATEGY=LOWER",
             "-co",
-            "RESOLUTION=AVERAGE",
+            "RESOLUTION=HIGHEST",
             str(pyramid_path),
             str(mbtiles_path),
         ]

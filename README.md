@@ -42,9 +42,18 @@ planetarble tile --config configs/base/pipeline.yaml
 
 # convert to PMTiles and assemble distribution bundle (requires pmtiles CLI)
 planetarble package --config configs/base/pipeline.yaml
+
+# increase JPEG quality or switch to WebP when experimenting
+planetarble tile --config configs/base/pipeline.yaml --quality 95 --tile-format WEBP
 ```
 
 The default configuration stores raw data in `data/`, temporary artifacts in `tmp/`, and final outputs in `output/`. Adjust paths and parameters by copying `configs/base/pipeline.yaml` and editing as needed. Expect roughly 4.5 GB of downloads on the first run (BMNG 500 m panels, GEBCO netCDF, Natural Earth archives); on an 80 Mbps connection the acquisition step typically completes in about 10 minutes.
+
+## Quality Tuning
+
+- `processing.tile_quality` defaults to 95 in `configs/base/pipeline.yaml`; raise or lower this value to trade file size for fidelity.
+- You can override quality and format per run: `planetarble tile --quality 95 --tile-format WEBP` regenerates MBTiles with WebP tiles at quality 95.
+- After changing quality-related settings, rerun `planetarble tile` and `planetarble package` (and `planetarble process` if upstream rasters changed) to rebuild artifacts.
 
 ## Caching & Re-download Policy
 

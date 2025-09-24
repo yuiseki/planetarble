@@ -1,5 +1,7 @@
 # Planetarble
 
+[![Image from Gyazo](https://i.gyazo.com/aefeffdeb3c3575ff02037a8509c4d7c.png)](https://gyazo.com/aefeffdeb3c3575ff02037a8509c4d7c)
+
 Planetarble builds a fully open global raster basemap and packages it as a single PMTiles archive for offline distribution. The project orchestrates three core phases:
 
 1. **Acquire** the required datasets (NASA BMNG 2004, GEBCO 2024 Global Grid, Natural Earth 10 m layers) with integrity checks.

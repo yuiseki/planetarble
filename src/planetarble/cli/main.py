@@ -170,6 +170,15 @@ def _handle_acquire(args: argparse.Namespace) -> int:
         raise
     except Exception as exc:
         LOGGER.warning("modis acquisition skipped: %s", exc)
+    try:
+        manager.download_viirs_corrected_reflectance(
+            force=args.force,
+            product=cfg.processing.viirs_product,
+        )
+    except (SystemExit, KeyboardInterrupt):
+        raise
+    except Exception as exc:
+        LOGGER.warning("viirs acquisition skipped: %s", exc)
     manager.generate_manifest(
         generation_params={"bmng_resolution": args.bmng_resolution},
     )
@@ -221,6 +230,24 @@ def _handle_process(args: argparse.Namespace) -> int:
             date_code=cfg.processing.modis_doy,
         )
 
+    viirs_cog_path: Path | None = None
+    if cfg.processing.viirs_enabled:
+        if not cfg.processing.viirs_date:
+            raise SystemExit("processing.viirs_date must be set when viirs_enabled is true")
+        viirs_root = (cfg.data_dir / "viirs_vnp09ga" / cfg.processing.viirs_date).resolve()
+        if not viirs_root.exists():
+            raise SystemExit(f"VIIRS directory not found: {viirs_root}")
+        tiles = cfg.processing.viirs_tiles or tuple(
+            sorted(p.name for p in viirs_root.iterdir() if p.is_dir())
+        )
+        if not tiles:
+            raise SystemExit(f"No VIIRS tiles found under {viirs_root}")
+        viirs_cog_path = manager.prepare_viirs_rgb(
+            viirs_root,
+            tiles=tiles,
+            date_code=cfg.processing.viirs_date,
+        )
+
     LOGGER.info("processing outputs", extra={
         "bmng_mosaic": str(bmng_source),
         "normalized": str(normalized),
@@ -228,6 +255,7 @@ def _handle_process(args: argparse.Namespace) -> int:
         "masks": str(masks_dir),
         "cog": str(cog_path),
         "modis_cog": str(modis_cog_path) if modis_cog_path else None,
+        "viirs_cog": str(viirs_cog_path) if viirs_cog_path else None,
     })
     return 0
 
@@ -259,13 +287,22 @@ def _handle_tile(args: argparse.Namespace) -> int:
         raise SystemExit("No normalized COG raster found; run the process stage first")
     source_raster = source_candidates[0]
 
-    if cfg.processing.modis_tile_source == "modis":
+    tile_source = (cfg.processing.tile_source or cfg.processing.modis_tile_source or "bmng").lower()
+
+    if tile_source == "modis":
         modis_candidates = sorted(processing_dir.glob("modis_*_rgb_cog.tif"))
         if not modis_candidates:
             raise SystemExit("MODIS tile source selected but no modis_*_rgb_cog.tif found; run process stage")
         source_raster = modis_candidates[0]
-    elif cfg.processing.modis_tile_source == "blend":
-        raise SystemExit("modis_tile_source=blend is not implemented yet")
+    elif tile_source == "viirs":
+        viirs_candidates = sorted(processing_dir.glob("viirs_*_rgb_cog.tif"))
+        if not viirs_candidates:
+            raise SystemExit("VIIRS tile source selected but no viirs_*_rgb_cog.tif found; run process stage")
+        source_raster = viirs_candidates[0]
+    elif tile_source == "blend":
+        raise SystemExit("tile_source=blend is not implemented yet")
+    elif tile_source != "bmng":
+        raise SystemExit(f"Unsupported tile_source value: {cfg.processing.tile_source}")
 
     reprojected = manager.reproject_to_webmercator(source_raster)
     mbtiles_path = manager.create_mbtiles(reprojected)
@@ -296,31 +333,48 @@ def _handle_package(args: argparse.Namespace) -> int:
     packaging = PackagingManager(dry_run=args.dry_run)
     pmtiles_path = packaging.convert_to_pmtiles(mbtiles_path, destination=pmtiles_destination)
 
+    tile_source = (cfg.processing.tile_source or cfg.processing.modis_tile_source or "bmng").lower()
+
+    if tile_source == "modis":
+        imagery_label = f"MODIS MCD43A4 ({cfg.processing.modis_doy or 'unknown date'})"
+        imagery_attribution = "Imagery: NASA MODIS MCD43A4 (LP DAAC)."
+    elif tile_source == "viirs":
+        product = cfg.processing.viirs_product or "VNP09GA"
+        imagery_label = f"VIIRS Corrected Reflectance ({product} {cfg.processing.viirs_date or 'daily'})"
+        imagery_attribution = "Imagery: NASA VIIRS Corrected Reflectance (LP DAAC)."
+    else:
+        imagery_label = "NASA Blue Marble Next Generation (2004)"
+        imagery_attribution = "Imagery: NASA Blue Marble (2004)."
+
     metadata = TileMetadata(
         name=f"Planetarble {cfg.processing.gebco_year}",
-        description="Global basemap composed from NASA BMNG and GEBCO bathymetry.",
+        description=f"Global basemap composed from {imagery_label} and GEBCO bathymetry.",
         version=str(cfg.processing.gebco_year),
         bounds=(-180.0, -85.0511, 180.0, 85.0511),
         center=(0.0, 0.0, 2),
         minzoom=0,
         maxzoom=cfg.processing.max_zoom,
         attribution=(
-            "Imagery: NASA Blue Marble (2004). Bathymetry: GEBCO 2024. "
-            "Masks: Natural Earth 10m."
+            f"{imagery_attribution} Bathymetry: GEBCO 2024. Masks: Natural Earth 10m."
         ),
         format=cfg.processing.tile_format,
     )
     tilejson_path = packaging.generate_tilejson(pmtiles_path, metadata)
 
     manifest_path = (cfg.output_dir / "MANIFEST.json").resolve()
+    imagery_line = {
+        "modis": "- MODIS MCD43A4 BRDF-Corrected Reflectance (NASA LP DAAC).",
+        "viirs": "- VIIRS Corrected Reflectance (VNP09GA, NASA LP DAAC).",
+    }.get(tile_source, "- NASA Blue Marble Next Generation (2004).")
+
     license_text = (
         "Planetarble Distribution\n\n"
         "Data Sources:\n"
-        "- NASA Blue Marble Next Generation (2004).\n"
+        f"{imagery_line}\n"
         "- GEBCO 2024 Global Bathymetry Grid.\n"
         "- Natural Earth 1:10m land/ocean/coastline layers.\n\n"
         "Attribution:\n"
-        "Imagery © NASA Earth Observatory. Bathymetry courtesy of GEBCO Compilation Group. "
+        f"{imagery_attribution} Bathymetry courtesy of GEBCO Compilation Group. "
         "Natural Earth data is in the public domain."
     )
     package_dir = packaging.create_distribution_package(

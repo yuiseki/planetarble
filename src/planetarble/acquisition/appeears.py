@@ -16,6 +16,7 @@ __all__ = [
     "AppEEARSDownloadError",
     "AppEEARSAuthError",
     "download_mcd43a4_tiles",
+    "download_viirs_corrected_reflectance",
     "modis_tile_polygon",
 ]
 
@@ -265,6 +266,56 @@ def download_mcd43a4_tiles(
     return outputs
 
 
+def download_viirs_corrected_reflectance(
+    client: AppEEARSClient,
+    *,
+    date_value: date,
+    tiles: Sequence[str],
+    destination: Path,
+    layers: Optional[Sequence[str]] = None,
+    projection: str = "geographic",
+    product: str = "VNP09GA.002",
+) -> Dict[str, List[Path]]:
+    """Request and download VIIRS corrected reflectance tiles for a given date."""
+
+    if layers is None:
+        layers = _default_viirs_layers(product)
+
+    tasks: Dict[str, str] = {}
+    doy = date_value.timetuple().tm_yday
+    for tile in tiles:
+        polygon = modis_tile_polygon(tile)
+        task_name = f"viirs_{date_value.year}{doy:03d}_{tile}"
+        task_id = client.submit_area_task(
+            task_name=task_name,
+            product=product,
+            start_date=date_value,
+            end_date=date_value,
+            polygon=polygon,
+            layers=layers,
+            output_format="geotiff",
+            projection=projection,
+        )
+        tasks[tile] = task_id
+
+    statuses = client.wait_for_tasks(tasks)
+    failed = [tile for tile, ok in statuses.items() if not ok]
+    if failed:
+        raise AppEEARSDownloadError(f"AppEEARS tasks failed: {', '.join(sorted(failed))}")
+
+    outputs: Dict[str, List[Path]] = {}
+    for tile, task_id in tasks.items():
+        files = client.list_bundle_files(task_id)
+        tile_dir = destination / f"{date_value.year}{doy:03d}" / tile
+        for record in files:
+            file_id = str(record.get("file_id"))
+            if not file_id:
+                continue
+            file_path = client.download_file(task_id, file_id, tile_dir / str(record.get("file_name", file_id)))
+            outputs.setdefault(tile, []).append(file_path)
+    return outputs
+
+
 def modis_tile_polygon(tile: str) -> Dict[str, object]:
     """Return a GeoJSON feature covering a MODIS tile in WGS84 coordinates."""
 
@@ -321,3 +372,12 @@ def _parse_content_disposition(header: Optional[str]) -> Optional[str]:
                 value = value[1:-1]
             return value or None
     return None
+
+
+def _default_viirs_layers(product: Optional[str]) -> Sequence[str]:
+    collection = (product or "").strip()
+    if collection.endswith(('.002', '.003')):
+        return ("SurfReflect_I1_1", "SurfReflect_I2_1", "SurfReflect_I3_1")
+    reflectance = ["SurfReflect_I1", "SurfReflect_I2", "SurfReflect_I3"]
+    quality = ["SurfReflect_QC_I1", "SurfReflect_QC_I2", "SurfReflect_QC_I3"]
+    return (*reflectance, *quality)

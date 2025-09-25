@@ -41,6 +41,7 @@ class ProcessingConfig:
     max_zoom: int = 10
     tile_format: str = "JPEG"
     tile_quality: int = 95
+    tile_source: str = "bmng"
     modis_enabled: bool = False
     modis_doy: Optional[str] = None
     modis_tiles: Tuple[str, ...] = field(default_factory=tuple)
@@ -48,6 +49,13 @@ class ProcessingConfig:
     modis_scale_min: float = 0.0
     modis_scale_max: float = 4000.0
     modis_gamma: float = 1.0
+    viirs_enabled: bool = False
+    viirs_date: Optional[str] = None
+    viirs_tiles: Tuple[str, ...] = field(default_factory=tuple)
+    viirs_product: str = "VNP09GA.002"
+    viirs_scale_min: float = 0.0
+    viirs_scale_max: float = 9000.0
+    viirs_gamma: float = 0.8
 
 
 @dataclass

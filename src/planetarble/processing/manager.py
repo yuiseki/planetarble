@@ -193,29 +193,82 @@ class ProcessingManager(DataProcessor):
         tiles: Sequence[str],
         date_code: str,
     ) -> Path:
-        if not tiles:
-            raise ValueError("No MODIS tiles provided for processing")
-
         band_map: Dict[str, str] = {
             "red": "Nadir_Reflectance_Band1",
             "green": "Nadir_Reflectance_Band4",
             "blue": "Nadir_Reflectance_Band3",
         }
+        return self._prepare_rgb_product(
+            product_root=modis_root,
+            tiles=tiles,
+            date_code=date_code,
+            band_map=band_map,
+            pattern_template="*{band}_doy{date_code}*.tif",
+            product_slug="modis",
+            scale_min=self._config.modis_scale_min,
+            scale_max=self._config.modis_scale_max,
+            gamma=self._config.modis_gamma,
+        )
+
+    def prepare_viirs_rgb(
+        self,
+        viirs_root: Path,
+        *,
+        tiles: Sequence[str],
+        date_code: str,
+    ) -> Path:
+        product = (self._config.viirs_product or "").strip()
+        if product.endswith((".002", ".003")):
+            band_map: Dict[str, str] = {
+                "red": "SurfReflect_I1_1",
+                "green": "SurfReflect_I2_1",
+                "blue": "SurfReflect_I3_1",
+            }
+        else:
+            band_map = {
+                "red": "SurfReflect_I1",
+                "green": "SurfReflect_I2",
+                "blue": "SurfReflect_I3",
+            }
+        return self._prepare_rgb_product(
+            product_root=viirs_root,
+            tiles=tiles,
+            date_code=date_code,
+            band_map=band_map,
+            pattern_template="*{band}_doy{date_code}*.tif",
+            product_slug="viirs",
+            scale_min=self._config.viirs_scale_min,
+            scale_max=self._config.viirs_scale_max,
+            gamma=self._config.viirs_gamma,
+        )
+
+    def _prepare_rgb_product(
+        self,
+        *,
+        product_root: Path,
+        tiles: Sequence[str],
+        date_code: str,
+        band_map: Dict[str, str],
+        pattern_template: str,
+        product_slug: str,
+        scale_min: float,
+        scale_max: float,
+        gamma: float,
+    ) -> Path:
+        if not tiles:
+            raise ValueError(f"No {product_slug} tiles provided for processing")
 
         band_files: Dict[str, List[Path]] = {key: [] for key in band_map}
 
         for tile in tiles:
-            tile_dir = modis_root / tile
+            tile_dir = product_root / tile
             if not tile_dir.exists():
-                raise FileNotFoundError(f"MODIS tile directory not found: {tile_dir}")
-            candidates = sorted(p for p in tile_dir.glob("MCD43A4.061_*") if p.is_dir())
-            if not candidates:
-                raise FileNotFoundError(f"No MODIS data bundle found under {tile_dir}")
-            data_dir = candidates[0]
+                raise FileNotFoundError(f"{product_slug.upper()} tile directory not found: {tile_dir}")
+            data_dir = self._resolve_tile_data_dir(tile_dir)
 
             for key, band_name in band_map.items():
-                pattern = f"*{band_name}_doy{date_code}*.tif"
-                matches = list((data_dir if data_dir.is_dir() else tile_dir).glob(pattern))
+                pattern = pattern_template.format(band=band_name, date_code=date_code)
+                matches = list(data_dir.glob(pattern))
                 if not matches:
                     raise FileNotFoundError(
                         f"Band {band_name} not found in {data_dir} for tile {tile}"
@@ -224,19 +277,19 @@ class ProcessingManager(DataProcessor):
 
         vrt_paths: Dict[str, Path] = {}
         for key, files in band_files.items():
-            list_path = self._temp_dir / f"modis_{key}_tiles.txt"
+            list_path = self._temp_dir / f"{product_slug}_{key}_tiles.txt"
             list_path.write_text("\n".join(str(path) for path in files), encoding="utf-8")
-            vrt_path = self._temp_dir / f"modis_{key}_mosaic.vrt"
+            vrt_path = self._temp_dir / f"{product_slug}_{key}_mosaic.vrt"
             command = [
                 "gdalbuildvrt",
                 "-input_file_list",
                 str(list_path),
                 str(vrt_path),
             ]
-            self._runner.run(command, description=f"mosaic MODIS {key} band")
+            self._runner.run(command, description=f"mosaic {product_slug.upper()} {key} band")
             vrt_paths[key] = vrt_path
 
-        rgb_vrt = self._temp_dir / "modis_rgb.vrt"
+        rgb_vrt = self._temp_dir / f"{product_slug}_rgb.vrt"
         command = [
             "gdalbuildvrt",
             "-separate",
@@ -245,12 +298,9 @@ class ProcessingManager(DataProcessor):
             str(vrt_paths["green"]),
             str(vrt_paths["blue"]),
         ]
-        self._runner.run(command, description="combine MODIS bands into RGB VRT")
+        self._runner.run(command, description=f"combine {product_slug.upper()} bands into RGB VRT")
 
-        rgb_tif = self._processing_dir / f"modis_{date_code}_rgb.tif"
-        scale_min = self._config.modis_scale_min
-        scale_max = self._config.modis_scale_max
-        gamma = self._config.modis_gamma
+        rgb_tif = self._processing_dir / f"{product_slug}_{date_code}_rgb.tif"
 
         command = [
             "gdal_translate",
@@ -278,7 +328,13 @@ class ProcessingManager(DataProcessor):
             str(rgb_vrt),
             str(rgb_tif),
         ])
-        self._runner.run(command, description="convert MODIS RGB mosaic to GeoTIFF")
+        self._runner.run(command, description=f"convert {product_slug.upper()} RGB mosaic to GeoTIFF")
 
         cog_path = self.create_cog(rgb_tif)
         return cog_path
+
+    def _resolve_tile_data_dir(self, tile_dir: Path) -> Path:
+        candidates = sorted(p for p in tile_dir.iterdir() if p.is_dir())
+        if candidates:
+            return candidates[0]
+        return tile_dir

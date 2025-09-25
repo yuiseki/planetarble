@@ -5,6 +5,7 @@ from planetarble.acquisition.appeears import (
     AppEEARSClient,
     AppEEARSDownloadError,
     download_mcd43a4_tiles,
+    download_viirs_corrected_reflectance,
 )
 from planetarble.acquisition.base import DataAcquisition
 from planetarble.acquisition.catalog import AssetCatalog, AssetRecord
@@ -22,4 +23,5 @@ __all__ = [
     "DownloadError",
     "DownloadManager",
     "download_mcd43a4_tiles",
+    "download_viirs_corrected_reflectance",
 ]

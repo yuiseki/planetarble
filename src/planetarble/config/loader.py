@@ -77,7 +77,14 @@ class ConfigLoader:
         processing_data = dict(processing_payload)
         if "modis_tiles" in processing_data:
             processing_data["modis_tiles"] = tuple(processing_data.get("modis_tiles") or [])
+        if "viirs_tiles" in processing_data:
+            processing_data["viirs_tiles"] = tuple(processing_data.get("viirs_tiles") or [])
+        if "tile_source" not in processing_data and "modis_tile_source" in processing_data:
+            processing_data["tile_source"] = processing_data.get("modis_tile_source")
         for key in ("modis_scale_min", "modis_scale_max", "modis_gamma"):
+            if key in processing_data and processing_data[key] is not None:
+                processing_data[key] = float(processing_data[key])
+        for key in ("viirs_scale_min", "viirs_scale_max", "viirs_gamma"):
             if key in processing_data and processing_data[key] is not None:
                 processing_data[key] = float(processing_data[key])
         processing = ProcessingConfig(**processing_data)

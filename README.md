@@ -6,7 +6,7 @@ Planetarble builds a fully open global raster basemap and packages it as a singl
 
 The project orchestrates three core phases:
 
-1. **Acquire** the required datasets (NASA BMNG 2004, GEBCO 2024 Global Grid, Natural Earth 10 m layers) with integrity checks.
+1. **Acquire** the required datasets (NASA BMNG 2004, GEBCO 2024 Global Grid, Natural Earth 10 m layers, and optional MODIS/VIIRS surface reflectance tiles) with integrity checks.
 2. **Process** the rasters into a blended Web Mercator tile pyramid covering zoom levels 0–10.
 3. **Package** the output as `world_YYYY.pmtiles` with companion metadata and licensing bundles.
 
@@ -49,6 +49,14 @@ planetarble tile --config configs/base/pipeline.yaml --quality 95 --tile-format 
 
 The default configuration stores raw data in `data/`, temporary artifacts in `tmp/`, and final outputs in `output/`. Adjust paths and parameters by copying `configs/base/pipeline.yaml` and editing as needed. Expect roughly 4.5 GB of downloads on the first run (BMNG 500 m panels, GEBCO netCDF, Natural Earth archives); on an 80 Mbps connection the acquisition step typically completes in about 10 minutes.
 
+## Imagery Options
+
+- Planetarble ships with NASA Blue Marble Next Generation (BMNG) as the default imagery. The processing stage produces a normalized Cloud Optimized GeoTIFF under `output/processing/*_normalized_cog.tif` and the tiling stage uses it when `processing.tile_source` is left at `bmng`.
+- MODIS MCD43A4 surface reflectance can be enabled by setting `processing.modis_enabled: true`, providing a day-of-year (`processing.modis_doy`) and listing desired sinusoidal tiles (`processing.modis_tiles`). The acquisition command requests the corresponding assets via NASA AppEEARS. Switch the final tile source by setting `processing.tile_source: modis` in your configuration.
+- VIIRS corrected reflectance (VNP09GA.002) is now supported. Set `processing.viirs_enabled: true`, choose the acquisition date (`processing.viirs_date` in `YYYYJJJ` format), and list the tiles in `processing.viirs_tiles`. Select `processing.tile_source: viirs` to build the MBTiles/PMTiles pyramid from the VIIRS COG. Adjust `processing.viirs_product` if you need to target another collection (e.g., `VJ109GA.002` for NOAA-20); Planetarble automatically requests the correct Collection 2 layer names.
+- Both MODIS and VIIRS downloads require AppEEARS credentials. Export `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD`, or provide an `APPEEARS_TOKEN`, before running `planetarble acquire` so the CLI can authenticate with the service.
+- You can enable multiple imagery sources simultaneously; each processed raster is preserved under `output/processing/`. Switching `processing.tile_source` lets you compare BMNG, MODIS, and VIIRS outputs without re-running the acquisition step.
+
 ## Quality Tuning
 
 - `processing.tile_quality` defaults to 95 in `configs/base/pipeline.yaml`; raise or lower this value to trade file size for fidelity.
@@ -66,13 +74,10 @@ The default configuration stores raw data in `data/`, temporary artifacts in `tm
 ## Roadmap
 
 - Support higher-resolution outputs across the entire basemap without compromising reproducibility.
-- Evaluate MODIS MCD43A4 (NBAR, 500 m) composites as an earlier alternative imagery source before Sentinel-2 experiments.
-- Experiment with VIIRS Corrected Reflectance swaths (375–500 m) ahead of any Sentinel-2 ingestion to validate processing throughput.
-- Ingest Sentinel-2 acquisitions via Copernicus services to unlock higher zoom levels where source data allows.
+- Integrate Sentinel-2 acquisitions via Copernicus services to unlock higher zoom levels where source data allows.
 - Offer selective high-zoom coverage so priority regions can receive detailed tiles while keeping the global bundle lean.
 - Provide region-scoped refresh workflows that update only the areas requiring newer imagery.
-- Implement the preprocessing pipeline (`ProcessingManager`) to normalize BMNG imagery, generate GEBCO hillshade, unpack Natural Earth masks, and convert merged rasters to Cloud Optimized GeoTIFFs.
-- Add commands for tiling, PMTiles conversion, and output verification.
+- Expand quality assurance with automated visual diffs and `pmtiles verify` integration once long-running workflow orchestration is in place.
 
 ## Requirements
 

@@ -59,6 +59,31 @@ class ProcessingConfig:
 
 
 @dataclass
+class CopernicusLayerConfig:
+    """Describe a Copernicus WMS layer to download."""
+
+    name: str
+    format: str = "image/jpeg"
+    style: str = ""
+    time: Optional[str] = None
+    output: Optional[str] = None
+
+
+@dataclass
+class CopernicusConfig:
+    """Configuration controlling Copernicus Sentinel-2 acquisition."""
+
+    enabled: bool = False
+    bbox: Tuple[float, float, float, float] = (123.0, 24.0, 147.0, 46.0)
+    min_zoom: int = 8
+    max_zoom: int = 12
+    tile_size: int = 256
+    layers: Tuple[CopernicusLayerConfig, ...] = field(default_factory=tuple)
+    max_tiles_per_layer: Optional[int] = None
+    timeout_seconds: int = 30
+
+
+@dataclass
 class TileMetadata:
     """Metadata embedded in PMTiles and TileJSON outputs."""
 

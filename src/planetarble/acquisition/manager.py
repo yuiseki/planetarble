@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from planetarble.core.models import AssetManifest
+from planetarble.core.models import AssetManifest, CopernicusConfig
 from planetarble.logging import get_logger
 
 from .appeears import (
@@ -18,6 +18,14 @@ from .appeears import (
     AppEEARSDownloadError,
     download_mcd43a4_tiles,
     download_viirs_corrected_reflectance,
+)
+from .copernicus import (
+    CopernicusAccessError,
+    CopernicusAuthError,
+    CopernicusCredentials,
+    CopernicusCredentialsMissing,
+    download_tiles as download_copernicus_wms_tiles,
+    verify_copernicus_connection,
 )
 from .base import DataAcquisition
 from .catalog import AssetCatalog, AssetRecord
@@ -193,6 +201,73 @@ class AcquisitionManager(DataAcquisition):
 
         results.update(downloaded)
         return results
+
+    def check_copernicus_connection(self, *, strict: bool = False) -> bool:
+        """Verify that Copernicus credentials allow WMS access."""
+
+        try:
+            ok = verify_copernicus_connection()
+        except CopernicusCredentialsMissing as exc:
+            LOGGER.info("copernicus credentials missing; skipping verification", extra={"error": str(exc)})
+            if strict:
+                raise
+            return False
+        except (CopernicusAuthError, CopernicusAccessError) as exc:
+            LOGGER.error("copernicus verification failed", extra={"error": str(exc)})
+            if strict:
+                raise
+            return False
+        else:
+            LOGGER.info("copernicus connection verified")
+            return ok
+
+    def download_copernicus_tiles(
+        self,
+        config: CopernicusConfig,
+        *,
+        force: bool = False,
+    ) -> List[Dict[str, object]]:
+        """Download Copernicus Sentinel-2 tiles according to configuration."""
+
+        if not config.enabled:
+            LOGGER.debug("copernicus acquisition disabled; skipping")
+            return []
+        if not config.layers:
+            LOGGER.warning("copernicus acquisition enabled but no layers configured")
+            return []
+
+        try:
+            credentials = CopernicusCredentials.from_env()
+        except CopernicusCredentialsMissing as exc:
+            LOGGER.warning("Copernicus credentials missing; skipping tile download", extra={"error": str(exc)})
+            return []
+
+        destination = (self._data_directory / "copernicus" / "tiles").resolve()
+        destination.mkdir(parents=True, exist_ok=True)
+
+        LOGGER.info(
+            "downloading copernicus tiles",
+            extra={
+                "layers": [layer.name for layer in config.layers],
+                "bbox": config.bbox,
+                "min_zoom": config.min_zoom,
+                "max_zoom": config.max_zoom,
+            },
+        )
+
+        summaries = download_copernicus_wms_tiles(
+            credentials,
+            config,
+            destination,
+            force=force,
+        )
+
+        for summary in summaries:
+            LOGGER.info(
+                "copernicus layer download summary",
+                extra=summary,
+            )
+        return summaries
 
     def download_viirs_corrected_reflectance(
         self,

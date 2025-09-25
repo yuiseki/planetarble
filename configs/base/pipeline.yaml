@@ -38,3 +38,22 @@ processing:
   viirs_scale_min: 0
   viirs_scale_max: 9000
   viirs_gamma: 0.8
+copernicus:
+  enabled: true
+  bbox:
+    - 123.0
+    - 24.0
+    - 147.0
+    - 46.0
+  min_zoom: 8
+  max_zoom: 12
+  tile_size: 256
+  max_tiles_per_layer: null
+  timeout_seconds: 30
+  layers:
+    - name: TRUE_COLOR
+      format: image/jpeg
+      output: true_color
+    - name: VEGETATION_INDEX
+      format: image/png
+      output: vegetation_index

@@ -7,6 +7,13 @@ from planetarble.acquisition.appeears import (
     download_mcd43a4_tiles,
     download_viirs_corrected_reflectance,
 )
+from planetarble.acquisition.copernicus import (
+    CopernicusAccessError,
+    CopernicusAuthError,
+    CopernicusCredentialsMissing,
+    get_available_layers,
+    verify_copernicus_connection,
+)
 from planetarble.acquisition.base import DataAcquisition
 from planetarble.acquisition.catalog import AssetCatalog, AssetRecord
 from planetarble.acquisition.download import DownloadError, DownloadManager
@@ -19,9 +26,14 @@ __all__ = [
     "AppEEARSDownloadError",
     "AssetCatalog",
     "AssetRecord",
+    "CopernicusAccessError",
+    "CopernicusAuthError",
+    "CopernicusCredentialsMissing",
     "DataAcquisition",
     "DownloadError",
     "DownloadManager",
+    "get_available_layers",
+    "verify_copernicus_connection",
     "download_mcd43a4_tiles",
     "download_viirs_corrected_reflectance",
 ]

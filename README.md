@@ -45,6 +45,9 @@ planetarble package --config configs/base/pipeline.yaml
 
 # increase JPEG quality or switch to WebP when experimenting
 planetarble tile --config configs/base/pipeline.yaml --quality 95 --tile-format WEBP
+
+# inspect available Copernicus (Sentinel-2) WMS layers
+planetarble copernicus-layers
 ```
 
 The default configuration stores raw data in `data/`, temporary artifacts in `tmp/`, and final outputs in `output/`. Adjust paths and parameters by copying `configs/base/pipeline.yaml` and editing as needed. Expect roughly 4.5 GB of downloads on the first run (BMNG 500 m panels, GEBCO netCDF, Natural Earth archives); on an 80 Mbps connection the acquisition step typically completes in about 10 minutes.
@@ -54,6 +57,7 @@ The default configuration stores raw data in `data/`, temporary artifacts in `tm
 - Planetarble ships with NASA Blue Marble Next Generation (BMNG) as the default imagery. The processing stage produces a normalized Cloud Optimized GeoTIFF under `output/processing/*_normalized_cog.tif` and the tiling stage uses it when `processing.tile_source` is left at `bmng`.
 - MODIS MCD43A4 surface reflectance can be enabled by setting `processing.modis_enabled: true`, providing a day-of-year (`processing.modis_doy`) and listing desired sinusoidal tiles (`processing.modis_tiles`). The acquisition command requests the corresponding assets via NASA AppEEARS. Switch the final tile source by setting `processing.tile_source: modis` in your configuration.
 - VIIRS corrected reflectance (VNP09GA.002) is now supported. Set `processing.viirs_enabled: true`, choose the acquisition date (`processing.viirs_date` in `YYYYJJJ` format), and list the tiles in `processing.viirs_tiles`. Select `processing.tile_source: viirs` to build the MBTiles/PMTiles pyramid from the VIIRS COG. Adjust `processing.viirs_product` if you need to target another collection (e.g., `VJ109GA.002` for NOAA-20); Planetarble automatically requests the correct Collection 2 layer names.
+- Sentinel-2 L2A imagery from the Copernicus Data Space Ecosystem can be downloaded by enabling the `copernicus` block in `configs/base/pipeline.yaml`. The default configuration targets Japan (`bbox: [123, 24, 147, 46]`) for zoom levels `8–12` and fetches the `TRUE_COLOR` and `VEGETATION_INDEX` layers. Adjust `copernicus.layers`, `bbox`, `min_zoom`, `max_zoom`, or `max_tiles_per_layer` to control coverage and cost. Make sure `COPERNICUS_INSTANCE_ID`, `COPERNICUS_CLIENT_ID`, and `COPERNICUS_CLIENT_SECRET` are defined in `.env` before running `planetarble acquire`.
 - Both MODIS and VIIRS downloads require AppEEARS credentials. Export `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD`, or provide an `APPEEARS_TOKEN`, before running `planetarble acquire` so the CLI can authenticate with the service.
 - You can enable multiple imagery sources simultaneously; each processed raster is preserved under `output/processing/`. Switching `processing.tile_source` lets you compare BMNG, MODIS, and VIIRS outputs without re-running the acquisition step.
 

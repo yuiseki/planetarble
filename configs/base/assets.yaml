@@ -213,3 +213,30 @@ assets:
     license: "NASA EOSDIS — unrestricted"
     attribution: "NASA LP DAAC"
     media_type: raster
+  copernicus_sentinel2_true_color:
+    name: Copernicus Sentinel-2 L2A (True Color)
+    description: True color RGB WMS layer served from the Copernicus Data Space Ecosystem.
+    urls:
+      - https://sh.dataspace.copernicus.eu/ogc/wms/${COPERNICUS_INSTANCE_ID}?service=WMS
+    destination: copernicus/sentinel2/true_color_capabilities.xml
+    license: "Copernicus Data Policy — free and open"
+    attribution: "Copernicus Sentinel data (2025) processed by ESA"
+    media_type: wms
+  copernicus_sentinel2_vegetation_index:
+    name: Copernicus Sentinel-2 L2A (Vegetation Index)
+    description: NDVI WMS layer composed from Sentinel-2 L2A via the Copernicus Data Space Ecosystem.
+    urls:
+      - https://sh.dataspace.copernicus.eu/ogc/wms/${COPERNICUS_INSTANCE_ID}?service=WMS
+    destination: copernicus/sentinel2/vegetation_index_capabilities.xml
+    license: "Copernicus Data Policy — free and open"
+    attribution: "Copernicus Sentinel data (2025) processed by ESA"
+    media_type: wms
+  copernicus_sentinel2_agriculture:
+    name: Copernicus Sentinel-2 L2A (Agriculture)
+    description: Agriculture-focused WMS layer highlighting crop signatures from Sentinel-2 L2A.
+    urls:
+      - https://sh.dataspace.copernicus.eu/ogc/wms/${COPERNICUS_INSTANCE_ID}?service=WMS
+    destination: copernicus/sentinel2/agriculture_capabilities.xml
+    license: "Copernicus Data Policy — free and open"
+    attribution: "Copernicus Sentinel data (2025) processed by ESA"
+    media_type: wms

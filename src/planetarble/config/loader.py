@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from planetarble.core.models import ProcessingConfig
+from planetarble.core.models import CopernicusConfig, CopernicusLayerConfig, ProcessingConfig
 
 try:
     import yaml  # type: ignore
@@ -23,6 +23,7 @@ class PipelineConfig:
     temp_dir: Path = Path("tmp")
     output_dir: Path = Path("output")
     processing: ProcessingConfig = field(default_factory=ProcessingConfig)
+    copernicus: CopernicusConfig = field(default_factory=CopernicusConfig)
 
     def resolve_relative_paths(self, base_dir: Path) -> None:
         """Resolve relative directories against the provided base directory."""
@@ -88,11 +89,32 @@ class ConfigLoader:
             if key in processing_data and processing_data[key] is not None:
                 processing_data[key] = float(processing_data[key])
         processing = ProcessingConfig(**processing_data)
+
+        copernicus_payload = payload.get("copernicus", {})
+        copernicus_data = dict(copernicus_payload)
+        layers_payload = copernicus_data.pop("layers", []) or []
+        layer_configs = []
+        for layer in layers_payload:
+            if isinstance(layer, dict):
+                layer_configs.append(CopernicusLayerConfig(**layer))
+            else:  # pragma: no cover - configuration guard
+                raise ValueError("copernicus.layers entries must be mappings")
+        copernicus_data["layers"] = tuple(layer_configs)
+        bbox = copernicus_data.get("bbox")
+        if bbox is not None:
+            if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                raise ValueError("copernicus.bbox must be a list of four numbers")
+            copernicus_data["bbox"] = tuple(float(value) for value in bbox)
+        for key in ("min_zoom", "max_zoom", "tile_size", "timeout_seconds", "max_tiles_per_layer"):
+            if key in copernicus_data and copernicus_data[key] is not None:
+                copernicus_data[key] = int(copernicus_data[key])
+        copernicus = CopernicusConfig(**copernicus_data)
         return PipelineConfig(
             data_dir=data_dir,
             temp_dir=temp_dir,
             output_dir=output_dir,
             processing=processing,
+            copernicus=copernicus,
         )
 
 

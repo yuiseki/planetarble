@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import argparse
 import sys
+import os
 from pathlib import Path
 from typing import Iterable
 
-from planetarble.acquisition import AcquisitionManager
+from planetarble.acquisition import (
+    AcquisitionManager,
+    CopernicusAccessError,
+    CopernicusAuthError,
+    CopernicusCredentialsMissing,
+)
 from planetarble.config import load_config
 from planetarble.core.models import TileMetadata
 from planetarble.logging import configure_logging, get_logger
@@ -16,6 +22,25 @@ from planetarble.processing import ProcessingManager
 from planetarble.tiling import TilingManager
 
 LOGGER = get_logger(__name__)
+
+
+def _load_env() -> None:
+    env_path = Path.cwd() / ".env"
+    if not env_path.exists():
+        return
+    try:
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if "=" not in stripped:
+                continue
+            key, value = stripped.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"')
+            os.environ.setdefault(key, value)
+    except OSError as exc:  # pragma: no cover - filesystem errors
+        LOGGER.warning("Failed to load .env file", extra={"path": str(env_path), "error": str(exc)})
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -116,10 +141,26 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print packaging commands without executing",
     )
+
+    copernicus_layers = subcommands.add_parser(
+        "copernicus-layers",
+        help="List available Copernicus WMS layers for the configured instance",
+    )
+    copernicus_layers.add_argument(
+        "--instance-id",
+        default=None,
+        help="Override COPERNICUS_INSTANCE_ID for listing layers",
+    )
+    copernicus_layers.add_argument(
+        "--no-credentials",
+        action="store_true",
+        help="Do not use client credentials when fetching capabilities",
+    )
     return parser
 
 
 def main(argv: Iterable[str] | None = None) -> int:
+    _load_env()
     parser = build_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
 
@@ -133,6 +174,8 @@ def main(argv: Iterable[str] | None = None) -> int:
         return _handle_tile(args)
     if args.command == "package":
         return _handle_package(args)
+    if args.command == "copernicus-layers":
+        return _handle_copernicus_layers(args)
     parser.error("Unknown command")
     return 1
 
@@ -179,8 +222,27 @@ def _handle_acquire(args: argparse.Namespace) -> int:
         raise
     except Exception as exc:
         LOGGER.warning("viirs acquisition skipped: %s", exc)
+    try:
+        manager.check_copernicus_connection()
+    except (SystemExit, KeyboardInterrupt):
+        raise
+    except Exception as exc:
+        LOGGER.warning("copernicus verification failed: %s", exc)
+
+    copernicus_summary: list[dict[str, object]] = []
+    try:
+        copernicus_summary = manager.download_copernicus_tiles(cfg.copernicus, force=args.force)
+    except (SystemExit, KeyboardInterrupt):
+        raise
+    except (CopernicusCredentialsMissing, CopernicusAuthError, CopernicusAccessError) as exc:
+        LOGGER.warning("copernicus tiles skipped: %s", exc)
+
+    generation_params: dict[str, object] = {"bmng_resolution": args.bmng_resolution}
+    if copernicus_summary:
+        generation_params["copernicus_layers"] = copernicus_summary
+
     manager.generate_manifest(
-        generation_params={"bmng_resolution": args.bmng_resolution},
+        generation_params=generation_params,
     )
     return 0
 
@@ -391,6 +453,30 @@ def _handle_package(args: argparse.Namespace) -> int:
         "tilejson": str(tilejson_path),
         "distribution": str(package_dir),
     })
+    return 0
+
+
+def _handle_copernicus_layers(args: argparse.Namespace) -> int:
+    from planetarble.acquisition import CopernicusAccessError, CopernicusAuthError, get_available_layers
+
+    try:
+        layers = get_available_layers(
+            instance_id=args.instance_id,
+            use_credentials=not args.no_credentials,
+        )
+    except CopernicusCredentialsMissing as exc:
+        LOGGER.error(str(exc))
+        return 1
+    except (CopernicusAuthError, CopernicusAccessError) as exc:
+        LOGGER.error("Unable to list Copernicus layers: %s", exc)
+        return 1
+
+    if not layers:
+        LOGGER.warning("No layers found for the specified Copernicus instance")
+        return 0
+
+    for name, title in layers:
+        print(f"{name}\t{title}")
     return 0
 
 

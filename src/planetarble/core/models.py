@@ -81,6 +81,9 @@ class CopernicusConfig:
     layers: Tuple[CopernicusLayerConfig, ...] = field(default_factory=tuple)
     max_tiles_per_layer: Optional[int] = None
     timeout_seconds: int = 30
+    request_interval_seconds: float = 0.5
+    max_retries: int = 3
+    backoff_factor: float = 2.0
 
 
 @dataclass

@@ -231,6 +231,7 @@ def download_tiles(
     except CopernicusAccessError as exc:
         LOGGER.warning("copernicus capabilities fetch skipped", extra={"error": str(exc)})
 
+    summaries: List[Dict[str, object]] = []
     for layer in config.layers:
         summary = _download_layer_tiles(
             session=session,
@@ -303,46 +304,38 @@ def _download_layer_tiles(
                 if layer_config.time:
                     params["TIME"] = layer_config.time
 
-                try:
-                    response = session.get(base_url, params=params, timeout=timeout)
-                except requests.RequestException as exc:  # pragma: no cover - network failure path
-                    LOGGER.warning(
-                        "copernicus tile request failed",
-                        extra={
-                            "layer": layer_config.name,
-                            "zoom": zoom,
-                            "x": x,
-                            "y": y,
-                            "error": str(exc),
-                        },
-                    )
+                success, status_code = _fetch_tile(
+                    session=session,
+                    base_url=base_url,
+                    params=params,
+                    timeout=timeout,
+                    credentials=credentials,
+                    config=config,
+                    layer_name=layer_config.name,
+                    zoom=zoom,
+                    x=x,
+                    y=y,
+                    destination=tile_path,
+                )
+                if success:
+                    tiles_written += 1
+                else:
                     tiles_failed += 1
-                    continue
+                    if status_code == 403:
+                        LOGGER.warning(
+                            "copernicus returned 403; throttling",
+                            extra={
+                                "layer": layer_config.name,
+                                "zoom": zoom,
+                                "x": x,
+                                "y": y,
+                            },
+                        )
+                        time.sleep(config.request_interval_seconds * config.backoff_factor)
+                        tiles_limit_reached = True
+                        break
 
-                if response.status_code == 401:
-                    LOGGER.info("copernicus token expired; refreshing")
-                    token = request_access_token(credentials, timeout=timeout)
-                    session.headers.update({"Authorization": f"Bearer {token}"})
-                    response = session.get(base_url, params=params, timeout=timeout)
-
-                if response.status_code != 200:
-                    LOGGER.warning(
-                        "copernicus tile request returned %s",
-                        response.status_code,
-                        extra={
-                            "layer": layer_config.name,
-                            "zoom": zoom,
-                            "x": x,
-                            "y": y,
-                            "body": response.text[:200],
-                        },
-                    )
-                    tiles_failed += 1
-                    continue
-
-                tile_path.parent.mkdir(parents=True, exist_ok=True)
-                tile_path.write_bytes(response.content)
-                tiles_written += 1
+                time.sleep(max(0.0, config.request_interval_seconds))
             if tiles_limit_reached:
                 break
         if tiles_limit_reached:
@@ -362,6 +355,79 @@ def _download_layer_tiles(
     if tiles_limit_reached:
         summary["limit_reached"] = True
     return summary
+
+
+def _fetch_tile(
+    *,
+    session: requests.Session,
+    base_url: str,
+    params: Dict[str, str],
+    timeout: int,
+    credentials: CopernicusCredentials,
+    config: CopernicusConfig,
+    layer_name: str,
+    zoom: int,
+    x: int,
+    y: int,
+    destination: Path,
+) -> Tuple[bool, Optional[int]]:
+    attempts = 0
+    max_attempts = max(1, config.max_retries)
+    backoff = max(1.0, config.backoff_factor)
+    last_status: Optional[int] = None
+
+    while attempts < max_attempts:
+        attempts += 1
+        try:
+            response = session.get(base_url, params=params, timeout=timeout)
+        except requests.RequestException as exc:  # pragma: no cover - network failure path
+            LOGGER.warning(
+                "copernicus tile request failed",
+                extra={
+                    "layer": layer_name,
+                    "zoom": zoom,
+                    "x": x,
+                    "y": y,
+                    "error": str(exc),
+                    "attempt": attempts,
+                },
+            )
+            time.sleep(config.request_interval_seconds * (backoff ** attempts))
+            continue
+
+        last_status = response.status_code
+
+        if response.status_code == 401:
+            LOGGER.info("copernicus token expired; refreshing")
+            token = request_access_token(credentials, timeout=timeout)
+            session.headers.update({"Authorization": f"Bearer {token}"})
+            time.sleep(config.request_interval_seconds)
+            continue
+
+        if response.status_code == 200:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(response.content)
+            return True, 200
+
+        LOGGER.warning(
+            "copernicus tile request returned %s",
+            response.status_code,
+            extra={
+                "layer": layer_name,
+                "zoom": zoom,
+                "x": x,
+                "y": y,
+                "body": response.text[:200],
+                "attempt": attempts,
+            },
+        )
+
+        if response.status_code == 403:
+            return False, 403
+
+        time.sleep(config.request_interval_seconds * (backoff ** attempts))
+
+    return False, last_status
 
 
 def _tile_range(bbox: Tuple[float, float, float, float], zoom: int) -> Tuple[int, int, int, int]:

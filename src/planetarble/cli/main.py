@@ -255,6 +255,8 @@ def _handle_process(args: argparse.Namespace) -> int:
         cfg.processing,
         temp_dir=cfg.temp_dir,
         output_dir=cfg.output_dir,
+        data_dir=cfg.data_dir,
+        copernicus=cfg.copernicus,
         dry_run=args.dry_run,
     )
 
@@ -310,6 +312,15 @@ def _handle_process(args: argparse.Namespace) -> int:
             date_code=cfg.processing.viirs_date,
         )
 
+    copernicus_cogs: list[Path] = []
+    if cfg.copernicus.enabled:
+        try:
+            copernicus_cogs = manager.prepare_copernicus_layers(force=args.dry_run)
+        except (SystemExit, KeyboardInterrupt):
+            raise
+        except Exception as exc:
+            LOGGER.warning("copernicus processing skipped: %s", exc)
+
     LOGGER.info("processing outputs", extra={
         "bmng_mosaic": str(bmng_source),
         "normalized": str(normalized),
@@ -318,6 +329,7 @@ def _handle_process(args: argparse.Namespace) -> int:
         "cog": str(cog_path),
         "modis_cog": str(modis_cog_path) if modis_cog_path else None,
         "viirs_cog": str(viirs_cog_path) if viirs_cog_path else None,
+        "copernicus_cogs": [str(path) for path in copernicus_cogs] if copernicus_cogs else None,
     })
     return 0
 

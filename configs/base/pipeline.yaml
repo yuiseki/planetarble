@@ -50,6 +50,9 @@ copernicus:
   tile_size: 256
   max_tiles_per_layer: null
   timeout_seconds: 30
+  request_interval_seconds: 0.5
+  max_retries: 3
+  backoff_factor: 2.0
   layers:
     - name: TRUE_COLOR
       format: image/jpeg

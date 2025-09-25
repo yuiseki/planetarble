@@ -248,6 +248,10 @@ class ProcessingManager(DataProcessor):
         self._runner.run(command, description="combine MODIS bands into RGB VRT")
 
         rgb_tif = self._processing_dir / f"modis_{date_code}_rgb.tif"
+        scale_min = self._config.modis_scale_min
+        scale_max = self._config.modis_scale_max
+        gamma = self._config.modis_gamma
+
         command = [
             "gdal_translate",
             "-of",
@@ -261,15 +265,19 @@ class ProcessingManager(DataProcessor):
             "-ot",
             "Byte",
             "-scale",
-            "0",
-            "10000",
+            str(scale_min),
+            str(scale_max),
             "0",
             "255",
+        ]
+        if gamma and gamma != 1.0:
+            command.extend(["-exponent", str(gamma)])
+        command.extend([
             "-a_nodata",
             "0",
             str(rgb_vrt),
             str(rgb_tif),
-        ]
+        ])
         self._runner.run(command, description="convert MODIS RGB mosaic to GeoTIFF")
 
         cog_path = self.create_cog(rgb_tif)

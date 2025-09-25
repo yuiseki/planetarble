@@ -45,6 +45,9 @@ class ProcessingConfig:
     modis_doy: Optional[str] = None
     modis_tiles: Tuple[str, ...] = field(default_factory=tuple)
     modis_tile_source: str = "bmng"
+    modis_scale_min: float = 0.0
+    modis_scale_max: float = 4000.0
+    modis_gamma: float = 1.0
 
 
 @dataclass

@@ -21,3 +21,6 @@ processing:
     - h29v06
     - h30v05
   modis_tile_source: "modis"
+  modis_scale_min: 0
+  modis_scale_max: 2500
+  modis_gamma: 0.7

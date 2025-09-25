@@ -77,6 +77,9 @@ class ConfigLoader:
         processing_data = dict(processing_payload)
         if "modis_tiles" in processing_data:
             processing_data["modis_tiles"] = tuple(processing_data.get("modis_tiles") or [])
+        for key in ("modis_scale_min", "modis_scale_max", "modis_gamma"):
+            if key in processing_data and processing_data[key] is not None:
+                processing_data[key] = float(processing_data[key])
         processing = ProcessingConfig(**processing_data)
         return PipelineConfig(
             data_dir=data_dir,

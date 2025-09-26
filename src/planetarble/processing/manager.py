@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import re
 import subprocess
@@ -103,8 +105,16 @@ class ProcessingManager(DataProcessor):
         )
         return mosaic_path
 
-    def normalize_bmng(self, input_path: Path) -> Path:
+    def normalize_bmng(self, input_path: Path, *, source_files: Sequence[Path] | None = None) -> Path:
         output = self._processing_dir / f"{input_path.stem}_normalized.tif"
+        meta_path = self._metadata_path_for_output(output)
+        sources = self._format_sources(source_files, default_key="bmng_panel", fallback=input_path)
+        if self._can_reuse_output(output, meta_path, sources):
+            LOGGER.info(
+                "reusing normalized BMNG raster",
+                extra={"output": str(output)},
+            )
+            return output
         command = [
             "gdal_translate",
             "-of",
@@ -119,10 +129,19 @@ class ProcessingManager(DataProcessor):
             str(output),
         ]
         self._runner.run(command, description="normalize BMNG raster")
+        self._record_source_hashes(meta_path, sources)
         return output
 
     def generate_hillshade(self, gebco_path: Path) -> Path:
         output = self._processing_dir / f"{gebco_path.stem}_hillshade.tif"
+        meta_path = self._metadata_path_for_output(output)
+        sources = {"gebco": gebco_path}
+        if self._can_reuse_output(output, meta_path, sources):
+            LOGGER.info(
+                "reusing GEBCO hillshade",
+                extra={"output": str(output)},
+            )
+            return output
         command = [
             "gdaldem",
             "hillshade",
@@ -135,19 +154,28 @@ class ProcessingManager(DataProcessor):
             str(output),
         ]
         self._runner.run(command, description="generate GEBCO hillshade")
+        self._record_source_hashes(meta_path, sources)
         return output
 
     def create_masks(self, natural_earth_path: Path) -> Path:
         destination = self._temp_dir / "natural_earth"
         destination.mkdir(parents=True, exist_ok=True)
+        meta_path = self._metadata_path_for_output(destination)
+        sources = self._collect_natural_earth_sources(natural_earth_path)
+        if self._can_reuse_output(destination, meta_path, sources):
+            LOGGER.info(
+                "reusing Natural Earth masks",
+                extra={"destination": str(destination)},
+            )
+            return destination
         if natural_earth_path.is_file() and natural_earth_path.suffix == ".zip":
             self._extract_zip(natural_earth_path, destination)
-            return destination
-        if natural_earth_path.is_dir():
+        elif natural_earth_path.is_dir():
             for archive in natural_earth_path.glob("*.zip"):
                 self._extract_zip(archive, destination / archive.stem)
         else:  # pragma: no cover - input guard
             raise ValueError(f"Unsupported Natural Earth input: {natural_earth_path}")
+        self._record_source_hashes(meta_path, sources)
         return destination
 
     def create_cog(self, raster_path: Path) -> Path:
@@ -195,6 +223,95 @@ class ProcessingManager(DataProcessor):
         )
         with zipfile.ZipFile(archive) as bundle:
             bundle.extractall(destination)
+
+    def _collect_natural_earth_sources(self, natural_earth_path: Path) -> Dict[str, Path]:
+        if natural_earth_path.is_file():
+            if natural_earth_path.suffix.lower() != ".zip":
+                raise ValueError(f"Unsupported Natural Earth archive: {natural_earth_path}")
+            return {natural_earth_path.name: natural_earth_path.resolve()}
+        if natural_earth_path.is_dir():
+            archives = sorted(natural_earth_path.glob("*.zip"))
+            if not archives:
+                raise FileNotFoundError(
+                    f"No Natural Earth ZIP archives found under {natural_earth_path}"
+                )
+            return {archive.name: archive.resolve() for archive in archives}
+        raise ValueError(f"Unsupported Natural Earth input: {natural_earth_path}")
+
+    def _format_sources(
+        self,
+        source_files: Sequence[Path] | None,
+        *,
+        default_key: str,
+        fallback: Path,
+    ) -> Dict[str, Path]:
+        if source_files:
+            mapping: Dict[str, Path] = {}
+            for index, path in enumerate(sorted(set(Path(p).resolve() for p in source_files))):
+                mapping[f"{default_key}_{index + 1:02d}"] = path
+            if mapping:
+                return mapping
+        return {default_key: fallback.resolve()}
+
+    def _metadata_path_for_output(self, output: Path) -> Path:
+        if output.suffix:
+            return output.with_suffix(output.suffix + ".hash.json")
+        return output / ".hash.json"
+
+    def _can_reuse_output(
+        self,
+        output: Path,
+        meta_path: Path,
+        sources: Dict[str, Path],
+    ) -> bool:
+        if self._dry_run:
+            return False
+        if not output.exists() or not meta_path.exists():
+            return False
+        try:
+            cached = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        recorded = cached.get("sources", {})
+        for key, source_path in sources.items():
+            if not source_path.exists():
+                return False
+            current_hash = self._hash_file(source_path)
+            cached_entry = recorded.get(key, {})
+            if cached_entry.get("md5") != current_hash:
+                return False
+        if len(recorded) != len(sources):
+            return False
+        return True
+
+    def _record_source_hashes(self, meta_path: Path, sources: Dict[str, Path]) -> None:
+        if self._dry_run:
+            return
+        payload = {"sources": {}}
+        for key, source_path in sources.items():
+            resolved = source_path.resolve()
+            if not resolved.exists():
+                continue
+            payload["sources"][key] = {
+                "path": str(resolved),
+                "md5": self._hash_file(resolved),
+            }
+        try:
+            meta_path.parent.mkdir(parents=True, exist_ok=True)
+            meta_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        except OSError as exc:
+            LOGGER.warning(
+                "failed to persist hash metadata",
+                extra={"path": str(meta_path), "error": str(exc)},
+            )
+
+    @staticmethod
+    def _hash_file(path: Path) -> str:
+        checksum = hashlib.md5()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                checksum.update(chunk)
+        return checksum.hexdigest()
 
     def prepare_copernicus_layers(self, *, force: bool = False) -> List[Path]:
         config = self._copernicus

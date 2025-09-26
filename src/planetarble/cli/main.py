@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import argparse
-import sys
 import os
+import re
+import sys
 from pathlib import Path
 from typing import Iterable
 
@@ -15,7 +16,7 @@ from planetarble.acquisition import (
     CopernicusCredentialsMissing,
 )
 from planetarble.config import load_config
-from planetarble.core.models import TileMetadata
+from planetarble.core.models import CopernicusLayerConfig, TileMetadata
 from planetarble.logging import configure_logging, get_logger
 from planetarble.packaging import PackagingManager
 from planetarble.processing import ProcessingManager
@@ -192,6 +193,29 @@ def _resolve_config_path(path: Path | None) -> Path:
     raise SystemExit("No configuration file found; supply --config or create configs/base/pipeline.yaml")
 
 
+def _resolve_copernicus_cog(processing_dir: Path, layers: Iterable[CopernicusLayerConfig]) -> list[Path]:
+    ordered: list[Path] = []
+    seen: set[Path] = set()
+
+    for layer in layers or []:
+        slug = _slugify(layer.output or layer.name)
+        candidate = processing_dir / f"copernicus_{slug}_cog.tif"
+        if candidate.exists() and candidate not in seen:
+            ordered.append(candidate)
+            seen.add(candidate)
+
+    for candidate in sorted(processing_dir.glob("copernicus_*_cog.tif")):
+        if candidate not in seen:
+            ordered.append(candidate)
+            seen.add(candidate)
+
+    return ordered
+
+
+def _slugify(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_") or "layer"
+
+
 def _handle_acquire(args: argparse.Namespace) -> int:
     config_path = _resolve_config_path(args.config)
     cfg = load_config(config_path)
@@ -263,8 +287,9 @@ def _handle_process(args: argparse.Namespace) -> int:
     bmng_dir = (cfg.data_dir / "bmng" / cfg.processing.bmng_resolution).resolve()
     if not bmng_dir.exists():
         raise SystemExit(f"BMNG directory not found: {bmng_dir}")
+    bmng_panels = tuple(sorted(bmng_dir.glob("*.tif")))
     bmng_source = manager.compose_bmng_panels(bmng_dir)
-    normalized = manager.normalize_bmng(bmng_source)
+    normalized = manager.normalize_bmng(bmng_source, source_files=bmng_panels)
 
     gebco_path = (cfg.data_dir / "gebco" / f"GEBCO_{cfg.processing.gebco_year}_CF.nc").resolve()
     if not gebco_path.exists():
@@ -373,6 +398,13 @@ def _handle_tile(args: argparse.Namespace) -> int:
         if not viirs_candidates:
             raise SystemExit("VIIRS tile source selected but no viirs_*_rgb_cog.tif found; run process stage")
         source_raster = viirs_candidates[0]
+    elif tile_source == "copernicus":
+        copernicus_candidates = _resolve_copernicus_cog(processing_dir, cfg.copernicus.layers)
+        if not copernicus_candidates:
+            raise SystemExit(
+                "Copernicus tile source selected but no copernicus_*_cog.tif found; run process stage"
+            )
+        source_raster = copernicus_candidates[0]
     elif tile_source == "blend":
         raise SystemExit("tile_source=blend is not implemented yet")
     elif tile_source != "bmng":
@@ -416,6 +448,9 @@ def _handle_package(args: argparse.Namespace) -> int:
         product = cfg.processing.viirs_product or "VNP09GA"
         imagery_label = f"VIIRS Corrected Reflectance ({product} {cfg.processing.viirs_date or 'daily'})"
         imagery_attribution = "Imagery: NASA VIIRS Corrected Reflectance (LP DAAC)."
+    elif tile_source == "copernicus":
+        imagery_label = "Copernicus Sentinel-2 Level-2A"
+        imagery_attribution = "Imagery: Copernicus Sentinel-2 (European Space Agency)."
     else:
         imagery_label = "NASA Blue Marble Next Generation (2004)"
         imagery_attribution = "Imagery: NASA Blue Marble (2004)."
@@ -439,6 +474,7 @@ def _handle_package(args: argparse.Namespace) -> int:
     imagery_line = {
         "modis": "- MODIS MCD43A4 BRDF-Corrected Reflectance (NASA LP DAAC).",
         "viirs": "- VIIRS Corrected Reflectance (VNP09GA, NASA LP DAAC).",
+        "copernicus": "- Copernicus Sentinel-2 Level-2A (European Space Agency).",
     }.get(tile_source, "- NASA Blue Marble Next Generation (2004).")
 
     license_text = (

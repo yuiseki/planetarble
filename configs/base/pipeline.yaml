@@ -11,8 +11,8 @@ processing:
   max_zoom: 10
   tile_format: "JPEG"
   tile_quality: 95
-  tile_source: "modis"
-  modis_enabled: true
+  tile_source: "copernicus"
+  modis_enabled: false
   modis_doy: "2025233"
   modis_tiles:
     - h27v04
@@ -57,6 +57,3 @@ copernicus:
     - name: TRUE_COLOR
       format: image/jpeg
       output: true_color
-    - name: VEGETATION_INDEX
-      format: image/png
-      output: vegetation_index

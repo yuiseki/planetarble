@@ -14,6 +14,10 @@ from planetarble.acquisition import (
     CopernicusAccessError,
     CopernicusAuthError,
     CopernicusCredentialsMissing,
+    MPCError,
+    fetch_true_color_tile,
+    get_available_layers,
+    verify_copernicus_connection,
 )
 from planetarble.config import load_config
 from planetarble.core.models import CopernicusLayerConfig, TileMetadata
@@ -124,6 +128,59 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override tile encoding quality",
     )
 
+    mpc_fetch = subcommands.add_parser(
+        "mpc-fetch",
+        help="Download a Sentinel-2 true color clip via Microsoft Planetary Computer",
+    )
+    mpc_fetch.add_argument("--lat", type=float, required=True, help="Latitude of the target point")
+    mpc_fetch.add_argument("--lon", type=float, required=True, help="Longitude of the target point")
+    mpc_fetch.add_argument(
+        "--width-m",
+        type=float,
+        default=500.0,
+        help="Clip width in meters (default: 500)",
+    )
+    mpc_fetch.add_argument(
+        "--height-m",
+        type=float,
+        default=500.0,
+        help="Clip height in meters (default: 500)",
+    )
+    mpc_fetch.add_argument(
+        "--max-cloud",
+        type=float,
+        default=None,
+        help="Maximum acceptable cloud cover percentage",
+    )
+    mpc_fetch.add_argument(
+        "--start",
+        dest="start_datetime",
+        default=None,
+        help="ISO8601 start datetime filter (inclusive)",
+    )
+    mpc_fetch.add_argument(
+        "--end",
+        dest="end_datetime",
+        default=None,
+        help="ISO8601 end datetime filter (inclusive)",
+    )
+    mpc_fetch.add_argument(
+        "--output",
+        type=Path,
+        default=Path("mpc_true_color.tif"),
+        help="Output GeoTIFF path (default: mpc_true_color.tif)",
+    )
+    mpc_fetch.add_argument(
+        "--gdal-translate",
+        default="gdal_translate",
+        help="gdal_translate executable name (default: gdal_translate)",
+    )
+    mpc_fetch.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print commands without executing GDAL",
+    )
+
     package = subcommands.add_parser("package", help="Create PMTiles distribution")
     package.add_argument(
         "--config",
@@ -173,6 +230,8 @@ def main(argv: Iterable[str] | None = None) -> int:
         return _handle_process(args)
     if args.command == "tile":
         return _handle_tile(args)
+    if args.command == "mpc-fetch":
+        return _handle_mpc_fetch(args)
     if args.command == "package":
         return _handle_package(args)
     if args.command == "copernicus-layers":
@@ -525,6 +584,32 @@ def _handle_copernicus_layers(args: argparse.Namespace) -> int:
 
     for name, title in layers:
         print(f"{name}\t{title}")
+    return 0
+
+
+def _handle_mpc_fetch(args: argparse.Namespace) -> int:
+    try:
+        summary = fetch_true_color_tile(
+            lat=args.lat,
+            lon=args.lon,
+            width_m=args.width_m,
+            height_m=args.height_m,
+            output_path=args.output,
+            max_cloud=args.max_cloud,
+            start_datetime=args.start_datetime,
+            end_datetime=args.end_datetime,
+            gdal_translate=args.gdal_translate,
+            dry_run=args.dry_run,
+        )
+    except (SystemExit, KeyboardInterrupt):
+        raise
+    except MPCError as exc:
+        LOGGER.error("MPC fetch failed: %s", exc)
+        return 1
+
+    LOGGER.info("mpc fetch complete", extra=summary)
+    if args.dry_run:
+        print(summary)
     return 0
 
 

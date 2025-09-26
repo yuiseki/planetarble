@@ -58,6 +58,19 @@ The default configuration stores raw data in `data/`, temporary artifacts in `tm
 - MODIS MCD43A4 surface reflectance can be enabled by setting `processing.modis_enabled: true`, providing a day-of-year (`processing.modis_doy`) and listing desired sinusoidal tiles (`processing.modis_tiles`). The acquisition command requests the corresponding assets via NASA AppEEARS. Switch the final tile source by setting `processing.tile_source: modis` in your configuration.
 - VIIRS corrected reflectance (VNP09GA.002) is now supported. Set `processing.viirs_enabled: true`, choose the acquisition date (`processing.viirs_date` in `YYYYJJJ` format), and list the tiles in `processing.viirs_tiles`. Select `processing.tile_source: viirs` to build the MBTiles/PMTiles pyramid from the VIIRS COG. Adjust `processing.viirs_product` if you need to target another collection (e.g., `VJ109GA.002` for NOAA-20); Planetarble automatically requests the correct Collection 2 layer names.
 - Sentinel-2 L2A imagery from the Copernicus Data Space Ecosystem can be downloaded by enabling the `copernicus` block in `configs/base/pipeline.yaml`. The default configuration targets Japan (`bbox: [123, 24, 147, 46]`) for zoom levels `8–12` and fetches the `TRUE_COLOR` and `VEGETATION_INDEX` layers. Adjust `copernicus.layers`, `bbox`, `min_zoom`, `max_zoom`, or `max_tiles_per_layer` to control coverage and cost. Make sure `COPERNICUS_INSTANCE_ID`, `COPERNICUS_CLIENT_ID`, and `COPERNICUS_CLIENT_SECRET` are defined in `.env` before running `planetarble acquire`.
+- When Copernicus throttles access, run `planetarble mpc-fetch` to anonymously clip a high-resolution Sentinel-2 True Color chip (10 m) from Microsoft Planetary Computer without downloading a full tile. Example:
+
+  ```bash
+  planetarble mpc-fetch \
+    --lat 35.6839 \
+    --lon 139.7021 \
+    --width-m 600 \
+    --height-m 600 \
+    --max-cloud 10 \
+    --output output/processing/mpc_yoyogi_true_color.tif
+  ```
+
+  The command queries the MPC STAC API for a low-cloud Sentinel-2 L2A scene, signs the `visual` COG asset with an anonymous SAS token, and calls `gdal_translate` with `-projwin` so only the requested footprint is streamed from storage.
 - Both MODIS and VIIRS downloads require AppEEARS credentials. Export `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD`, or provide an `APPEEARS_TOKEN`, before running `planetarble acquire` so the CLI can authenticate with the service.
 - You can enable multiple imagery sources simultaneously; each processed raster is preserved under `output/processing/`. Switching `processing.tile_source` lets you compare BMNG, MODIS, and VIIRS outputs without re-running the acquisition step.
 

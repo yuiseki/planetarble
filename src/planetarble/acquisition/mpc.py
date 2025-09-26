@@ -61,6 +61,19 @@ def fetch_true_color_tile(
     """
 
     bbox = _bbox_from_point(lat=lat, lon=lon, width_m=width_m, height_m=height_m)
+    LOGGER.info(
+        "mpc stac search",
+        extra={
+            "lat": lat,
+            "lon": lon,
+            "width_m": width_m,
+            "height_m": height_m,
+            "bbox": bbox,
+            "max_cloud": max_cloud,
+            "start": start_datetime,
+            "end": end_datetime,
+        },
+    )
     scene = _select_scene(
         bbox=bbox,
         max_cloud=max_cloud,
@@ -68,7 +81,21 @@ def fetch_true_color_tile(
         end_datetime=end_datetime,
         timeout=timeout,
     )
+    LOGGER.info(
+        "mpc scene selected",
+        extra={
+            "item_id": scene.item_id,
+            "collection": scene.collection,
+            "cloud_cover": scene.cloud_cover,
+        },
+    )
     sas_token = _fetch_sas_token(scene.collection, timeout=timeout)
+    LOGGER.info(
+        "mpc sas token acquired",
+        extra={
+            "collection": scene.collection,
+        },
+    )
     signed_url = _append_token(scene.visual_href, sas_token)
 
     output_path = output_path.resolve()
@@ -95,6 +122,12 @@ def fetch_true_color_tile(
             subprocess.run(command, check=True)
         except subprocess.CalledProcessError as exc:  # pragma: no cover - requires GDAL runtime
             raise MPCError(f"gdal_translate failed: {exc}") from exc
+        LOGGER.info(
+            "mpc clip complete",
+            extra={
+                "output": str(output_path),
+            },
+        )
 
     return {
         "output": str(output_path),
@@ -141,6 +174,10 @@ def _select_scene(
             f"MPC STAC search failed: {response.status_code} {response.text.strip()}"
         )
     payload = response.json()
+    LOGGER.debug(
+        "mpc stac response",
+        extra={"matched": len(payload.get("features") or [])},
+    )
     features = payload.get("features") or []
     if not features:
         raise MPCError("No Sentinel-2 scenes found for the requested area")
@@ -238,4 +275,3 @@ def _safe_float(value: object) -> Optional[float]:
         return float(value) if value is not None else None
     except (TypeError, ValueError):
         return None
-

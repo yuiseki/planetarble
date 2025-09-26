@@ -14,7 +14,9 @@ from planetarble.acquisition import (
     CopernicusAccessError,
     CopernicusAuthError,
     CopernicusCredentialsMissing,
+    GSIError,
     MPCError,
+    fetch_gsi_ortho_clip,
     fetch_true_color_tile,
     get_available_layers,
     verify_copernicus_connection,
@@ -181,6 +183,62 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print commands without executing GDAL",
     )
 
+    gsi_fetch = subcommands.add_parser(
+        "gsi-fetch",
+        help="Download a GSI high-resolution orthophoto clip via the XYZ tile service",
+    )
+    gsi_fetch.add_argument("--lat", type=float, required=True, help="Latitude of the target point")
+    gsi_fetch.add_argument("--lon", type=float, required=True, help="Longitude of the target point")
+    gsi_fetch.add_argument(
+        "--width-m",
+        type=float,
+        default=400.0,
+        help="Clip width in meters (default: 400)",
+    )
+    gsi_fetch.add_argument(
+        "--height-m",
+        type=float,
+        default=400.0,
+        help="Clip height in meters (default: 400)",
+    )
+    gsi_fetch.add_argument(
+        "--zoom",
+        type=int,
+        default=18,
+        help="Tile zoom level (default: 18)",
+    )
+    gsi_fetch.add_argument(
+        "--tile-template",
+        default="https://cyberjapandata.gsi.go.jp/xyz/ortho/{z}/{x}/{y}.jpg",
+        help="XYZ tile template URL (default: GSI ortho)",
+    )
+    gsi_fetch.add_argument(
+        "--output",
+        type=Path,
+        default=Path("gsi_ortho.tif"),
+        help="Output GeoTIFF path (default: gsi_ortho.tif)",
+    )
+    gsi_fetch.add_argument(
+        "--gdal-translate",
+        default="gdal_translate",
+        help="gdal_translate executable name (default: gdal_translate)",
+    )
+    gsi_fetch.add_argument(
+        "--gdal-buildvrt",
+        default="gdalbuildvrt",
+        help="gdalbuildvrt executable name (default: gdalbuildvrt)",
+    )
+    gsi_fetch.add_argument(
+        "--gdal-warp",
+        default="gdalwarp",
+        help="gdalwarp executable name (default: gdalwarp)",
+    )
+    gsi_fetch.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print commands without executing GDAL",
+    )
+
     package = subcommands.add_parser("package", help="Create PMTiles distribution")
     package.add_argument(
         "--config",
@@ -232,6 +290,8 @@ def main(argv: Iterable[str] | None = None) -> int:
         return _handle_tile(args)
     if args.command == "mpc-fetch":
         return _handle_mpc_fetch(args)
+    if args.command == "gsi-fetch":
+        return _handle_gsi_fetch(args)
     if args.command == "package":
         return _handle_package(args)
     if args.command == "copernicus-layers":
@@ -608,6 +668,33 @@ def _handle_mpc_fetch(args: argparse.Namespace) -> int:
         return 1
 
     LOGGER.info("mpc fetch complete", extra=summary)
+    if args.dry_run:
+        print(summary)
+    return 0
+
+
+def _handle_gsi_fetch(args: argparse.Namespace) -> int:
+    try:
+        summary = fetch_gsi_ortho_clip(
+            lat=args.lat,
+            lon=args.lon,
+            width_m=args.width_m,
+            height_m=args.height_m,
+            zoom=args.zoom,
+            tile_template=args.tile_template,
+            gdal_translate=args.gdal_translate,
+            gdal_buildvrt=args.gdal_buildvrt,
+            gdal_warp=args.gdal_warp,
+            output_path=args.output,
+            dry_run=args.dry_run,
+        )
+    except (SystemExit, KeyboardInterrupt):
+        raise
+    except GSIError as exc:
+        LOGGER.error("GSI fetch failed: %s", exc)
+        return 1
+
+    LOGGER.info("gsi fetch complete", extra=summary)
     if args.dry_run:
         print(summary)
     return 0

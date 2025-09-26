@@ -71,6 +71,7 @@ The default configuration stores raw data in `data/`, temporary artifacts in `tm
   ```
 
   The command queries the MPC STAC API for a low-cloud Sentinel-2 L2A scene, signs the `visual` COG asset with an anonymous SAS token, and calls `gdal_translate` with `-projwin` so only the requested footprint is streamed from storage.
+- For sub-meter coverage in Japan, `planetarble gsi-fetch --lat 35.6839 --lon 139.7021 --width-m 300 --height-m 300 --zoom 18 --output output/processing/gsi_yoyogi_ortho.tif` streams only the requested area from 国土地理院の航空写真（デフォルトで `https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg` を使用）して COG 化します。ズーム 19 以上が必要な場合は `--tile-template` で別レイヤーを指定してください。配布時は必ず国土地理院の出典表記を添えてください。
 - Both MODIS and VIIRS downloads require AppEEARS credentials. Export `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD`, or provide an `APPEEARS_TOKEN`, before running `planetarble acquire` so the CLI can authenticate with the service.
 - You can enable multiple imagery sources simultaneously; each processed raster is preserved under `output/processing/`. Switching `processing.tile_source` lets you compare BMNG, MODIS, and VIIRS outputs without re-running the acquisition step.
 

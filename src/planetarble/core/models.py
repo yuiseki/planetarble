@@ -42,20 +42,32 @@ class ProcessingConfig:
     tile_format: str = "JPEG"
     tile_quality: int = 75
     tile_source: str = "bmng"
-    modis_enabled: bool = False
-    modis_doy: Optional[str] = None
-    modis_tiles: Tuple[str, ...] = field(default_factory=tuple)
-    modis_tile_source: str = "bmng"
-    modis_scale_min: float = 0.0
-    modis_scale_max: float = 4000.0
-    modis_gamma: float = 1.0
-    viirs_enabled: bool = False
-    viirs_date: Optional[str] = None
-    viirs_tiles: Tuple[str, ...] = field(default_factory=tuple)
-    viirs_product: str = "VNP09GA.002"
-    viirs_scale_min: float = 0.0
-    viirs_scale_max: float = 9000.0
-    viirs_gamma: float = 0.8
+
+
+@dataclass
+class ModisConfig:
+    """Configuration for MODIS MCD43A4 surface reflectance processing."""
+
+    enabled: bool = False
+    doy: Optional[str] = None
+    tiles: Tuple[str, ...] = field(default_factory=tuple)
+    tile_source: Optional[str] = None
+    scale_min: float = 0.0
+    scale_max: float = 4000.0
+    gamma: float = 1.0
+
+
+@dataclass
+class ViirsConfig:
+    """Configuration for VIIRS corrected reflectance processing."""
+
+    enabled: bool = False
+    date: Optional[str] = None
+    tiles: Tuple[str, ...] = field(default_factory=tuple)
+    product: str = "VNP09GA.002"
+    scale_min: float = 0.0
+    scale_max: float = 9000.0
+    gamma: float = 0.8
 
 
 @dataclass

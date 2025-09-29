@@ -12,7 +12,13 @@ import zipfile
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from planetarble.core.models import CopernicusConfig, CopernicusLayerConfig, ProcessingConfig
+from planetarble.core.models import (
+    CopernicusConfig,
+    CopernicusLayerConfig,
+    ModisConfig,
+    ProcessingConfig,
+    ViirsConfig,
+)
 from planetarble.logging import get_logger
 
 from .base import DataProcessor
@@ -53,9 +59,13 @@ class ProcessingManager(DataProcessor):
         output_dir: Path,
         data_dir: Path,
         copernicus: Optional[CopernicusConfig] = None,
+        modis: Optional[ModisConfig] = None,
+        viirs: Optional[ViirsConfig] = None,
         dry_run: bool = False,
     ) -> None:
         self._config = config
+        self._modis = modis or ModisConfig()
+        self._viirs = viirs or ViirsConfig()
         self._temp_dir = temp_dir
         self._output_dir = output_dir
         self._data_dir = data_dir
@@ -437,9 +447,9 @@ class ProcessingManager(DataProcessor):
             band_map=band_map,
             pattern_template="*{band}_doy{date_code}*.tif",
             product_slug="modis",
-            scale_min=self._config.modis_scale_min,
-            scale_max=self._config.modis_scale_max,
-            gamma=self._config.modis_gamma,
+            scale_min=self._modis.scale_min,
+            scale_max=self._modis.scale_max,
+            gamma=self._modis.gamma,
         )
 
     def prepare_viirs_rgb(
@@ -449,7 +459,7 @@ class ProcessingManager(DataProcessor):
         tiles: Sequence[str],
         date_code: str,
     ) -> Path:
-        product = (self._config.viirs_product or "").strip()
+        product = (self._viirs.product or "").strip()
         if product.endswith((".002", ".003")):
             band_map: Dict[str, str] = {
                 "red": "SurfReflect_I1_1",
@@ -469,9 +479,9 @@ class ProcessingManager(DataProcessor):
             band_map=band_map,
             pattern_template="*{band}_doy{date_code}*.tif",
             product_slug="viirs",
-            scale_min=self._config.viirs_scale_min,
-            scale_max=self._config.viirs_scale_max,
-            gamma=self._config.viirs_gamma,
+            scale_min=self._viirs.scale_min,
+            scale_max=self._viirs.scale_max,
+            gamma=self._viirs.gamma,
         )
 
     def _prepare_rgb_product(
@@ -688,9 +698,9 @@ def _lat_to_tile(lat: float, zoom: int) -> float:
             band_map=band_map,
             pattern_template="*{band}_doy{date_code}*.tif",
             product_slug="modis",
-            scale_min=self._config.modis_scale_min,
-            scale_max=self._config.modis_scale_max,
-            gamma=self._config.modis_gamma,
+            scale_min=self._modis.scale_min,
+            scale_max=self._modis.scale_max,
+            gamma=self._modis.gamma,
         )
 
     def prepare_viirs_rgb(
@@ -700,7 +710,7 @@ def _lat_to_tile(lat: float, zoom: int) -> float:
         tiles: Sequence[str],
         date_code: str,
     ) -> Path:
-        product = (self._config.viirs_product or "").strip()
+        product = (self._viirs.product or "").strip()
         if product.endswith((".002", ".003")):
             band_map: Dict[str, str] = {
                 "red": "SurfReflect_I1_1",
@@ -720,9 +730,9 @@ def _lat_to_tile(lat: float, zoom: int) -> float:
             band_map=band_map,
             pattern_template="*{band}_doy{date_code}*.tif",
             product_slug="viirs",
-            scale_min=self._config.viirs_scale_min,
-            scale_max=self._config.viirs_scale_max,
-            gamma=self._config.viirs_gamma,
+            scale_min=self._viirs.scale_min,
+            scale_max=self._viirs.scale_max,
+            gamma=self._viirs.gamma,
         )
 
     def _prepare_rgb_product(

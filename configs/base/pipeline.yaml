@@ -12,32 +12,33 @@ processing:
   tile_format: "JPEG"
   tile_quality: 75
   tile_source: "gsi_orthophotos"
-  modis_enabled: false
-  modis_doy: "2025233"
-  modis_tiles:
+modis:
+  enabled: false
+  doy: "2025233"
+  tiles:
     - h27v04
     - h28v04
     - h28v05
     - h29v05
     - h29v06
     - h30v05
-  modis_tile_source: "modis"
-  modis_scale_min: 0
-  modis_scale_max: 2500
-  modis_gamma: 0.7
-  viirs_enabled: false
-  viirs_date: "2025233"
-  viirs_tiles:
+  scale_min: 0
+  scale_max: 2500
+  gamma: 0.7
+viirs:
+  enabled: false
+  date: "2025233"
+  tiles:
     - h27v04
     - h28v04
     - h28v05
     - h29v05
     - h29v06
     - h30v05
-  viirs_product: "VNP09GA.002"
-  viirs_scale_min: 0
-  viirs_scale_max: 9000
-  viirs_gamma: 0.8
+  product: "VNP09GA.002"
+  scale_min: 0
+  scale_max: 9000
+  gamma: 0.8
 copernicus:
   enabled: false
   bbox:

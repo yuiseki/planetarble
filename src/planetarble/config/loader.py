@@ -11,7 +11,9 @@ from planetarble.core.models import (
     CopernicusConfig,
     CopernicusLayerConfig,
     GSIOrthophotoConfig,
+    ModisConfig,
     ProcessingConfig,
+    ViirsConfig,
 )
 
 try:
@@ -28,6 +30,8 @@ class PipelineConfig:
     temp_dir: Path = Path("tmp")
     output_dir: Path = Path("output")
     processing: ProcessingConfig = field(default_factory=ProcessingConfig)
+    modis: ModisConfig = field(default_factory=ModisConfig)
+    viirs: ViirsConfig = field(default_factory=ViirsConfig)
     copernicus: CopernicusConfig = field(default_factory=CopernicusConfig)
     gsi_orthophotos: GSIOrthophotoConfig = field(default_factory=GSIOrthophotoConfig)
 
@@ -80,21 +84,32 @@ class ConfigLoader:
         data_dir = Path(payload.get("data_dir", "data"))
         temp_dir = Path(payload.get("temp_dir", "tmp"))
         output_dir = Path(payload.get("output_dir", "output"))
-        processing_payload = payload.get("processing", {})
-        processing_data = dict(processing_payload)
-        if "modis_tiles" in processing_data:
-            processing_data["modis_tiles"] = tuple(processing_data.get("modis_tiles") or [])
-        if "viirs_tiles" in processing_data:
-            processing_data["viirs_tiles"] = tuple(processing_data.get("viirs_tiles") or [])
-        if "tile_source" not in processing_data and "modis_tile_source" in processing_data:
-            processing_data["tile_source"] = processing_data.get("modis_tile_source")
-        for key in ("modis_scale_min", "modis_scale_max", "modis_gamma"):
-            if key in processing_data and processing_data[key] is not None:
-                processing_data[key] = float(processing_data[key])
-        for key in ("viirs_scale_min", "viirs_scale_max", "viirs_gamma"):
-            if key in processing_data and processing_data[key] is not None:
-                processing_data[key] = float(processing_data[key])
-        processing = ProcessingConfig(**processing_data)
+        processing_payload = payload.get("processing") or {}
+        if not isinstance(processing_payload, dict):
+            raise ValueError("processing section must be a mapping")
+        processing = ProcessingConfig(**processing_payload)
+
+        modis_payload = payload.get("modis") or {}
+        if not isinstance(modis_payload, dict):
+            raise ValueError("modis section must be a mapping")
+        modis_data = dict(modis_payload)
+        if "tiles" in modis_data:
+            modis_data["tiles"] = tuple(modis_data.get("tiles") or [])
+        for key in ("scale_min", "scale_max", "gamma"):
+            if key in modis_data and modis_data[key] is not None:
+                modis_data[key] = float(modis_data[key])
+        modis = ModisConfig(**modis_data)
+
+        viirs_payload = payload.get("viirs") or {}
+        if not isinstance(viirs_payload, dict):
+            raise ValueError("viirs section must be a mapping")
+        viirs_data = dict(viirs_payload)
+        if "tiles" in viirs_data:
+            viirs_data["tiles"] = tuple(viirs_data.get("tiles") or [])
+        for key in ("scale_min", "scale_max", "gamma"):
+            if key in viirs_data and viirs_data[key] is not None:
+                viirs_data[key] = float(viirs_data[key])
+        viirs = ViirsConfig(**viirs_data)
 
         copernicus_payload = payload.get("copernicus", {})
         copernicus_data = dict(copernicus_payload)
@@ -134,6 +149,8 @@ class ConfigLoader:
             temp_dir=temp_dir,
             output_dir=output_dir,
             processing=processing,
+            modis=modis,
+            viirs=viirs,
             copernicus=copernicus,
             gsi_orthophotos=gsi_orthophotos,
         )

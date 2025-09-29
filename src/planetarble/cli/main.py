@@ -359,7 +359,7 @@ def _handle_acquire(args: argparse.Namespace) -> int:
     try:
         manager.download_viirs_corrected_reflectance(
             force=args.force,
-            product=cfg.processing.viirs_product,
+            product=cfg.viirs.product,
         )
     except (SystemExit, KeyboardInterrupt):
         raise
@@ -400,6 +400,8 @@ def _handle_process(args: argparse.Namespace) -> int:
         output_dir=cfg.output_dir,
         data_dir=cfg.data_dir,
         copernicus=cfg.copernicus,
+        modis=cfg.modis,
+        viirs=cfg.viirs,
         dry_run=args.dry_run,
     )
 
@@ -423,29 +425,29 @@ def _handle_process(args: argparse.Namespace) -> int:
     cog_path = manager.create_cog(normalized)
 
     modis_cog_path: Path | None = None
-    if cfg.processing.modis_enabled:
-        if not cfg.processing.modis_doy:
-            raise SystemExit("processing.modis_doy must be set when modis_enabled is true")
-        modis_root = (cfg.data_dir / "modis_mcd43a4" / cfg.processing.modis_doy).resolve()
+    if cfg.modis.enabled:
+        if not cfg.modis.doy:
+            raise SystemExit("modis.doy must be set when modis.enabled is true")
+        modis_root = (cfg.data_dir / "modis_mcd43a4" / cfg.modis.doy).resolve()
         if not modis_root.exists():
             raise SystemExit(f"MODIS directory not found: {modis_root}")
-        tiles = cfg.processing.modis_tiles or tuple(sorted(p.name for p in modis_root.iterdir() if p.is_dir()))
+        tiles = cfg.modis.tiles or tuple(sorted(p.name for p in modis_root.iterdir() if p.is_dir()))
         if not tiles:
             raise SystemExit(f"No MODIS tiles found under {modis_root}")
         modis_cog_path = manager.prepare_modis_rgb(
             modis_root,
             tiles=tiles,
-            date_code=cfg.processing.modis_doy,
+            date_code=cfg.modis.doy,
         )
 
     viirs_cog_path: Path | None = None
-    if cfg.processing.viirs_enabled:
-        if not cfg.processing.viirs_date:
-            raise SystemExit("processing.viirs_date must be set when viirs_enabled is true")
-        viirs_root = (cfg.data_dir / "viirs_vnp09ga" / cfg.processing.viirs_date).resolve()
+    if cfg.viirs.enabled:
+        if not cfg.viirs.date:
+            raise SystemExit("viirs.date must be set when viirs.enabled is true")
+        viirs_root = (cfg.data_dir / "viirs_vnp09ga" / cfg.viirs.date).resolve()
         if not viirs_root.exists():
             raise SystemExit(f"VIIRS directory not found: {viirs_root}")
-        tiles = cfg.processing.viirs_tiles or tuple(
+        tiles = cfg.viirs.tiles or tuple(
             sorted(p.name for p in viirs_root.iterdir() if p.is_dir())
         )
         if not tiles:
@@ -453,7 +455,7 @@ def _handle_process(args: argparse.Namespace) -> int:
         viirs_cog_path = manager.prepare_viirs_rgb(
             viirs_root,
             tiles=tiles,
-            date_code=cfg.processing.viirs_date,
+            date_code=cfg.viirs.date,
         )
 
     copernicus_cogs: list[Path] = []
@@ -526,7 +528,7 @@ def _handle_tile(args: argparse.Namespace) -> int:
         raise SystemExit("No normalized COG raster found; run the process stage first")
     source_raster = source_candidates[0]
 
-    tile_source = (cfg.processing.tile_source or cfg.processing.modis_tile_source or "bmng").lower()
+    tile_source = (cfg.processing.tile_source or cfg.modis.tile_source or "bmng").lower()
 
     if tile_source == "modis":
         modis_candidates = sorted(processing_dir.glob("modis_*_rgb_cog.tif"))
@@ -586,14 +588,14 @@ def _handle_package(args: argparse.Namespace) -> int:
     packaging = PackagingManager(dry_run=args.dry_run)
     pmtiles_path = packaging.convert_to_pmtiles(mbtiles_path, destination=pmtiles_destination)
 
-    tile_source = (cfg.processing.tile_source or cfg.processing.modis_tile_source or "bmng").lower()
+    tile_source = (cfg.processing.tile_source or cfg.modis.tile_source or "bmng").lower()
 
     if tile_source == "modis":
-        imagery_label = f"MODIS MCD43A4 ({cfg.processing.modis_doy or 'unknown date'})"
+        imagery_label = f"MODIS MCD43A4 ({cfg.modis.doy or 'unknown date'})"
         imagery_attribution = "Imagery: NASA MODIS MCD43A4 (LP DAAC)."
     elif tile_source == "viirs":
-        product = cfg.processing.viirs_product or "VNP09GA"
-        imagery_label = f"VIIRS Corrected Reflectance ({product} {cfg.processing.viirs_date or 'daily'})"
+        product = cfg.viirs.product or "VNP09GA"
+        imagery_label = f"VIIRS Corrected Reflectance ({product} {cfg.viirs.date or 'daily'})"
         imagery_attribution = "Imagery: NASA VIIRS Corrected Reflectance (LP DAAC)."
     elif tile_source == "copernicus":
         imagery_label = "Copernicus Sentinel-2 Level-2A"

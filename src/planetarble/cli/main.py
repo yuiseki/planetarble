@@ -119,7 +119,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     tile.add_argument(
         "--tile-format",
-        choices=["JPEG", "WEBP"],
+        choices=["PNG", "JPEG", "WEBP"],
         default=None,
         help="Override tile image format",
     )

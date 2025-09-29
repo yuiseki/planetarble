@@ -11,7 +11,7 @@ processing:
   max_zoom: 10
   tile_format: "JPEG"
   tile_quality: 95
-  tile_source: "copernicus"
+  tile_source: "gsi_orthophotos"
   modis_enabled: false
   modis_doy: "2025233"
   modis_tiles:
@@ -39,7 +39,7 @@ processing:
   viirs_scale_max: 9000
   viirs_gamma: 0.8
 copernicus:
-  enabled: true
+  enabled: false
   bbox:
     - 123.0
     - 24.0
@@ -57,3 +57,13 @@ copernicus:
     - name: TRUE_COLOR
       format: image/jpeg
       output: true_color
+gsi_orthophotos:
+  enabled: true
+  lat: 35.681236
+  lon: 139.767125
+  width_m: 3000
+  height_m: 3000
+  zoom: 18
+  tile_template: "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"
+  output_basename: "gsi_orthophotos"
+  timeout_seconds: 60

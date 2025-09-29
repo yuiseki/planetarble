@@ -7,7 +7,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from planetarble.core.models import CopernicusConfig, CopernicusLayerConfig, ProcessingConfig
+from planetarble.core.models import (
+    CopernicusConfig,
+    CopernicusLayerConfig,
+    GSIOrthophotoConfig,
+    ProcessingConfig,
+)
 
 try:
     import yaml  # type: ignore
@@ -24,6 +29,7 @@ class PipelineConfig:
     output_dir: Path = Path("output")
     processing: ProcessingConfig = field(default_factory=ProcessingConfig)
     copernicus: CopernicusConfig = field(default_factory=CopernicusConfig)
+    gsi_orthophotos: GSIOrthophotoConfig = field(default_factory=GSIOrthophotoConfig)
 
     def resolve_relative_paths(self, base_dir: Path) -> None:
         """Resolve relative directories against the provided base directory."""
@@ -112,12 +118,24 @@ class ConfigLoader:
             if key in copernicus_data and copernicus_data[key] is not None:
                 copernicus_data[key] = float(copernicus_data[key])
         copernicus = CopernicusConfig(**copernicus_data)
+
+        gsi_payload = payload.get("gsi_orthophotos", {}) or {}
+        gsi_data = dict(gsi_payload)
+        for key in ("lat", "lon", "width_m", "height_m"):
+            if key in gsi_data and gsi_data[key] is not None:
+                gsi_data[key] = float(gsi_data[key])
+        if "zoom" in gsi_data and gsi_data["zoom"] is not None:
+            gsi_data["zoom"] = int(gsi_data["zoom"])
+        if "timeout_seconds" in gsi_data and gsi_data["timeout_seconds"] is not None:
+            gsi_data["timeout_seconds"] = int(gsi_data["timeout_seconds"])
+        gsi_orthophotos = GSIOrthophotoConfig(**gsi_data)
         return PipelineConfig(
             data_dir=data_dir,
             temp_dir=temp_dir,
             output_dir=output_dir,
             processing=processing,
             copernicus=copernicus,
+            gsi_orthophotos=gsi_orthophotos,
         )
 
 

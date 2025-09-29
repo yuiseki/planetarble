@@ -240,3 +240,12 @@ assets:
     license: "Copernicus Data Policy — free and open"
     attribution: "Copernicus Sentinel data (2025) processed by ESA"
     media_type: wms
+  gsi_orthophotos:
+    name: GSI Seamless Orthophoto Tiles
+    description: High-resolution orthophoto XYZ tiles from the Geospatial Information Authority of Japan.
+    urls:
+      - https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg
+    destination: gsi/seamlessphoto/source.txt
+    license: "GSI Seamless Photographs — use requires attribution"
+    attribution: "Imagery courtesy of the Geospatial Information Authority of Japan (GSI)."
+    media_type: xyz

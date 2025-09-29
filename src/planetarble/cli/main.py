@@ -465,6 +465,27 @@ def _handle_process(args: argparse.Namespace) -> int:
         except Exception as exc:
             LOGGER.warning("copernicus processing skipped: %s", exc)
 
+    gsi_summary: dict[str, object] | None = None
+    gsi_cog_path: Path | None = None
+    if cfg.gsi_orthophotos.enabled:
+        gsi_output = (cfg.output_dir / "processing" / f"{cfg.gsi_orthophotos.output_basename}.tif").resolve()
+        try:
+            gsi_summary = fetch_gsi_ortho_clip(
+                lat=cfg.gsi_orthophotos.lat,
+                lon=cfg.gsi_orthophotos.lon,
+                width_m=cfg.gsi_orthophotos.width_m,
+                height_m=cfg.gsi_orthophotos.height_m,
+                zoom=cfg.gsi_orthophotos.zoom,
+                tile_template=cfg.gsi_orthophotos.tile_template,
+                output_path=gsi_output,
+                timeout=cfg.gsi_orthophotos.timeout_seconds,
+                dry_run=args.dry_run,
+            )
+        except GSIError as exc:
+            raise SystemExit(f"Failed to fetch GSI orthophotos: {exc}") from exc
+        gsi_output_str = gsi_summary.get("output") if gsi_summary else str(gsi_output)
+        gsi_cog_path = Path(gsi_output_str)
+
     LOGGER.info("processing outputs", extra={
         "bmng_mosaic": str(bmng_source),
         "normalized": str(normalized),
@@ -474,6 +495,8 @@ def _handle_process(args: argparse.Namespace) -> int:
         "modis_cog": str(modis_cog_path) if modis_cog_path else None,
         "viirs_cog": str(viirs_cog_path) if viirs_cog_path else None,
         "copernicus_cogs": [str(path) for path in copernicus_cogs] if copernicus_cogs else None,
+        "gsi_cog": str(gsi_cog_path) if gsi_cog_path else None,
+        "gsi_summary": gsi_summary,
     })
     return 0
 
@@ -524,6 +547,13 @@ def _handle_tile(args: argparse.Namespace) -> int:
                 "Copernicus tile source selected but no copernicus_*_cog.tif found; run process stage"
             )
         source_raster = copernicus_candidates[0]
+    elif tile_source == "gsi_orthophotos":
+        gsi_candidate = (cfg.output_dir / "processing" / f"{cfg.gsi_orthophotos.output_basename}.tif").resolve()
+        if not gsi_candidate.exists():
+            raise SystemExit(
+                "GSI tile source selected but no GSI orthophoto COG found; run process stage"
+            )
+        source_raster = gsi_candidate
     elif tile_source == "blend":
         raise SystemExit("tile_source=blend is not implemented yet")
     elif tile_source != "bmng":
@@ -570,6 +600,9 @@ def _handle_package(args: argparse.Namespace) -> int:
     elif tile_source == "copernicus":
         imagery_label = "Copernicus Sentinel-2 Level-2A"
         imagery_attribution = "Imagery: Copernicus Sentinel-2 (European Space Agency)."
+    elif tile_source == "gsi_orthophotos":
+        imagery_label = "GSI Seamless Orthophoto"
+        imagery_attribution = "Imagery: Geospatial Information Authority of Japan (GSI) Seamless Orthophotography."
     else:
         imagery_label = "NASA Blue Marble Next Generation (2004)"
         imagery_attribution = "Imagery: NASA Blue Marble (2004)."
@@ -594,6 +627,7 @@ def _handle_package(args: argparse.Namespace) -> int:
         "modis": "- MODIS MCD43A4 BRDF-Corrected Reflectance (NASA LP DAAC).",
         "viirs": "- VIIRS Corrected Reflectance (VNP09GA, NASA LP DAAC).",
         "copernicus": "- Copernicus Sentinel-2 Level-2A (European Space Agency).",
+        "gsi_orthophotos": "- Geospatial Information Authority of Japan Seamless Orthophotography.",
     }.get(tile_source, "- NASA Blue Marble Next Generation (2004).")
 
     license_text = (

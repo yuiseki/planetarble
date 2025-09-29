@@ -87,6 +87,21 @@ class CopernicusConfig:
 
 
 @dataclass
+class GSIOrthophotoConfig:
+    """Configuration controlling GSI orthophoto extraction."""
+
+    enabled: bool = False
+    lat: float = 35.681236
+    lon: float = 139.767125
+    width_m: float = 3000.0
+    height_m: float = 3000.0
+    zoom: int = 18
+    tile_template: str = "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"
+    output_basename: str = "gsi_orthophotos"
+    timeout_seconds: int = 60
+
+
+@dataclass
 class TileMetadata:
     """Metadata embedded in PMTiles and TileJSON outputs."""
 

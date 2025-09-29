@@ -59,6 +59,7 @@
         "Reproject",
         "reprojected",
         "reprojection",
+        "seamlessphoto",
         "setuptools",
         "STAC",
         "sublicensable",
@@ -71,6 +72,7 @@
         "vrts",
         "webmercator",
         "yday",
+        "yoyogi",
         "YYYYJJJ"
     ],
     "python-envs.defaultEnvManager": "ms-python.python:conda",

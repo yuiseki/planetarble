@@ -505,8 +505,6 @@ def _handle_tile(args: argparse.Namespace) -> int:
     config_path = _resolve_config_path(args.config)
     cfg = load_config(config_path)
 
-    if args.max_zoom is not None:
-        cfg.processing.max_zoom = args.max_zoom
     if args.tile_format is not None:
         cfg.processing.tile_format = args.tile_format
     if args.quality is not None:

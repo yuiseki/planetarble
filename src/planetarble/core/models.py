@@ -38,9 +38,9 @@ class ProcessingConfig:
     natural_earth_scale: str = "10m"
     color_enhancement: float = 1.05
     hillshade_opacity: float = 0.15
-    max_zoom: int = 10
+    max_zoom: int = 18
     tile_format: str = "JPEG"
-    tile_quality: int = 95
+    tile_quality: int = 75
     tile_source: str = "bmng"
     modis_enabled: bool = False
     modis_doy: Optional[str] = None
@@ -76,7 +76,7 @@ class CopernicusConfig:
     enabled: bool = False
     bbox: Tuple[float, float, float, float] = (123.0, 24.0, 147.0, 46.0)
     min_zoom: int = 8
-    max_zoom: int = 12
+    max_zoom: int = 14
     tile_size: int = 256
     layers: Tuple[CopernicusLayerConfig, ...] = field(default_factory=tuple)
     max_tiles_per_layer: Optional[int] = None

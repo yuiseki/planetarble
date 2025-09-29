@@ -10,7 +10,7 @@ processing:
   hillshade_opacity: 0.15
   max_zoom: 18
   tile_format: "JPEG"
-  tile_quality: 95
+  tile_quality: 75
   tile_source: "gsi_orthophotos"
   modis_enabled: false
   modis_doy: "2025233"
@@ -46,7 +46,7 @@ copernicus:
     - 147.0
     - 46.0
   min_zoom: 8
-  max_zoom: 12
+  max_zoom: 14
   tile_size: 256
   max_tiles_per_layer: null
   timeout_seconds: 30

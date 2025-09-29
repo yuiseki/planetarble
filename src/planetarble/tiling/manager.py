@@ -87,27 +87,28 @@ class TilingManager(TileGenerator):
         self._runner.run(command, description="reproject raster to EPSG:3857")
         return output
 
-    def generate_pyramid(self, input_path: Path, max_zoom: int | None = None) -> Path:
+    def generate_pyramid(self, input_path: Path) -> Path:
         # For MBTiles generation we defer to gdal_translate output path naming
         return input_path
 
     def create_mbtiles(self, pyramid_path: Path, format: str | None = None, quality: int | None = None) -> Path:
         tile_format = (format or self._config.tile_format).upper()
         quality_value = str(quality or self._config.tile_quality)
-        max_zoom = str(self._config.max_zoom)
         mbtiles_path = self._tiling_dir / f"world_{self._config.max_zoom}z.mbtiles"
         command = [
             "gdal_translate",
+            "--config",
+            "GDAL_NUM_THREADS",
+            "ALL_CPUS",
+            "--config",
+            "GDAL_CACHEMAX",
+            "1024",
             "-of",
             "MBTILES",
             "-co",
             f"TILE_FORMAT={tile_format}",
             "-co",
             f"QUALITY={quality_value}",
-            "-co",
-            "MINZOOM=0",
-            "-co",
-            f"MAXZOOM={max_zoom}",
             "-co",
             "ZOOM_LEVEL_STRATEGY=LOWER",
             str(pyramid_path),

@@ -7,16 +7,18 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, Optional
-from urllib.parse import urlencode, urlsplit, urlunsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import requests
+from pystac_client import Client
+from pystac_client import exceptions as pc_exceptions
 
 from planetarble.logging import get_logger
 
 
 LOGGER = get_logger(__name__)
 
-STAC_SEARCH_ENDPOINT = "https://planetarycomputer.microsoft.com/api/stac/v1/search"
+STAC_API_ROOT = "https://planetarycomputer.microsoft.com/api/stac/v1"
 SAS_TOKEN_ENDPOINT_TEMPLATE = (
     "https://planetarycomputer.microsoft.com/api/sas/v1/token/{collection}?token=anon"
 )
@@ -147,52 +149,58 @@ def _select_scene(
     end_datetime: Optional[str],
     timeout: int,
 ) -> MPCScene:
-    body: Dict[str, object] = {
-        "collections": [DEFAULT_COLLECTION],
-        "bbox": list(bbox),
-        "limit": 1,
-        "sortby": [{"field": "eo:cloud_cover", "direction": "asc"}],
-    }
+    datetime_filter: Optional[str]
+    if start_datetime and end_datetime:
+        datetime_filter = f"{start_datetime}/{end_datetime}"
+    elif start_datetime:
+        datetime_filter = f"{start_datetime}/.."
+    elif end_datetime:
+        datetime_filter = f"../{end_datetime}"
+    else:
+        datetime_filter = None
+
     query: Dict[str, Dict[str, object]] = {}
     if max_cloud is not None:
         query["eo:cloud_cover"] = {"lte": max_cloud}
-    if query:
-        body["query"] = query
-    if start_datetime and end_datetime:
-        body["datetime"] = f"{start_datetime}/{end_datetime}"
-    elif start_datetime:
-        body["datetime"] = f"{start_datetime}/.."
-    elif end_datetime:
-        body["datetime"] = f"../{end_datetime}"
 
     try:
-        response = requests.post(STAC_SEARCH_ENDPOINT, json=body, timeout=timeout)
-    except requests.RequestException as exc:  # pragma: no cover - network failure path
-        raise MPCError(f"Failed to query MPC STAC: {exc}") from exc
-    if response.status_code != 200:
-        raise MPCError(
-            f"MPC STAC search failed: {response.status_code} {response.text.strip()}"
-        )
-    payload = response.json()
-    LOGGER.debug(
-        "mpc stac response",
-        extra={"matched": len(payload.get("features") or [])},
-    )
-    features = payload.get("features") or []
-    if not features:
+        client = Client.open(STAC_API_ROOT, timeout=timeout)
+    except (pc_exceptions.APIError, requests.RequestException) as exc:  # pragma: no cover - network failure path
+        raise MPCError(f"Failed to open MPC STAC client: {exc}") from exc
+
+    search_kwargs: Dict[str, object] = {
+        "collections": [DEFAULT_COLLECTION],
+        "bbox": list(bbox),
+        "max_items": 1,
+        "sortby": "properties.eo:cloud_cover",
+    }
+    if query:
+        search_kwargs["query"] = query
+    if datetime_filter:
+        search_kwargs["datetime"] = datetime_filter
+
+    try:
+        search = client.search(**search_kwargs)
+        item_collection = search.item_collection()
+    except (pc_exceptions.APIError, requests.RequestException) as exc:  # pragma: no cover - network failure path
+        raise MPCError(f"MPC STAC search failed: {exc}") from exc
+
+    matches = len(item_collection.items) if item_collection else 0
+    LOGGER.debug("mpc stac response", extra={"matched": matches})
+
+    if not item_collection or not item_collection.items:
         raise MPCError("No Sentinel-2 scenes found for the requested area")
 
-    feature = features[0]
-    assets = feature.get("assets") or {}
-    visual = assets.get("visual")
-    if not visual or "href" not in visual:
+    item = item_collection.items[0]
+    visual_asset = item.assets.get("visual") if item.assets else None
+    if not visual_asset:
         raise MPCError("Selected scene does not expose a visual asset")
 
     return MPCScene(
-        collection=feature.get("collection", DEFAULT_COLLECTION),
-        item_id=feature.get("id", "unknown"),
-        visual_href=visual["href"],
-        cloud_cover=_safe_float(feature.get("properties", {}).get("eo:cloud_cover")),
+        collection=item.collection_id or DEFAULT_COLLECTION,
+        item_id=item.id,
+        visual_href=visual_asset.href,
+        cloud_cover=_safe_float(item.properties.get("eo:cloud_cover")),
     )
 
 

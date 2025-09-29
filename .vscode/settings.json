@@ -5,6 +5,7 @@
         "basemaps",
         "bathy",
         "bathymetric",
+        "bbox",
         "BMNG",
         "BRDF",
         "checkpointing",
@@ -33,15 +34,20 @@
         "minzoom",
         "MODIS",
         "NBAR",
+        "NDVI",
+        "NOAA",
         "noxfile",
         "planetarble",
         "pmtiles",
+        "projwin",
         "pyproject",
+        "pystac",
         "PYTHONPATH",
         "Reproject",
         "reprojected",
         "reprojection",
         "setuptools",
+        "STAC",
         "sublicensable",
         "tilejson",
         "tilestore",
@@ -49,6 +55,10 @@
         "Typer",
         "VIIRS",
         "webmercator",
-        "yday"
-    ]
+        "yday",
+        "YYYYJJJ"
+    ],
+    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "python-envs.pythonProjects": []
 }

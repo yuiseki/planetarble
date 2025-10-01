@@ -94,7 +94,7 @@ class TilingManager(TileGenerator):
     def create_mbtiles(self, pyramid_path: Path, format: str | None = None, quality: int | None = None) -> Path:
         tile_format = (format or self._config.tile_format).upper()
         quality_value = str(quality or self._config.tile_quality)
-        mbtiles_path = self._tiling_dir / f"world_{self._config.max_zoom}z.mbtiles"
+        mbtiles_path = self._tiling_dir / f"planet_{self._config.gebco_year}_{self._config.max_zoom}z.mbtiles"
         command = [
             "gdal_translate",
             "--config",

@@ -3,7 +3,7 @@
 ## 1. Project Scope
 
 ### 1.1 Goals
-- Produce a single `world_YYYY.pmtiles` file containing a global raster basemap built solely from open data.
+- Produce a single `planet_{YYYY}_{max_zoom_level}z.pmtiles` file containing a global raster basemap built solely from open data.
 - Serve XYZ (`{z}/{x}/{y}`) 256 px tiles in EPSG:3857 for zoom levels `0–10` (optionally extendable to `12` when resources allow).
 - Enable fully offline (air-gapped) usage via direct PMTiles access or by exposing an HTTP endpoint that serves the same tiles.
 
@@ -14,8 +14,8 @@
 - Automating future yearly refresh workflows (treated as a later enhancement).
 
 ## 2. Mandatory Artifacts
-- `world_YYYY.pmtiles` — PMTiles archive storing raster tiles in JPEG or WebP format.
-- `world_YYYY.tilejson.json` — TileJSON metadata (bounds, center, minzoom, maxzoom, attribution, format).
+- `planet_{YYYY}_{max_zoom_level}z.pmtiles` — PMTiles archive storing raster tiles in JPEG or WebP format.
+- `planet_{YYYY}_{max_zoom_level}z.tilejson.json` — TileJSON metadata (bounds, center, minzoom, maxzoom, attribution, format).
 - `LICENSE_AND_CREDITS.txt` — Attributions for NASA, GEBCO, and Natural Earth sources with redistribution notes.
 - `MANIFEST.json` — Source inventory that records URLs, SHA256 checksums, file sizes, and generation parameters.
 - (Optional) Minimal HTML viewer using MapLibre GL + pmtiles protocol for local verification.

@@ -8,7 +8,7 @@ The project orchestrates three core phases:
 
 1. **Acquire** the required datasets (NASA BMNG 2004, GEBCO 2024 Global Grid, Natural Earth 10 m layers, and optional MODIS/VIIRS surface reflectance tiles) with integrity checks.
 2. **Process** the rasters into a blended Web Mercator tile pyramid covering zoom levels 0–10.
-3. **Package** the output as `world_YYYY.pmtiles` with companion metadata and licensing bundles.
+3. **Package** the output as `planet_{YYYY}_{max_zoom_level}z.pmtiles` with companion metadata and licensing bundles.
 
 The Earth is famously seen as a "blue marble", a description inspired by the 1972 photograph taken by the Apollo 17 crew that revealed our planet as a delicate swirl of blues and whites. Planetarble carries forward that legacy by relying on NASA’s Blue Marble Next Generation imagery. It continues the tradition of sharing a whole-Earth view constructed entirely from open data.
 
@@ -100,6 +100,6 @@ The default configuration stores raw data in `data/`, temporary artifacts in `tm
 ## Requirements
 
 - GDAL ≥ 3.x must be installed locally to run the processing and tiling commands (`gdalbuildvrt`, `gdal_translate`, `gdaldem`, `gdalwarp`, `gdaladdo`).
-- The PMTiles CLI (`pmtiles convert`) is required to produce the final `world_YYYY.pmtiles` artifact.
+- The PMTiles CLI (`pmtiles convert`) is required to produce the final `planet_{YYYY}_{max_zoom_level}z.pmtiles` artifact.
 - `aria2c` is expected for the default acquisition workflow so downloads can resume cleanly; the CLI falls back to Python’s downloader if aria2c is missing, but installing it avoids broken transfers.
 - Python dependencies are recorded in `pyproject.toml` (PyYAML is required for configuration loading).

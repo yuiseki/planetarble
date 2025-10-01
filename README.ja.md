@@ -8,7 +8,7 @@ Planetarble は、完全にオープンな地球規模のラスター地図タ�
 
 1. 必要なデータセット（NASA BMNG 2004、GEBCO 2024 Global Grid、Natural Earth 10 m レイヤー）を整合性チェック付きで取得します。
 2. ラスターを加工し、ズームレベル 0–10 をカバーする Web Mercator タイルピラミッドにブレンドします。
-3. 出力を付属メタデータやライセンス情報とともに `world_YYYY.pmtiles` としてパッケージ化します。
+3. 出力を付属メタデータやライセンス情報とともに `planet_{YYYY}_{max_zoom_level}z.pmtiles` としてパッケージ化します。
 
 アポロ 17 号が撮影した「The Blue Marble」の写真は、地球が青と白の繊細な渦を持つ美しい惑星であることを世界に示しました。Planetarble はその精神を受け継ぎ、NASA の Blue Marble Next Generation 画像を活用し、完全にオープンなデータから構築された地球全体のビューを提供します。
 
@@ -77,7 +77,7 @@ planetarble tile --config configs/base/pipeline.yaml --quality 95 --tile-format 
 ## 必要要件
 
 - GDAL 3.x 以上がローカルに必要です（`gdalbuildvrt`、`gdal_translate`、`gdaldem`、`gdalwarp`、`gdaladdo` などを利用します）。
-- 最終的な `world_YYYY.pmtiles` を生成するために PMTiles CLI（`pmtiles convert`）が必要です。
+- 最終的な `planet_{YYYY}_{max_zoom_level}z.pmtiles` を生成するために PMTiles CLI（`pmtiles convert`）が必要です。
 - 既定の取得ワークフローでは aria2c を使ってレジューム付きダウンロードを行う想定です。見つからない場合は Python 標準のダウンローダーにフォールバックしますが、転送中断を避けるためにインストールしておくことを推奨します。
 - Python 依存関係は `pyproject.toml` に記録されています（設定読み込みには PyYAML が必要）。
 

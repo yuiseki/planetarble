@@ -16,8 +16,8 @@
   - Encode tiles as JPEG (quality 75–85) or WebP consistently
 
 - [ ] 4. Package deliverables
-  - Convert MBTiles output to `world_YYYY.pmtiles` using the PMTiles CLI
-  - Produce `world_YYYY.tilejson.json`, `LICENSE_AND_CREDITS.txt`, and update `MANIFEST.json`
+  - Convert MBTiles output to `planet_{YYYY}_{max_zoom_level}z.pmtiles` using the PMTiles CLI
+  - Produce `planet_{YYYY}_{max_zoom_level}z.tilejson.json`, `LICENSE_AND_CREDITS.txt`, and update `MANIFEST.json`
   - Document usage of `pmtiles serve` and the optional HTML viewer for offline inspection
 
 - [ ] 5. Implement configuration & logging

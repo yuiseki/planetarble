@@ -1,6 +1,6 @@
 # Design Overview
 
-Planetarble is a focused pipeline that transforms three open datasets into a single `world_YYYY.pmtiles` archive suitable for offline use. The architecture is intentionally streamlined: each phase outputs the minimum artifacts required to satisfy the project scope while avoiding optional complexity.
+Planetarble is a focused pipeline that transforms three open datasets into a single `planet_{YYYY}_{max_zoom_level}z.pmtiles` archive suitable for offline use. The architecture is intentionally streamlined: each phase outputs the minimum artifacts required to satisfy the project scope while avoiding optional complexity.
 
 ## System Phases
 
@@ -33,8 +33,8 @@ Data Sources → Acquisition → Preprocessing → Tile Generation → Packaging
 - Record tile metadata (bounds, center, minzoom, maxzoom, attribution) for later reuse.
 
 ### 5. Packaging & Delivery
-- Run the PMTiles CLI to convert MBTiles output into `world_YYYY.pmtiles`, leveraging built-in deduplication.
-- Write `world_YYYY.tilejson.json` using the recorded metadata and embed the same information in the PMTiles archive.
+- Run the PMTiles CLI to convert MBTiles output into `planet_{YYYY}_{max_zoom_level}z.pmtiles`, leveraging built-in deduplication.
+- Write `planet_{YYYY}_{max_zoom_level}z.tilejson.json` using the recorded metadata and embed the same information in the PMTiles archive.
 - Generate `LICENSE_AND_CREDITS.txt` from the asset catalog, ensuring NASA, GEBCO, and Natural Earth attributions.
 - Bundle `MANIFEST.json`, TileJSON, and PMTiles file as the primary deliverable set.
 - Provide a lightweight HTML viewer (MapLibre GL + pmtiles protocol) for optional offline inspection and document usage of `pmtiles serve` for HTTP endpoints.

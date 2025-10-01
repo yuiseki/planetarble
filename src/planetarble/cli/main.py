@@ -250,7 +250,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--pmtiles-name",
         type=str,
         default=None,
-        help="Filename for the PMTiles archive (defaults to world_<year>.pmtiles)",
+        help="Filename for the PMTiles archive (defaults to planet_<year>_<max_zoom_level>z.pmtiles)",
     )
     package.add_argument(
         "--dry-run",
@@ -577,12 +577,12 @@ def _handle_package(args: argparse.Namespace) -> int:
     tiling_dir = (cfg.output_dir / "tiling").resolve()
     if not tiling_dir.exists():
         raise SystemExit(f"Tiling directory not found: {tiling_dir}")
-    mbtiles_candidates = sorted(tiling_dir.glob("*.mbtiles"))
+    mbtiles_candidates = sorted(tiling_dir.glob(f"planet_{cfg.processing.gebco_year}_{cfg.processing.max_zoom}z.mbtiles"))
     if not mbtiles_candidates:
         raise SystemExit("No MBTiles archive found; run the tile stage first")
     mbtiles_path = mbtiles_candidates[0]
 
-    pmtiles_name = args.pmtiles_name or f"world_{cfg.processing.gebco_year}.pmtiles"
+    pmtiles_name = args.pmtiles_name or f"planet_{cfg.processing.gebco_year}_{cfg.processing.max_zoom}z.pmtiles"
     pmtiles_destination = tiling_dir / pmtiles_name
 
     packaging = PackagingManager(dry_run=args.dry_run)

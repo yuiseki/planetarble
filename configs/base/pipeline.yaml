@@ -8,10 +8,11 @@ processing:
   natural_earth_scale: "10m"
   color_enhancement: 1.05
   hillshade_opacity: 0.15
-  max_zoom: 18
+  max_zoom: 8
+  resampling: "cubic"
   tile_format: "JPEG"
   tile_quality: 75
-  tile_source: "gsi_orthophotos"
+  tile_source: "bmng"
 modis:
   enabled: false
   doy: "2025233"

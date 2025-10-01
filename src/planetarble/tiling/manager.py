@@ -102,9 +102,11 @@ class TilingManager(TileGenerator):
             "ALL_CPUS",
             "--config",
             "GDAL_CACHEMAX",
-            "1024",
+            "2048",
             "-of",
             "MBTILES",
+            "-co",
+            "BLOCKSIZE=512",
             "-co",
             f"TILE_FORMAT={tile_format}",
             "-co",
@@ -122,12 +124,18 @@ class TilingManager(TileGenerator):
         if self._dry_run:
             return
 
+        resampling = self._config.resampling.lower()
+        if resampling not in ("nearest", "average", "gauss", "cubic", "cubicspline", "lanczos", "mode"):
+            LOGGER.warning(f"unknown resampling method '{resampling}'; defaulting to 'cubic'")
+            resampling = "cubic"
+
         overview_levels = self._compute_overview_factors()
         if not overview_levels:
             LOGGER.debug("no overview levels requested; skipping gdaladdo")
             return
 
-        command = ["gdaladdo", "-r", "average", str(mbtiles_path), *overview_levels]
+        LOGGER.info(f"building overviews: {', '.join(overview_levels)}")
+        command = ["gdaladdo", "-r", resampling, str(mbtiles_path), *overview_levels]
         self._runner.run(command, description="build MBTiles overviews")
 
     def _compute_overview_factors(self) -> list[str]:

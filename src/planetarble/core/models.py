@@ -39,6 +39,7 @@ class ProcessingConfig:
     color_enhancement: float = 1.05
     hillshade_opacity: float = 0.15
     max_zoom: int = 18
+    resampling: str = "cubic"
     tile_format: str = "JPEG"
     tile_quality: int = 75
     tile_source: str = "bmng"

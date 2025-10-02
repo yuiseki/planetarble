@@ -43,6 +43,7 @@ class ProcessingConfig:
     tile_format: str = "JPEG"
     tile_quality: int = 75
     tile_source: str = "bmng"
+    mbtiles_tiler: str = "auto"
 
 
 @dataclass

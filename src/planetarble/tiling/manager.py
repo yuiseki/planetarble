@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-import subprocess
-from pathlib import Path
+import importlib.util
 import shutil
+import subprocess
+import sys
+from pathlib import Path
 from typing import List
 
 from planetarble.core.models import ProcessingConfig
@@ -30,9 +32,18 @@ class TileRunner:
         if self._dry_run:
             return
         try:
-            subprocess.run(command, check=True)
+           proc = subprocess.run(command, check=True, text=True, capture_output=True)
+           if proc.stdout:
+               LOGGER.debug(proc.stdout.strip())
+           if proc.stderr:
+               LOGGER.debug(proc.stderr.strip())
         except subprocess.CalledProcessError as exc:  # pragma: no cover - depends on GDAL runtime
-            raise TileCommandError(f"Command failed: {' '.join(command)}") from exc
+           msg = f"Command failed: {' '.join(command)}"
+           if exc.stdout:
+               msg += f"\n--- stdout ---\n{exc.stdout}"
+           if exc.stderr:
+               msg += f"\n--- stderr ---\n{exc.stderr}"
+           raise TileCommandError(msg) from exc
 
 
 class TilingManager(TileGenerator):
@@ -52,7 +63,7 @@ class TilingManager(TileGenerator):
         self._tiling_dir = self._output_dir / "tiling"
         self._dry_run = dry_run
         self._runner = TileRunner(dry_run=dry_run)
-        self._gdal2mbtiles = shutil.which("gdal2mbtiles")
+        self._gdal2mbtiles_cmd = self._resolve_gdal2mbtiles()
         self._temp_dir.mkdir(parents=True, exist_ok=True)
         self._output_dir.mkdir(parents=True, exist_ok=True)
         self._tiling_dir.mkdir(parents=True, exist_ok=True)
@@ -62,6 +73,12 @@ class TilingManager(TileGenerator):
         if output.exists() and not self._dry_run:
             output.unlink()
         tile_dimension = 256 * (2 ** self._config.max_zoom)
+
+        LOGGER.info("warp params",
+            extra={"dst_srs": "EPSG:3857",
+                    "tile_dim": tile_dimension,
+                    "world_extent": "[-20037508.342789244, 20037508.342789244]"})
+
         command = [
             "gdalwarp",
             "-t_srs",
@@ -89,13 +106,9 @@ class TilingManager(TileGenerator):
         self._runner.run(command, description="reproject raster to EPSG:3857")
         return output
 
-    def generate_pyramid(self, input_path: Path) -> Path:
-        # For MBTiles generation we defer to gdal_translate output path naming
-        return input_path
-
     def create_mbtiles(
         self,
-        pyramid_path: Path,
+        source_path: Path,
         format: str | None = None,
         quality: int | None = None,
     ) -> Path:
@@ -106,15 +119,17 @@ class TilingManager(TileGenerator):
         preferred = tiler_preference in {"gdal2mbtiles", "pyvips"}
         auto_mode = tiler_preference == "auto"
 
-        if preferred and not self._gdal2mbtiles:
-            raise TileCommandError("gdal2mbtiles requested but not found in PATH")
+        if preferred and not self._gdal2mbtiles_cmd:
+            raise TileCommandError("gdal2mbtiles requested but not available in environment")
 
         if mbtiles_path.exists() and not self._dry_run:
             mbtiles_path.unlink()
 
+        reprojected_path: Path | None = None
+
         if self._should_use_gdal2mbtiles(tile_format, auto_mode, preferred):
             try:
-                self._run_gdal2mbtiles(pyramid_path, mbtiles_path, tile_format)
+                self._run_gdal2mbtiles(source_path, mbtiles_path, tile_format)
                 LOGGER.info(
                     "generated MBTiles with gdal2mbtiles",
                     extra={
@@ -132,37 +147,56 @@ class TilingManager(TileGenerator):
                     extra={"tile_format": tile_format},
                 )
 
-        self._run_gdal_translate(pyramid_path, mbtiles_path, tile_format, quality_value)
+        if reprojected_path is None:
+            reprojected_path = self.reproject_to_webmercator(source_path)
+        self._run_gdal_translate(reprojected_path, mbtiles_path, tile_format, quality_value)
         self.optimize_overviews(mbtiles_path)
         return mbtiles_path
 
     def _should_use_gdal2mbtiles(self, tile_format: str, auto_mode: bool, preferred: bool) -> bool:
         if self._dry_run:
             return False
-        if not self._gdal2mbtiles:
+        if not self._gdal2mbtiles_cmd:
+            return False
+        if not self._libvips_healthy():
             return False
         if preferred:
             return True
         if not auto_mode:
             return False
-        # gdal2mbtiles currently handles JPEG fastest; other formats fall back to GDAL.
         return tile_format == "JPEG"
 
-    def _run_gdal2mbtiles(self, pyramid_path: Path, destination: Path, tile_format: str) -> None:
-        command = [
-            self._gdal2mbtiles or "gdal2mbtiles",
-            str(pyramid_path),
-            str(destination),
-        ]
+    def _libvips_healthy(self) -> bool:
+        try:
+            import pyvips  # noqa
+            # 最小動作確認（内部シンボルに触れない安全な操作）
+            img = pyvips.Image.black(1, 1)
+            _ = (img.width, img.height)
+            return True
+        except Exception as e:
+            LOGGER.warning("pyvips/libvips preflight failed; disable gdal2mbtiles",
+                        extra={"error": str(e)})
+            return False
+
+    def _run_gdal2mbtiles(self, input_path: Path, destination: Path, tile_format: str) -> None:
+        command = list(self._gdal2mbtiles_cmd)
         # Only pass format hint when gdal2mbtiles supports the requested encoding.
         format_map = {"JPEG": "jpg", "PNG": "png"}
         tile_format_lower = format_map.get(tile_format)
-        additional_args = []
         if tile_format_lower:
-            additional_args.append(f"--format={tile_format_lower}")
-        additional_args.append(f"--max-resolution={self._config.max_zoom}")
-        command[1:1] = additional_args
+            command.append(f"--format={tile_format_lower}")
+        command.append(f"--max-resolution={self._config.max_zoom}")
+        command.extend([str(input_path), str(destination)])
         self._runner.run(command, description="generate MBTiles pyramid via gdal2mbtiles")
+
+    def _resolve_gdal2mbtiles(self) -> list[str] | None:
+        candidate = shutil.which("gdal2mbtiles")
+        if candidate:
+            return [candidate]
+        spec = importlib.util.find_spec("gdal2mbtiles.main")
+        if spec is not None:
+            return [sys.executable, "-m", "gdal2mbtiles"]
+        return None
 
     def _run_gdal_translate(
         self,
@@ -184,9 +218,15 @@ class TilingManager(TileGenerator):
             "-co",
             "BLOCKSIZE=512",
             "-co",
+            "TILING_SCHEME=GoogleMapsCompatible",
+            "-co",
             f"TILE_FORMAT={tile_format}",
             "-co",
             f"QUALITY={quality_value}",
+            "-co",
+            f"MINZOOM=0",
+            "-co",
+            f"MAXZOOM={self._config.max_zoom}",
             "-co",
             "ZOOM_LEVEL_STRATEGY=LOWER",
             str(pyramid_path),

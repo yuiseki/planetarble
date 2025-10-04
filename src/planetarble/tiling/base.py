@@ -12,10 +12,12 @@ class TileGenerator(Protocol):
     def reproject_to_webmercator(self, input_path: Path) -> Path:
         """Return a raster transformed to EPSG:3857 with polar clipping."""
 
-    def generate_pyramid(self, input_path: Path, max_zoom: int) -> Path:
-        """Return a path to generated tile pyramid artifacts up to max_zoom."""
-
-    def create_mbtiles(self, pyramid_path: Path, format: str, quality: int) -> Path:
+    def create_mbtiles(
+        self,
+        source_path: Path,
+        format: str,
+        quality: int,
+    ) -> Path:
         """Return an MBTiles archive generated from the tile pyramid."""
 
     def optimize_overviews(self, mbtiles_path: Path) -> None:

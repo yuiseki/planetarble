@@ -559,12 +559,10 @@ def _handle_tile(args: argparse.Namespace) -> int:
     elif tile_source != "bmng":
         raise SystemExit(f"Unsupported tile_source value: {cfg.processing.tile_source}")
 
-    reprojected = manager.reproject_to_webmercator(source_raster)
-    mbtiles_path = manager.create_mbtiles(reprojected)
+    mbtiles_path = manager.create_mbtiles(source_raster)
 
     LOGGER.info("tiling outputs", extra={
         "source": str(source_raster),
-        "reprojected": str(reprojected),
         "mbtiles": str(mbtiles_path),
     })
     return 0

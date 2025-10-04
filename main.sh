@@ -1,0 +1,1 @@
+PYTHONPATH=src python -m planetarble.cli.main tiling pmtiles --input configs/base/output/processing/bmng_mosaic_normalized.tif --out output/pmtiles --min-zoom 0 --max-zoom 12 --format   jpg --quality 80 --resampling cubic --name "Planetarble 2024" --attribution "Imagery: NASA BMNG + GEBCO" --bounds-mode auto

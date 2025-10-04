@@ -38,11 +38,17 @@ class ProcessingConfig:
     natural_earth_scale: str = "10m"
     color_enhancement: float = 1.05
     hillshade_opacity: float = 0.15
+    min_zoom: int = 0
     max_zoom: int = 18
     resampling: str = "cubic"
     tile_format: str = "JPEG"
     tile_quality: int = 75
     tile_source: str = "bmng"
+    tile_name: str = "Planetarble Tiles"
+    tile_attribution: str = "Imagery: Planetarble."
+    gdal_num_threads: str = "ALL_CPUS"
+    gdal_cachemax: str = "50%"
+    pmtiles_dedup: bool = True
     mbtiles_tiler: str = "auto"
 
 

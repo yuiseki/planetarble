@@ -22,11 +22,11 @@ from planetarble.acquisition import (
     verify_copernicus_connection,
 )
 from planetarble.config import load_config
-from planetarble.core.models import CopernicusLayerConfig, TileMetadata
+from planetarble.core.models import CopernicusLayerConfig, ProcessingConfig, TileMetadata
 from planetarble.logging import configure_logging, get_logger
 from planetarble.packaging import PackagingManager
 from planetarble.processing import ProcessingManager
-from planetarble.tiling import TilingManager
+from planetarble.tiling import PmtilesTilingManager, TilingManager
 
 LOGGER = get_logger(__name__)
 
@@ -128,6 +128,83 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Override tile encoding quality",
+    )
+
+    tiling = subcommands.add_parser("tiling", help="Advanced tiling utilities")
+    tiling_subcommands = tiling.add_subparsers(dest="tiling_command", required=True)
+
+    tiling_pmtiles = tiling_subcommands.add_parser(
+        "pmtiles",
+        help="Convert a raster into PMTiles via XYZ and MBTiles",
+    )
+    tiling_pmtiles.add_argument("--input", type=Path, required=True, help="Source raster path")
+    tiling_pmtiles.add_argument(
+        "--out",
+        type=Path,
+        required=True,
+        help="Destination directory for PMTiles and intermediate artifacts",
+    )
+    tiling_pmtiles.add_argument(
+        "--min-zoom",
+        type=int,
+        default=None,
+        help="Minimum zoom level (default: config or 0)",
+    )
+    tiling_pmtiles.add_argument(
+        "--max-zoom",
+        type=int,
+        default=None,
+        help="Maximum zoom level",
+    )
+    tiling_pmtiles.add_argument(
+        "--format",
+        choices=["png", "jpg", "webp"],
+        default=None,
+        help="Tile image format",
+    )
+    tiling_pmtiles.add_argument(
+        "--quality",
+        type=int,
+        default=None,
+        help="Compression quality for JPEG/WEBP tiles",
+    )
+    tiling_pmtiles.add_argument(
+        "--resampling",
+        default=None,
+        help="Resampling kernel for gdal raster tile (default: config value)",
+    )
+    tiling_pmtiles.add_argument("--name", default=None, help="Human-readable tileset name")
+    tiling_pmtiles.add_argument(
+        "--attribution",
+        default=None,
+        help="Attribution string embedded into MBTiles metadata",
+    )
+    tiling_pmtiles.add_argument(
+        "--bounds-mode",
+        choices=["auto", "global"],
+        default="auto",
+        help="Strategy to derive bounds metadata",
+    )
+    tiling_pmtiles.add_argument(
+        "--no-deduplication",
+        action="store_true",
+        help="Disable PMTiles deduplication during conversion",
+    )
+    tiling_pmtiles.add_argument(
+        "--cluster",
+        action="store_true",
+        help="Run pmtiles cluster after conversion",
+    )
+    tiling_pmtiles.add_argument(
+        "--temp-dir",
+        type=Path,
+        default=None,
+        help="Temporary workspace directory (defaults to <out>/tmp)",
+    )
+    tiling_pmtiles.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print commands without executing them",
     )
 
     mpc_fetch = subcommands.add_parser(
@@ -288,6 +365,11 @@ def main(argv: Iterable[str] | None = None) -> int:
         return _handle_process(args)
     if args.command == "tile":
         return _handle_tile(args)
+    if args.command == "tiling":
+        if args.tiling_command == "pmtiles":
+            return _handle_tiling_pmtiles(args)
+        parser.error("Unknown tiling subcommand")
+        return 1
     if args.command == "mpc-fetch":
         return _handle_mpc_fetch(args)
     if args.command == "gsi-fetch":
@@ -565,6 +647,83 @@ def _handle_tile(args: argparse.Namespace) -> int:
         "source": str(source_raster),
         "mbtiles": str(mbtiles_path),
     })
+    return 0
+
+
+def _handle_tiling_pmtiles(args: argparse.Namespace) -> int:
+    source_path = args.input.resolve()
+    if not source_path.exists():
+        raise SystemExit(f"Input raster not found: {source_path}")
+
+    output_dir = args.out.resolve()
+    temp_dir = (args.temp_dir or (output_dir / "tmp")).resolve()
+
+    if not args.dry_run:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+    config = ProcessingConfig()
+    min_zoom = args.min_zoom if args.min_zoom is not None else config.min_zoom
+    max_zoom = args.max_zoom if args.max_zoom is not None else config.max_zoom
+    if max_zoom < min_zoom:
+        raise SystemExit("--max-zoom must be greater than or equal to --min-zoom")
+
+    tile_format = (args.format or config.tile_format).upper()
+    tile_quality = args.quality if args.quality is not None else config.tile_quality
+    resampling = args.resampling or config.resampling
+    name = args.name or config.tile_name
+    attribution = args.attribution or config.tile_attribution
+    deduplicate = config.pmtiles_dedup and not args.no_deduplication
+
+    manager = PmtilesTilingManager(
+        config,
+        temp_dir=temp_dir,
+        output_dir=output_dir,
+        dry_run=args.dry_run,
+    )
+
+    zxy_dir = manager.build_zxy(
+        source_path,
+        min_zoom=min_zoom,
+        max_zoom=max_zoom,
+        tile_format=tile_format,
+        quality=tile_quality,
+        resampling=resampling,
+    )
+
+    mbtiles_path = manager.pack_mbtiles(
+        zxy_dir,
+        source_path=source_path,
+        tile_format=tile_format,
+        min_zoom=min_zoom,
+        max_zoom=max_zoom,
+        name=name,
+        attribution=attribution,
+        bounds_mode=args.bounds_mode,
+    )
+
+    pmtiles_destination = output_dir / f"{source_path.stem}_{min_zoom}-{max_zoom}.pmtiles"
+    pmtiles_path = manager.convert_pmtiles(
+        mbtiles_path,
+        destination=pmtiles_destination,
+        deduplicate=deduplicate,
+        cluster=args.cluster,
+    )
+
+    manager.verify(pmtiles_path)
+    header = manager.show_header(pmtiles_path)
+    if header:
+        LOGGER.info("pmtiles header", extra=header)
+
+    if not args.dry_run:
+        LOGGER.info(
+            "pmtiles build complete",
+            extra={
+                "pmtiles": str(pmtiles_path),
+                "mbtiles": str(mbtiles_path),
+                "zxy_dir": str(zxy_dir),
+            },
+        )
     return 0
 
 

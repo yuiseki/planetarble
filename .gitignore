@@ -3,6 +3,7 @@
 # Local data workspaces (not version-controlled)
 data/
 tmp/
+output/
 configs/base/data/
 configs/base/tmp/
 configs/base/output/

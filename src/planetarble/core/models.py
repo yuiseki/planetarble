@@ -39,13 +39,13 @@ class ProcessingConfig:
     color_enhancement: float = 1.05
     hillshade_opacity: float = 0.15
     min_zoom: int = 0
-    max_zoom: int = 18
+    max_zoom: int = 10
     resampling: str = "cubic"
-    tile_format: str = "JPEG"
-    tile_quality: int = 75
-    tile_source: str = "bmng"
-    tile_name: str = "Planetarble Tiles"
-    tile_attribution: str = "Imagery: Planetarble."
+    tile_format: str = "WEBP"
+    tile_quality: int = 82
+    tile_source: str = "hls"
+    tile_name: str = "Planetarble HLS Mosaic"
+    tile_attribution: str = ""
     gdal_num_threads: str = "ALL_CPUS"
     gdal_cachemax: str = "50%"
     pmtiles_dedup: bool = True
@@ -107,6 +107,64 @@ class CopernicusConfig:
 
 
 @dataclass
+class HLSSeasonWindow:
+    """Define a hemisphere-specific seasonal window for HLS compositing."""
+
+    name: str
+    hemisphere: str
+    start_month: int
+    start_day: int
+    end_month: int
+    end_day: int
+
+
+@dataclass
+class HLSConfig:
+    """Configuration for Harmonized Landsat and Sentinel-2 acquisition and mosaicking."""
+
+    enabled: bool = True
+    stac_api: str = "https://planetarycomputer.microsoft.com/api/stac/v1"
+    collections: Tuple[str, ...] = ("HLSS30", "HLSL30")
+    seasonal_windows: Tuple[HLSSeasonWindow, ...] = (
+        HLSSeasonWindow(
+            name="northern_growing_season",
+            hemisphere="north",
+            start_month=4,
+            start_day=1,
+            end_month=10,
+            end_day=31,
+        ),
+        HLSSeasonWindow(
+            name="southern_growing_season",
+            hemisphere="south",
+            start_month=10,
+            start_day=1,
+            end_month=4,
+            end_day=30,
+        ),
+    )
+    land_mask_path: Optional[str] = None
+    land_buffer_km: float = 20.0
+    max_cloud: float = 40.0
+    qa_mask_flags: Tuple[str, ...] = ("cloud", "cloud_shadow", "snow")
+    max_scene_age_days: int = 365
+    mosaic_strategy: str = "best_pixel"
+    robust_median_window: int = 5
+    target_zoom: int = 10
+    tile_size: int = 256
+    concurrency: int = 4
+    request_timeout_seconds: int = 60
+    max_retries: int = 5
+    backoff_factor: float = 1.8
+    fallback_collections: Tuple[str, ...] = ("landsat-c2-l2",)
+    fallback_max_cloud: float = 60.0
+    compositing_year: Optional[int] = None
+    spectral_bands: Tuple[str, ...] = ("B02", "B03", "B04")
+    qa_asset_key: str = "Fmask"
+    cache_ttl_days: int = 7
+
+
+@dataclass
 class GSIOrthophotoConfig:
     """Configuration controlling GSI orthophoto extraction."""
 
@@ -119,6 +177,22 @@ class GSIOrthophotoConfig:
     tile_template: str = "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"
     output_basename: str = "gsi_orthophotos"
     timeout_seconds: int = 60
+
+
+@dataclass
+class OceanConfig:
+    """Configuration for ocean rendering using auxiliary elevation datasets."""
+
+    enabled: bool = True
+    source_id: str = "etopo_2022_15arcsec_geotiff"
+    depth_color_ramp: str = "planetarble:ocean/depth_ramp.json"
+    apply_hillshade: bool = True
+    hillshade_azimuth: float = 315.0
+    hillshade_altitude: float = 45.0
+    hillshade_strength: float = 0.45
+    tone_mapping: str = "lambertian"
+    viirs_blend_percent: float = 0.0
+    viirs_max_fraction: float = 0.05
 
 
 @dataclass

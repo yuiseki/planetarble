@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import os
 import zipfile
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from planetarble.core.models import AssetManifest, CopernicusConfig
+from planetarble.core.models import AssetManifest, CopernicusConfig, HLSConfig
 from planetarble.logging import get_logger
 
 from .appeears import (
@@ -31,6 +32,7 @@ from .base import DataAcquisition
 from .catalog import AssetCatalog, AssetRecord
 from .download import DownloadError, DownloadManager, DownloadResult, calculate_sha256
 from .manifest import build_manifest, write_manifest
+from .hls import HLSMosaicPlanner, HLSPlanSummary
 
 LOGGER = get_logger(__name__)
 
@@ -61,6 +63,29 @@ class AcquisitionManager(DataAcquisition):
             "found" if credential_source else "missing",
             extra={"source": credential_source or "none"},
         )
+
+    def download_etopo(self, *, force: bool = False) -> Path:
+        result = self._downloader.download("etopo_2022_15s_bedrock_cog", force=force)
+        return result.path
+
+    def build_hls_plan(
+        self,
+        config: HLSConfig,
+        *,
+        destination: Optional[Path] = None,
+        force: bool = False,
+    ) -> Optional[HLSPlanSummary]:
+        if not config.enabled:
+            LOGGER.info("HLS acquisition disabled; skipping plan generation")
+            return None
+        planner = HLSMosaicPlanner(config)
+        plan_path = destination or (self._data_directory / "plans" / f"hls_z{config.target_zoom}_plan.ndjson")
+        plan_path = plan_path.resolve()
+        if plan_path.exists() and not force:
+            LOGGER.info("reusing existing HLS plan", extra={"path": str(plan_path)})
+            return self._summarize_plan(plan_path, config.target_zoom)
+        summary = planner.write_plan(plan_path)
+        return summary
 
     def download_bmng(self, resolution: str = "500m", force: bool = False) -> Path:
         if resolution == "500m":
@@ -201,6 +226,28 @@ class AcquisitionManager(DataAcquisition):
 
         results.update(downloaded)
         return results
+
+    def _summarize_plan(self, path: Path, zoom: int) -> HLSPlanSummary:
+        counter: Counter[str] = Counter()
+        total = 0
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        record = json.loads(line)
+                    except json.JSONDecodeError:
+                        LOGGER.debug("invalid hls plan record", extra={"path": str(path)})
+                        continue
+                    season_key = str(record.get("season", "unknown"))
+                    counter[season_key] += 1
+                    total += 1
+        except FileNotFoundError:
+            LOGGER.warning("hls plan file missing", extra={"path": str(path)})
+            return HLSPlanSummary(path=path, zoom=zoom, tile_count=0, season_counts={})
+        return HLSPlanSummary(path=path, zoom=zoom, tile_count=total, season_counts=dict(counter))
 
     def check_copernicus_connection(self, *, strict: bool = False) -> bool:
         """Verify that Copernicus credentials allow WMS access."""

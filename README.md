@@ -2,15 +2,15 @@
 
 [![Image from Gyazo](https://i.gyazo.com/aefeffdeb3c3575ff02037a8509c4d7c.png)](https://pmtiles.io/#url=https%3A%2F%2Fz.yuiseki.net%2Fstatic%2Fplanetarble%2Fplanet.pmtiles&map=1.88/0/0)
 
-Planetarble builds a fully open global raster basemap and packages it as a single PMTiles archive for offline distribution.
+Planetarble builds a fully open global raster basemap anchored on the NASA/USGS Harmonized Landsat and Sentinel-2 (HLS) v2 archive streamed directly from Microsoft Planetary Computer. Persistent cloud gaps are backfilled with Landsat Collection 2 Level-2 surface reflectance, and oceans are rendered with NOAA’s CC0 ETOPO 2022 bathymetry and hillshade. The entire stack remains effectively license-free (NASA/USGS public domain + NOAA CC0) and is distributed as a single PMTiles artifact for offline use.
 
-The project orchestrates three core phases:
+When HLS mode is enabled—the new default configuration—the pipeline orchestrates three core phases:
 
-1. **Acquire** the required datasets (NASA BMNG 2004, GEBCO 2024 Global Grid, Natural Earth 10 m layers, and optional MODIS/VIIRS surface reflectance tiles) with integrity checks.
-2. **Process** the rasters into a blended Web Mercator tile pyramid covering zoom levels 0–10.
-3. **Package** the output as `planet_{YYYY}_{max_zoom_level}z.pmtiles` with companion metadata and licensing bundles.
+1. **Acquire** — build an `hls_z{zoom}_plan.ndjson` that enumerates every land ZL10 tile, its seasonal window, and fallback collections, without downloading multi-terabyte imagery up front.
+2. **Process** — resolve the plan into a deduplicated, SAS-signed HLS scene manifest and pre-render NOAA ETOPO ocean shading ready for compositing.
+3. **Package** — tile the composited land/ocean rasters and emit a PMTiles bundle with empty attribution (recommended credits are documented separately).
 
-The Earth is famously seen as a "blue marble", a description inspired by the 1972 photograph taken by the Apollo 17 crew that revealed our planet as a delicate swirl of blues and whites. Planetarble carries forward that legacy by relying on NASA’s Blue Marble Next Generation imagery. It continues the tradition of sharing a whole-Earth view constructed entirely from open data.
+The legacy BMNG/GEBCO/Natural Earth workflow remains available by switching `processing.tile_source` back to `bmng`.
 
 ## Quickstart
 
@@ -21,7 +21,7 @@ pip install -e .
 # Fallback when a global install is not possible (relies on current repo checkout)
 PYTHONPATH=src python -m planetarble.cli.main --help
 
-# Download source datasets and emit MANIFEST.json into the output directory
+# Generate the HLS land plan (writes data/plans/hls_z10_plan.ndjson)
 planetarble acquire --config configs/base/pipeline.yaml
 
 # or, without installing the package system-wide
@@ -31,54 +31,38 @@ PYTHONPATH=src python -m planetarble.cli.main acquire --config configs/base/pipe
 # disable aria2c only if required
 planetarble acquire --config configs/base/pipeline.yaml --no-aria2
 
-# preprocess rasters (mosaic BMNG, hillshade GEBCO, unpack Natural Earth)
+# build the MPC scene manifest and ocean shading (long-running; streams STAC metadata)
 planetarble process --config configs/base/pipeline.yaml
 
 # preview commands without executing
 planetarble process --config configs/base/pipeline.yaml --dry-run
 
-# generate MBTiles pyramid (requires gdal_translate/gdaladdo)
+# generate MBTiles pyramid once land/ocean rasters are ready (requires gdal_translate/gdaladdo)
 planetarble tile --config configs/base/pipeline.yaml
 
 # convert to PMTiles and assemble distribution bundle (requires pmtiles CLI)
 planetarble package --config configs/base/pipeline.yaml
 
-# increase JPEG quality or switch to WebP when experimenting
-planetarble tile --config configs/base/pipeline.yaml --quality 95 --tile-format WEBP
+# increase WEBP quality (default pipeline uses WEBP Q=82)
+planetarble tile --config configs/base/pipeline.yaml --quality 90 --tile-format WEBP
 
 # inspect available Copernicus (Sentinel-2) WMS layers
 planetarble copernicus-layers
 ```
 
-The default configuration stores raw data in `data/`, temporary artifacts in `tmp/`, and final outputs in `output/`. Adjust paths and parameters by copying `configs/base/pipeline.yaml` and editing as needed. Expect roughly 4.5 GB of downloads on the first run (BMNG 500 m panels, GEBCO netCDF, Natural Earth archives); on an 80 Mbps connection the acquisition step typically completes in about 10 minutes.
+The default configuration keeps plan and manifest artefacts under `data/`, scratch working files in `tmp/`, and final outputs in `output/`. Copy `configs/base/pipeline.yaml` to create your own profile and adjust parameters (seasonal windows, cloud thresholds, ocean options) as needed. `planetarble acquire` also pulls down the NOAA ETOPO 2022 15 arc-second bedrock GeoTIFF (≈9 GB compressed) whenever `ocean.enabled` is true so ocean shading can run offline. Streaming the full HLS land archive during processing remains a long-running operation—plan on 1.6–2.0 TB of transfer against Microsoft Planetary Computer for a complete ZL10 build, roughly 60–75 % lower than fetching land + ocean pixels.
 
 ## Imagery Options
 
-- Planetarble ships with NASA Blue Marble Next Generation (BMNG) as the default imagery. The processing stage produces a normalized Cloud Optimized GeoTIFF under `output/processing/*_normalized_cog.tif` and the tiling stage uses it when `processing.tile_source` is left at `bmng`.
-- MODIS MCD43A4 surface reflectance can be enabled by setting `modis.enabled: true`, providing a day-of-year (`modis.doy`) and listing desired sinusoidal tiles (`modis.tiles`). The acquisition command requests the corresponding assets via NASA AppEEARS. Switch the final tile source by setting `processing.tile_source: modis` in your configuration.
-- VIIRS corrected reflectance (VNP09GA.002) is now supported. Set `viirs.enabled: true`, choose the acquisition date (`viirs.date` in `YYYYJJJ` format), and list the tiles in `viirs.tiles`. Select `processing.tile_source: viirs` to build the MBTiles/PMTiles pyramid from the VIIRS COG. Adjust `viirs.product` if you need to target another collection (e.g., `VJ109GA.002` for NOAA-20); Planetarble automatically requests the correct Collection 2 layer names.
-- Sentinel-2 L2A imagery from the Copernicus Data Space Ecosystem can be downloaded by enabling the `copernicus` block in `configs/base/pipeline.yaml`. The default configuration targets Japan (`bbox: [123, 24, 147, 46]`) for zoom levels `8–12` and fetches the `TRUE_COLOR` and `VEGETATION_INDEX` layers. Adjust `copernicus.layers`, `bbox`, `min_zoom`, `max_zoom`, or `max_tiles_per_layer` to control coverage and cost. Make sure `COPERNICUS_INSTANCE_ID`, `COPERNICUS_CLIENT_ID`, and `COPERNICUS_CLIENT_SECRET` are defined in `.env` before running `planetarble acquire`.
-- When Copernicus throttles access, run `planetarble mpc-fetch` to anonymously clip a high-resolution Sentinel-2 True Color chip (10 m) from Microsoft Planetary Computer without downloading a full tile. Example:
-
-  ```bash
-  planetarble mpc-fetch \
-    --lat 35.6839 \
-    --lon 139.7021 \
-    --width-m 600 \
-    --height-m 600 \
-    --max-cloud 10 \
-    --output output/processing/mpc_yoyogi_true_color.tif
-  ```
-
-  The command queries the MPC STAC API for a low-cloud Sentinel-2 L2A scene, signs the `visual` COG asset with an anonymous SAS token, and calls `gdal_translate` with `-projwin` so only the requested footprint is streamed from storage.
-- For sub-meter coverage in Japan, `planetarble gsi-fetch --lat 35.6839 --lon 139.7021 --width-m 300 --height-m 300 --zoom 18 --output output/processing/gsi_yoyogi_ortho.tif` streams only the requested area from 国土地理院の航空写真（デフォルトで `https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg` を使用）して COG 化します。ズーム 19 以上が必要な場合は `--tile-template` で別レイヤーを指定してください。配布時は必ず国土地理院の出典表記を添えてください。
-- Both MODIS and VIIRS downloads require AppEEARS credentials. Export `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD`, or provide an `APPEEARS_TOKEN`, before running `planetarble acquire` so the CLI can authenticate with the service.
-- You can enable multiple imagery sources simultaneously; each processed raster is preserved under `output/processing/`. Switching `processing.tile_source` lets you compare BMNG, MODIS, and VIIRS outputs without re-running the acquisition step.
+- **HLS v2 (default)** — `processing.tile_source: hls` activates the new global workflow. `planetarble acquire` writes an `hls_z10_plan.ndjson`; `planetarble process` expands it into `output/processing/hls_scene_manifest.json` with MPC-signed URLs for the required `B02/B03/B04` COGs and QA masks. Seasonal windows default to April–October for the northern hemisphere and October–April for the southern hemisphere.
+- **Landsat Collection 2 Level-2 SR fallback** — listed in `hls.fallback_collections`. When the primary HLS collections cannot clear clouds, the manifest builder records low-cloud Landsat scenes that align with the same tile footprints and QA masks.
+- **NOAA ETOPO 2022 ocean rendering** — `ocean.enabled: true` combines the CC0 bathymetry grid with a configurable color ramp and lambertian hillshade. `planetarble acquire` downloads the global 15 arc-second bedrock GeoTIFF to `data/etopo/ETOPO_2022_15s_bed.tif`; you can point `ocean.source_id` at a custom path if you maintain your own copy.
+- **Legacy BMNG / MODIS / VIIRS / Copernicus** — set `processing.tile_source` back to `bmng` (and toggle the respective blocks) to reuse the historical workflow that mosaics BMNG, optional MODIS/VIIRS reflectance, and Copernicus WMS tiles. All legacy commands remain available for backwards compatibility and regional experiments.
 
 ## Quality Tuning
 
-- `processing.tile_quality` defaults to 95 in `configs/base/pipeline.yaml`; raise or lower this value to trade file size for fidelity.
-- You can override quality and format per run: `planetarble tile --quality 95 --tile-format WEBP` regenerates MBTiles with WebP tiles at quality 95.
+- `processing.tile_quality` defaults to 82 for the HLS workflow; raise or lower this value to trade file size for fidelity.
+- Override quality and format per run: `planetarble tile --quality 88 --tile-format WEBP` regenerates MBTiles with WebP tiles at the requested quality.
 - After changing quality-related settings, rerun `planetarble tile` and `planetarble package` (and `planetarble process` if upstream rasters changed) to rebuild artifacts.
 
 ## Caching & Re-download Policy

@@ -1,4 +1,4 @@
-# Default pipeline locations for Planetarble
+# Default pipeline locations for Planetarble (HLS-first configuration)
 data_dir: data
 temp_dir: tmp
 output_dir: output
@@ -6,66 +6,83 @@ processing:
   bmng_resolution: "500m"
   gebco_year: 2024
   natural_earth_scale: "10m"
-  color_enhancement: 1.05
-  hillshade_opacity: 0.15
-  max_zoom: 12
-  resampling: "cubic"
-  tile_format: "JPEG"
-  tile_quality: 75
-  tile_source: "bmng"
+  color_enhancement: 1.0
+  hillshade_opacity: 0.12
+  min_zoom: 0
+  max_zoom: 10
+  resampling: "lanczos"
+  tile_format: "WEBP"
+  tile_quality: 82
+  tile_source: "hls"
+  tile_name: "Planetarble HLS Mosaic"
+  tile_attribution: ""
+  gdal_num_threads: "ALL_CPUS"
+  gdal_cachemax: "50%"
+  pmtiles_dedup: true
+  mbtiles_tiler: "auto"
+hls:
+  enabled: true
+  stac_api: "https://planetarycomputer.microsoft.com/api/stac/v1"
+  collections:
+    - "HLSS30"
+    - "HLSL30"
+  fallback_collections:
+    - "landsat-c2-l2"
+  land_mask_path: null
+  land_buffer_km: 20.0
+  max_cloud: 40.0
+  fallback_max_cloud: 60.0
+  max_scene_age_days: 365
+  qa_mask_flags:
+    - "cloud"
+    - "cloud_shadow"
+    - "snow"
+  mosaic_strategy: "best_pixel"
+  robust_median_window: 5
+  target_zoom: 10
+  tile_size: 256
+  concurrency: 6
+  request_timeout_seconds: 90
+  max_retries: 6
+  backoff_factor: 2.0
+  compositing_year: 2024
+  spectral_bands:
+    - "B02"
+    - "B03"
+    - "B04"
+  qa_asset_key: "Fmask"
+  seasonal_windows:
+    - name: "northern_growing_season"
+      hemisphere: "north"
+      start_month: 4
+      start_day: 1
+      end_month: 10
+      end_day: 31
+    - name: "southern_growing_season"
+      hemisphere: "south"
+      start_month: 10
+      start_day: 1
+      end_month: 4
+      end_day: 30
+ocean:
+  enabled: true
+  source_id: "etopo_2022_15arcsec_geotiff"
+  depth_color_ramp: "planetarble:ocean/depth_ramp.json"
+  apply_hillshade: true
+  hillshade_azimuth: 315.0
+  hillshade_altitude: 45.0
+  hillshade_strength: 0.45
+  tone_mapping: "lambertian"
+  viirs_blend_percent: 0.0
+  viirs_max_fraction: 0.05
 modis:
   enabled: false
-  doy: "2025233"
-  tiles:
-    - h27v04
-    - h28v04
-    - h28v05
-    - h29v05
-    - h29v06
-    - h30v05
-  scale_min: 0
-  scale_max: 2500
-  gamma: 0.7
+  tiles: []
 viirs:
   enabled: false
-  date: "2025233"
-  tiles:
-    - h27v04
-    - h28v04
-    - h28v05
-    - h29v05
-    - h29v06
-    - h30v05
-  product: "VNP09GA.002"
-  scale_min: 0
-  scale_max: 9000
-  gamma: 0.8
+  tiles: []
 copernicus:
   enabled: false
-  bbox:
-    - 123.0
-    - 24.0
-    - 147.0
-    - 46.0
-  min_zoom: 8
-  max_zoom: 14
-  tile_size: 256
-  max_tiles_per_layer: null
-  timeout_seconds: 30
-  request_interval_seconds: 0.5
-  max_retries: 3
-  backoff_factor: 2.0
-  layers:
-    - name: TRUE_COLOR
-      format: image/jpeg
-      output: true_color
+  layers: []
 gsi_orthophotos:
-  enabled: true
-  lat: 35.681236
-  lon: 139.767125
-  width_m: 3000
-  height_m: 3000
-  zoom: 18
-  tile_template: "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"
-  output_basename: "gsi_orthophotos"
-  timeout_seconds: 60
+  enabled: false

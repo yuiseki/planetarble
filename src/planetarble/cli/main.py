@@ -7,7 +7,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Iterable
+from typing import Dict, Iterable
 
 from planetarble.acquisition import (
     AcquisitionManager,
@@ -429,46 +429,73 @@ def _handle_acquire(args: argparse.Namespace) -> int:
         manifest_path=manifest_path,
         use_aria2=not args.no_aria2,
     )
-    manager.download_bmng(args.bmng_resolution, force=args.force)
-    manager.download_gebco(force=args.force)
-    manager.download_natural_earth(force=args.force)
-    try:
-        manager.download_modis_mcd43a4(force=args.force)
-    except (SystemExit, KeyboardInterrupt):
-        raise
-    except Exception as exc:
-        LOGGER.warning("modis acquisition skipped: %s", exc)
-    try:
-        manager.download_viirs_corrected_reflectance(
-            force=args.force,
-            product=cfg.viirs.product,
+    generation_params: dict[str, object] = {}
+    etopo_path: Path | None = None
+    if cfg.ocean.enabled:
+        try:
+            etopo_path = manager.download_etopo(force=args.force)
+            generation_params["etopo_path"] = str(etopo_path)
+        except Exception as exc:
+            LOGGER.warning("etopo acquisition skipped: %s", exc)
+
+    if cfg.hls.enabled and cfg.processing.tile_source.lower() == "hls":
+        if args.bmng_resolution != "500m":
+            LOGGER.info(
+                "--bmng-resolution is ignored when tile_source is 'hls'",
+                extra={"bmng_resolution": args.bmng_resolution},
+            )
+        plan_path = cfg.data_dir / "plans" / f"hls_z{cfg.hls.target_zoom}_plan.ndjson"
+        summary = manager.build_hls_plan(cfg.hls, destination=plan_path, force=args.force)
+        if summary:
+            generation_params["hls_plan"] = {
+                "path": str(summary.path),
+                "zoom": summary.zoom,
+                "tiles": summary.tile_count,
+                "season_counts": summary.season_counts,
+            }
+    else:
+        LOGGER.info(
+            "HLS acquisition disabled or tile_source != 'hls'; running legacy Blue Marble pipeline",
+            extra={"tile_source": cfg.processing.tile_source, "hls_enabled": cfg.hls.enabled},
         )
-    except (SystemExit, KeyboardInterrupt):
-        raise
-    except Exception as exc:
-        LOGGER.warning("viirs acquisition skipped: %s", exc)
-    try:
-        manager.check_copernicus_connection()
-    except (SystemExit, KeyboardInterrupt):
-        raise
-    except Exception as exc:
-        LOGGER.warning("copernicus verification failed: %s", exc)
+        manager.download_bmng(args.bmng_resolution, force=args.force)
+        manager.download_gebco(force=args.force)
+        manager.download_natural_earth(force=args.force)
+        try:
+            manager.download_modis_mcd43a4(force=args.force)
+        except (SystemExit, KeyboardInterrupt):
+            raise
+        except Exception as exc:
+            LOGGER.warning("modis acquisition skipped: %s", exc)
+        try:
+            manager.download_viirs_corrected_reflectance(
+                force=args.force,
+                product=cfg.viirs.product,
+            )
+        except (SystemExit, KeyboardInterrupt):
+            raise
+        except Exception as exc:
+            LOGGER.warning("viirs acquisition skipped: %s", exc)
+        try:
+            manager.check_copernicus_connection()
+        except (SystemExit, KeyboardInterrupt):
+            raise
+        except Exception as exc:
+            LOGGER.warning("copernicus verification failed: %s", exc)
 
-    copernicus_summary: list[dict[str, object]] = []
-    try:
-        copernicus_summary = manager.download_copernicus_tiles(cfg.copernicus, force=args.force)
-    except (SystemExit, KeyboardInterrupt):
-        raise
-    except (CopernicusCredentialsMissing, CopernicusAuthError, CopernicusAccessError) as exc:
-        LOGGER.warning("copernicus tiles skipped: %s", exc)
+        copernicus_summary: list[dict[str, object]] = []
+        try:
+            copernicus_summary = manager.download_copernicus_tiles(cfg.copernicus, force=args.force)
+        except (SystemExit, KeyboardInterrupt):
+            raise
+        except (CopernicusCredentialsMissing, CopernicusAuthError, CopernicusAccessError) as exc:
+            LOGGER.warning("copernicus tiles skipped: %s", exc)
 
-    generation_params: dict[str, object] = {"bmng_resolution": args.bmng_resolution}
-    if copernicus_summary:
-        generation_params["copernicus_layers"] = copernicus_summary
+        generation_params["bmng_resolution"] = args.bmng_resolution
+        if copernicus_summary:
+            generation_params["copernicus_layers"] = copernicus_summary
 
-    manager.generate_manifest(
-        generation_params=generation_params,
-    )
+    manager.generate_manifest(generation_params=generation_params or None)
     return 0
 
 
@@ -484,8 +511,37 @@ def _handle_process(args: argparse.Namespace) -> int:
         copernicus=cfg.copernicus,
         modis=cfg.modis,
         viirs=cfg.viirs,
+        hls=cfg.hls,
+        ocean=cfg.ocean,
         dry_run=args.dry_run,
     )
+    if cfg.processing.tile_source.lower() == "hls":
+        plan_path = cfg.data_dir / "plans" / f"hls_z{cfg.hls.target_zoom}_plan.ndjson"
+        if not plan_path.exists():
+            raise SystemExit(
+                f"HLS plan not found at {plan_path}; run 'planetarble acquire' before processing"
+            )
+        scene_manifest = manager.prepare_hls_scene_manifest(plan_path)
+
+        ocean_outputs: Dict[str, Path] = {}
+        if cfg.ocean.enabled:
+            etopo_path = (cfg.data_dir / "etopo" / "ETOPO_2022_15s_bed.tif").resolve()
+            if not etopo_path.exists():
+                LOGGER.warning(
+                    "ETOPO raster not found; skipping ocean shading",
+                    extra={"path": str(etopo_path)},
+                )
+            else:
+                ocean_outputs = manager.render_ocean(etopo_path)
+
+        LOGGER.info(
+            "HLS preprocessing complete",
+            extra={
+                "scene_manifest": str(scene_manifest) if scene_manifest else None,
+                "ocean_outputs": {key: str(value) for key, value in ocean_outputs.items() if value},
+            },
+        )
+        return 0
 
     bmng_dir = (cfg.data_dir / "bmng" / cfg.processing.bmng_resolution).resolve()
     if not bmng_dir.exists():

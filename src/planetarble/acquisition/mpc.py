@@ -10,8 +10,22 @@ from typing import Dict, Iterable, Optional
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
-from pystac_client import Client
-from pystac_client import exceptions as pc_exceptions
+try:  # pragma: no cover - optional dependency availability
+    from pystac_client import Client
+    from pystac_client import exceptions as pc_exceptions
+    _PYSTAC_IMPORT_ERROR: Exception | None = None
+    _PYSTAC_ERRORS: Tuple[type[Exception], ...] = tuple(
+        err for err in (
+            getattr(pc_exceptions, "APIError", None),
+            getattr(pc_exceptions, "STACError", None),
+        )
+        if err is not None
+    ) or (Exception,)
+except Exception as exc:  # pragma: no cover
+    Client = None  # type: ignore[assignment]
+    pc_exceptions = None  # type: ignore[assignment]
+    _PYSTAC_IMPORT_ERROR = exc
+    _PYSTAC_ERRORS = (Exception,)
 
 from planetarble.logging import get_logger
 
@@ -91,19 +105,19 @@ def fetch_true_color_tile(
             "cloud_cover": scene.cloud_cover,
         },
     )
-    sas_token = _fetch_sas_token(scene.collection, timeout=timeout)
+    sas_token = fetch_sas_token(scene.collection, timeout=timeout)
     LOGGER.info(
         "mpc sas token acquired",
         extra={
             "collection": scene.collection,
         },
     )
-    signed_url = _append_token(scene.visual_href, sas_token)
+    signed_url = append_sas_token(scene.visual_href, sas_token)
 
     output_path = output_path.resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    command = _build_gdal_command(
+    command = build_clip_command(
         gdal_translate=gdal_translate,
         signed_url=signed_url,
         bbox=bbox,
@@ -149,6 +163,10 @@ def _select_scene(
     end_datetime: Optional[str],
     timeout: int,
 ) -> MPCScene:
+    if Client is None or pc_exceptions is None:
+        raise MPCError(
+            "pystac-client (and a sqlite-enabled Python build) is required for MPC STAC searches"
+        ) from _PYSTAC_IMPORT_ERROR
     datetime_filter: Optional[str]
     if start_datetime and end_datetime:
         datetime_filter = f"{start_datetime}/{end_datetime}"
@@ -165,7 +183,7 @@ def _select_scene(
 
     try:
         client = Client.open(STAC_API_ROOT, timeout=timeout)
-    except (pc_exceptions.APIError, requests.RequestException) as exc:  # pragma: no cover - network failure path
+    except (_PYSTAC_ERRORS + (requests.RequestException,)) as exc:  # type: ignore[operator] pragma: no cover - network failure path
         raise MPCError(f"Failed to open MPC STAC client: {exc}") from exc
 
     search_kwargs: Dict[str, object] = {
@@ -182,7 +200,7 @@ def _select_scene(
     try:
         search = client.search(**search_kwargs)
         item_collection = search.item_collection()
-    except (pc_exceptions.APIError, requests.RequestException) as exc:  # pragma: no cover - network failure path
+    except (_PYSTAC_ERRORS + (requests.RequestException,)) as exc:  # type: ignore[operator] pragma: no cover - network failure path
         raise MPCError(f"MPC STAC search failed: {exc}") from exc
 
     matches = len(item_collection.items) if item_collection else 0
@@ -204,7 +222,7 @@ def _select_scene(
     )
 
 
-def _fetch_sas_token(collection: str, *, timeout: int) -> str:
+def fetch_sas_token(collection: str, *, timeout: int) -> str:
     endpoint = SAS_TOKEN_ENDPOINT_TEMPLATE.format(collection=collection)
     try:
         response = requests.get(endpoint, timeout=timeout)
@@ -221,7 +239,7 @@ def _fetch_sas_token(collection: str, *, timeout: int) -> str:
     return token
 
 
-def _append_token(href: str, token: str) -> str:
+def append_sas_token(href: str, token: str) -> str:
     parsed = urlsplit(href)
     query = parsed.query
     token_query = token
@@ -234,7 +252,7 @@ def _append_token(href: str, token: str) -> str:
     return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, new_query, parsed.fragment))
 
 
-def _build_gdal_command(
+def build_clip_command(
     *,
     gdal_translate: str,
     signed_url: str,

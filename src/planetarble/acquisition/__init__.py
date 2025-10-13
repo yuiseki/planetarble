@@ -15,7 +15,15 @@ from planetarble.acquisition.copernicus import (
     verify_copernicus_connection,
 )
 from planetarble.acquisition.gsi import GSIError, fetch_gsi_ortho_clip
-from planetarble.acquisition.mpc import MPCError, fetch_true_color_tile
+from planetarble.acquisition.hls import (
+    HLSMosaicPlanner,
+    HLSMosaicTask,
+    HLSPlanSummary,
+    HLSScene,
+    HLSSTACClient,
+    iter_plan,
+)
+from planetarble.acquisition.mpc import MPCError, append_sas_token, fetch_sas_token, fetch_true_color_tile
 from planetarble.acquisition.base import DataAcquisition
 from planetarble.acquisition.catalog import AssetCatalog, AssetRecord
 from planetarble.acquisition.download import DownloadError, DownloadManager
@@ -35,10 +43,18 @@ __all__ = [
     "DownloadError",
     "DownloadManager",
     "GSIError",
+    "HLSMosaicPlanner",
+    "HLSMosaicTask",
+    "HLSPlanSummary",
+    "HLSScene",
+    "HLSSTACClient",
+    "iter_plan",
     "MPCError",
     "get_available_layers",
     "fetch_gsi_ortho_clip",
+    "fetch_sas_token",
     "fetch_true_color_tile",
+    "append_sas_token",
     "verify_copernicus_connection",
     "download_mcd43a4_tiles",
     "download_viirs_corrected_reflectance",

@@ -22,5 +22,11 @@ dependencies = [
 [project.scripts]
 planetarble = "planetarble.cli.main:main"
 
+[tool.setuptools]
+include-package-data = true
+
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"planetarble.data" = ["ocean/*.json"]

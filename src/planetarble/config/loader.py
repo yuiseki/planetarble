@@ -11,6 +11,9 @@ from planetarble.core.models import (
     CopernicusConfig,
     CopernicusLayerConfig,
     GSIOrthophotoConfig,
+    HLSConfig,
+    HLSSeasonWindow,
+    OceanConfig,
     ModisConfig,
     ProcessingConfig,
     ViirsConfig,
@@ -33,6 +36,8 @@ class PipelineConfig:
     modis: ModisConfig = field(default_factory=ModisConfig)
     viirs: ViirsConfig = field(default_factory=ViirsConfig)
     copernicus: CopernicusConfig = field(default_factory=CopernicusConfig)
+    hls: HLSConfig = field(default_factory=HLSConfig)
+    ocean: OceanConfig = field(default_factory=OceanConfig)
     gsi_orthophotos: GSIOrthophotoConfig = field(default_factory=GSIOrthophotoConfig)
 
     def resolve_relative_paths(self, base_dir: Path) -> None:
@@ -134,6 +139,46 @@ class ConfigLoader:
                 copernicus_data[key] = float(copernicus_data[key])
         copernicus = CopernicusConfig(**copernicus_data)
 
+        hls_payload = payload.get("hls") or {}
+        if not isinstance(hls_payload, dict):
+            raise ValueError("hls section must be a mapping")
+        hls_data = dict(hls_payload)
+        if "collections" in hls_data and hls_data["collections"] is not None:
+            hls_data["collections"] = tuple(hls_data.get("collections") or [])
+        if "fallback_collections" in hls_data and hls_data["fallback_collections"] is not None:
+            hls_data["fallback_collections"] = tuple(hls_data.get("fallback_collections") or [])
+        if "spectral_bands" in hls_data and hls_data["spectral_bands"] is not None:
+            hls_data["spectral_bands"] = tuple(hls_data.get("spectral_bands") or [])
+        for key in ("land_buffer_km", "max_cloud", "fallback_max_cloud"):
+            if key in hls_data and hls_data[key] is not None:
+                hls_data[key] = float(hls_data[key])
+        for key in ("target_zoom", "tile_size", "concurrency", "request_timeout_seconds", "max_retries", "max_scene_age_days", "robust_median_window", "compositing_year"):
+            if key in hls_data and hls_data[key] is not None:
+                hls_data[key] = int(hls_data[key])
+        for key in ("backoff_factor",):
+            if key in hls_data and hls_data[key] is not None:
+                hls_data[key] = float(hls_data[key])
+        if "cache_ttl_days" in hls_data and hls_data["cache_ttl_days"] is not None:
+            hls_data["cache_ttl_days"] = int(hls_data["cache_ttl_days"])
+        seasonal_payload = hls_data.pop("seasonal_windows", []) or []
+        seasonal_windows = []
+        for entry in seasonal_payload:
+            if not isinstance(entry, dict):
+                raise ValueError("hls.seasonal_windows entries must be mappings")
+            seasonal_windows.append(HLSSeasonWindow(**entry))
+        if seasonal_windows:
+            hls_data["seasonal_windows"] = tuple(seasonal_windows)
+        hls = HLSConfig(**hls_data)
+
+        ocean_payload = payload.get("ocean") or {}
+        if not isinstance(ocean_payload, dict):
+            raise ValueError("ocean section must be a mapping")
+        ocean_data = dict(ocean_payload)
+        for key in ("hillshade_azimuth", "hillshade_altitude", "hillshade_strength", "viirs_blend_percent", "viirs_max_fraction"):
+            if key in ocean_data and ocean_data[key] is not None:
+                ocean_data[key] = float(ocean_data[key])
+        ocean = OceanConfig(**ocean_data)
+
         gsi_payload = payload.get("gsi_orthophotos", {}) or {}
         gsi_data = dict(gsi_payload)
         for key in ("lat", "lon", "width_m", "height_m"):
@@ -152,6 +197,8 @@ class ConfigLoader:
             modis=modis,
             viirs=viirs,
             copernicus=copernicus,
+            hls=hls,
+            ocean=ocean,
             gsi_orthophotos=gsi_orthophotos,
         )
 

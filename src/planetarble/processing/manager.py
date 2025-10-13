@@ -15,13 +15,17 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from planetarble.core.models import (
     CopernicusConfig,
     CopernicusLayerConfig,
+    HLSConfig,
     ModisConfig,
+    OceanConfig,
     ProcessingConfig,
     ViirsConfig,
 )
 from planetarble.logging import get_logger
 
 from .base import DataProcessor
+from .hls import HLSSceneManifestBuilder
+from .ocean import OceanRenderer
 
 LOGGER = get_logger(__name__)
 
@@ -61,6 +65,8 @@ class ProcessingManager(DataProcessor):
         copernicus: Optional[CopernicusConfig] = None,
         modis: Optional[ModisConfig] = None,
         viirs: Optional[ViirsConfig] = None,
+        hls: Optional[HLSConfig] = None,
+        ocean: Optional[OceanConfig] = None,
         dry_run: bool = False,
     ) -> None:
         self._config = config
@@ -71,11 +77,67 @@ class ProcessingManager(DataProcessor):
         self._data_dir = data_dir
         self._processing_dir = self._output_dir / "processing"
         self._copernicus = copernicus
+        self._hls = hls or HLSConfig(enabled=False)
+        self._ocean = ocean or OceanConfig(enabled=False)
         self._runner = CommandRunner(dry_run=dry_run)
         self._dry_run = dry_run
         self._temp_dir.mkdir(parents=True, exist_ok=True)
         self._output_dir.mkdir(parents=True, exist_ok=True)
         self._processing_dir.mkdir(parents=True, exist_ok=True)
+
+    def prepare_hls_scene_manifest(
+        self,
+        plan_path: Path,
+        *,
+        destination: Optional[Path] = None,
+        max_tiles: Optional[int] = None,
+        max_scenes_per_tile: int = 3,
+    ) -> Optional[Path]:
+        if not self._hls.enabled:
+            LOGGER.info("HLS processing disabled; skipping scene manifest generation")
+            return None
+        dest = destination or (self._processing_dir / "hls_scene_manifest.json")
+        if self._dry_run:
+            LOGGER.info(
+                "dry-run: would build HLS scene manifest",
+                extra={"plan_path": str(plan_path), "destination": str(dest)},
+            )
+            return dest
+        builder = HLSSceneManifestBuilder(
+            self._hls,
+            cache_dir=self._data_dir / "cache" / "hls",
+            cache_ttl_days=self._hls.cache_ttl_days,
+        )
+        manifest = builder.build(
+            plan_path,
+            max_tiles=max_tiles,
+            max_scenes_per_tile=max_scenes_per_tile,
+            progress_interval=100,
+        )
+        manifest.write(dest)
+        return dest
+
+    def render_ocean(self, etopo_path: Path) -> Dict[str, Path]:
+        if not self._ocean.enabled:
+            LOGGER.info("Ocean rendering disabled in configuration")
+            return {}
+        renderer = OceanRenderer(
+            self._ocean,
+            self._runner,
+            temp_dir=self._temp_dir / "ocean",
+            output_dir=self._processing_dir / "ocean",
+        )
+        if self._dry_run:
+            LOGGER.info(
+                "dry-run: would render ocean shading",
+                extra={"etopo_path": str(etopo_path)},
+            )
+            ocean_dir = self._processing_dir / "ocean"
+            return {
+                "color": ocean_dir / "etopo_depth_color.tif",
+                "hillshade": ocean_dir / "etopo_hillshade.tif",
+            }
+        return renderer.render(etopo_path)
 
     def compose_bmng_panels(self, panel_dir: Path) -> Path:
         """Build a single raster from BMNG panels if multiple files are present."""

@@ -161,7 +161,7 @@ class HLSConfig:
     compositing_year: Optional[int] = None
     spectral_bands: Tuple[str, ...] = ("B02", "B03", "B04")
     qa_asset_key: str = "Fmask"
-    cache_ttl_days: int = 7
+    cache_ttl_days: int = 30
 
 
 @dataclass

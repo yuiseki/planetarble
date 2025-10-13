@@ -43,6 +43,7 @@
         "hillshading",
         "HLSL",
         "HLSS",
+        "HLSSTAC",
         "lambertian",
         "lanczos",
         "levelname",

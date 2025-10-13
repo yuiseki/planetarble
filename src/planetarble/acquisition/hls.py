@@ -218,7 +218,7 @@ class HLSSTACClient:
         max_retries: int | None = None,
         backoff_factor: float | None = None,
         cache_dir: Optional[Path] = None,
-        cache_ttl_days: int = 7,
+        cache_ttl_days: int = 30,
     ) -> None:
         if Client is None or pc_exceptions is None:
             raise MPCError(

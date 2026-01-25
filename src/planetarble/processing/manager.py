@@ -978,6 +978,7 @@ def _build_hls_band_vrts(
         vrt_path = temp_dir / f"hls_{label}_mosaic.vrt"
         command = [
             "gdalbuildvrt",
+            "-allow_projection_difference",
             "-input_file_list",
             str(list_path),
             str(vrt_path),

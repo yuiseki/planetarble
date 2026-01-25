@@ -495,6 +495,10 @@ def _is_valid_raster(path: Path) -> bool:
         from osgeo import gdal  # type: ignore
     except Exception:
         return True
+    try:
+        gdal.UseExceptions()
+    except AttributeError:
+        pass
     dataset = gdal.Open(str(path), gdal.GA_ReadOnly)
     if dataset is None:
         return False
@@ -711,7 +715,24 @@ def _handle_process(args: argparse.Namespace) -> int:
                     extra={"path": str(etopo_path)},
                 )
             else:
-                ocean_outputs = manager.render_ocean(etopo_path)
+                ocean_dir = (cfg.output_dir / "processing" / "ocean").resolve()
+                color_path = ocean_dir / "etopo_depth_color.tif"
+                hillshade_path = ocean_dir / "etopo_hillshade.tif"
+                color_ok = _is_valid_raster(color_path)
+                hillshade_ok = True
+                if cfg.ocean.apply_hillshade:
+                    hillshade_ok = _is_valid_raster(hillshade_path)
+                if color_ok and hillshade_ok:
+                    LOGGER.info(
+                        "ocean shading outputs valid; skipping render",
+                        extra={"color": str(color_path), "hillshade": str(hillshade_path)},
+                    )
+                    ocean_outputs = {
+                        "color": color_path,
+                        "hillshade": hillshade_path if cfg.ocean.apply_hillshade else Path(),
+                    }
+                else:
+                    ocean_outputs = manager.render_ocean(etopo_path)
 
         LOGGER.info(
             "HLS preprocessing complete",

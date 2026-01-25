@@ -9,6 +9,7 @@ import re
 import subprocess
 import time
 import zipfile
+from urllib.request import urlopen
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -16,6 +17,7 @@ from planetarble.core.models import (
     CopernicusConfig,
     CopernicusLayerConfig,
     HLSConfig,
+    HLSPlanRegion,
     ModisConfig,
     OceanConfig,
     ProcessingConfig,
@@ -26,6 +28,8 @@ from planetarble.logging import get_logger
 from .base import DataProcessor
 from .hls import HLSSceneManifestBuilder
 from .ocean import OceanRenderer
+from planetarble.acquisition.hls import load_region_geometry, _geom_intersects_bbox
+from planetarble.acquisition.mpc import append_sas_token, fetch_sas_token
 
 LOGGER = get_logger(__name__)
 
@@ -116,6 +120,58 @@ class ProcessingManager(DataProcessor):
         )
         manifest.write(dest)
         return dest
+
+    def build_hls_mosaic(
+        self,
+        scene_manifest_path: Path,
+        *,
+        plan_region: Optional[str] = None,
+        destination: Optional[Path] = None,
+    ) -> Optional[Path]:
+        if not self._hls.enabled:
+            LOGGER.info("HLS processing disabled; skipping mosaic generation")
+            return None
+        region = self._resolve_hls_region(plan_region)
+        region_geometry = None
+        if region is not None:
+            region_geometry = load_region_geometry(region, data_dir=self._data_dir)
+        scenes = _load_hls_scene_manifest(scene_manifest_path)
+        if region_geometry is not None:
+            filtered: List[Dict[str, object]] = []
+            for scene in scenes:
+                bbox = scene.get("bbox")
+                if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                    continue
+                if _geom_intersects_bbox(region_geometry, tuple(float(v) for v in bbox)):
+                    filtered.append(scene)
+            scenes = filtered
+        scenes = _refresh_hls_scene_urls(scenes, self._hls)
+        scenes = _cache_hls_assets(
+            scenes,
+            cache_dir=self._data_dir / "cache" / "hls" / "assets",
+            timeout=self._hls.request_timeout_seconds,
+        )
+        if not scenes:
+            LOGGER.warning("no HLS scenes available for mosaic", extra={"path": str(scene_manifest_path)})
+            return None
+        output_name = f"hls_mosaic_{region.name}" if region else "hls_mosaic"
+        output_base = destination or (self._processing_dir / f"{output_name}.tif")
+        if self._dry_run:
+            LOGGER.info(
+                "dry-run: would build HLS mosaic",
+                extra={"scene_manifest": str(scene_manifest_path), "destination": str(output_base)},
+            )
+            return output_base
+        band_lists = _write_hls_band_lists(self._temp_dir, scenes)
+        band_vrts = _build_hls_band_vrts(self._runner, band_lists, self._temp_dir)
+        rgb_vrt = _build_hls_rgb_vrt(self._runner, band_vrts, self._temp_dir)
+        cropped = _translate_hls_rgb(
+            self._runner,
+            rgb_vrt,
+            output_base,
+            region_geometry=region_geometry,
+        )
+        return self.create_cog(cropped)
 
     def render_ocean(self, etopo_path: Path) -> Dict[str, Path]:
         if not self._ocean.enabled:
@@ -642,6 +698,348 @@ class ProcessingManager(DataProcessor):
         if candidates:
             return candidates[0]
         return tile_dir
+
+    def _resolve_hls_region(self, plan_region: Optional[str]) -> Optional[HLSPlanRegion]:
+        region_name = plan_region or self._hls.plan_region
+        if not region_name:
+            return None
+        for region in self._hls.plan_regions:
+            if region.name == region_name:
+                return region
+        raise ValueError(f"Unknown HLS plan region: {region_name}")
+
+
+def _load_hls_scene_manifest(path: Path) -> List[Dict[str, object]]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    scenes = payload.get("scenes") if isinstance(payload, dict) else None
+    if not isinstance(scenes, list):
+        return []
+    return [scene for scene in scenes if isinstance(scene, dict)]
+
+
+def _refresh_hls_scene_urls(
+    scenes: Sequence[Dict[str, object]],
+    config: HLSConfig,
+) -> List[Dict[str, object]]:
+    refreshed: List[Dict[str, object]] = []
+    tokens: Dict[str, str] = {}
+    for scene in scenes:
+        collection = scene.get("collection_id")
+        if not isinstance(collection, str) or not collection:
+            continue
+        token = tokens.get(collection)
+        if token is None:
+            token = fetch_sas_token(collection, timeout=config.request_timeout_seconds)
+            tokens[collection] = token
+        bands = scene.get("bands")
+        if isinstance(bands, dict):
+            updated_bands = {}
+            for band, href in bands.items():
+                if not isinstance(href, str) or not href:
+                    continue
+                updated_bands[band] = append_sas_token(_strip_query(href), token)
+            scene["bands"] = updated_bands
+        qa = scene.get("qa_asset")
+        if isinstance(qa, str) and qa:
+            scene["qa_asset"] = append_sas_token(_strip_query(qa), token)
+        refreshed.append(scene)
+    return refreshed
+
+
+def _strip_query(url: str) -> str:
+    from urllib.parse import urlsplit, urlunsplit
+
+    parts = urlsplit(url)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+
+
+def _cache_hls_assets(
+    scenes: Sequence[Dict[str, object]],
+    *,
+    cache_dir: Path,
+    timeout: int,
+) -> List[Dict[str, object]]:
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    total_assets = 0
+    for scene in scenes:
+        bands = scene.get("bands")
+        if isinstance(bands, dict):
+            total_assets += len([href for href in bands.values() if isinstance(href, str) and href])
+    start_time = time.monotonic()
+    completed = 0
+    progress_interval = 10
+    updated: List[Dict[str, object]] = []
+    for scene in scenes:
+        collection = scene.get("collection_id")
+        item_id = scene.get("item_id")
+        if not isinstance(collection, str) or not isinstance(item_id, str):
+            continue
+        bands = scene.get("bands")
+        if not isinstance(bands, dict):
+            continue
+        local_bands: Dict[str, str] = {}
+        for band, href in bands.items():
+            if not isinstance(href, str) or not href:
+                continue
+            local_path = _cache_hls_asset(
+                href,
+                cache_dir=cache_dir / collection / item_id,
+                timeout=timeout,
+            )
+            local_bands[band] = str(local_path)
+            completed += 1
+            if total_assets and (completed % progress_interval == 0 or completed == total_assets):
+                elapsed = max(time.monotonic() - start_time, 0.001)
+                rate = completed / elapsed
+                remaining = max(total_assets - completed, 0)
+                eta = remaining / rate if rate > 0 else 0.0
+                LOGGER.info(
+                    "hls asset cache progress %s %d/%d (%.1f%%) elapsed=%s eta=%s",
+                    _format_progress_bar(completed, total_assets),
+                    completed,
+                    total_assets,
+                    (completed / total_assets) * 100.0,
+                    _format_duration(elapsed),
+                    _format_duration(eta),
+                )
+        scene["bands"] = local_bands
+        updated.append(scene)
+    return updated
+
+
+def _format_progress_bar(current: int, total: int, width: int = 30) -> str:
+    if total <= 0:
+        return "[" + ("-" * width) + "]"
+    ratio = min(max(current / total, 0.0), 1.0)
+    filled = int(round(ratio * width))
+    return "[" + ("#" * filled) + ("-" * (width - filled)) + "]"
+
+
+def _format_duration(seconds: float) -> str:
+    seconds = max(int(seconds), 0)
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes:02d}:{seconds:02d}"
+
+
+def _cache_hls_asset(url: str, *, cache_dir: Path, timeout: int) -> Path:
+    from urllib.parse import urlsplit
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    path = urlsplit(url).path
+    filename = Path(path).name or "asset.tif"
+    destination = cache_dir / filename
+    if destination.exists():
+        if _is_valid_hls_asset(destination):
+            LOGGER.info(
+                "hls asset cache hit",
+                extra={"url": url, "path": str(destination)},
+            )
+            return destination
+        LOGGER.warning(
+            "hls asset cache invalid; redownloading",
+            extra={"url": url, "path": str(destination)},
+        )
+        destination.unlink(missing_ok=True)
+    LOGGER.info("downloading hls asset", extra={"url": url, "path": str(destination)})
+    temp_path = destination.with_suffix(destination.suffix + ".part")
+    temp_path.unlink(missing_ok=True)
+    with urlopen(url, timeout=timeout) as response, temp_path.open("wb") as handle:
+        while True:
+            chunk = response.read(1024 * 1024)
+            if not chunk:
+                break
+            handle.write(chunk)
+    if not _is_valid_hls_asset(temp_path):
+        temp_path.unlink(missing_ok=True)
+        raise RuntimeError(f"Downloaded HLS asset is invalid: {destination}")
+    temp_path.replace(destination)
+    return destination
+
+
+def _is_valid_hls_asset(path: Path) -> bool:
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    try:
+        from osgeo import gdal
+    except Exception:
+        # If GDAL isn't available, skip validation instead of blocking.
+        return True
+    gdal.ErrorReset()
+    dataset = gdal.Open(str(path), gdal.GA_ReadOnly)
+    if dataset is None:
+        return False
+    band = dataset.GetRasterBand(1)
+    if band is None:
+        return False
+    block_x, block_y = band.GetBlockSize()
+    xsize = band.XSize
+    ysize = band.YSize
+    if block_x <= 0 or block_y <= 0 or xsize <= 0 or ysize <= 0:
+        return False
+    tiles_x = math.ceil(xsize / block_x)
+    tiles_y = math.ceil(ysize / block_y)
+    sample_tiles = {
+        (0, 0),
+        (tiles_x // 2, 0),
+        (0, tiles_y // 2),
+        (tiles_x // 2, tiles_y // 2),
+        (tiles_x - 1, tiles_y - 1),
+    }
+    for tx, ty in sample_tiles:
+        xoff = min(max(tx * block_x, 0), xsize - 1)
+        yoff = min(max(ty * block_y, 0), ysize - 1)
+        width = min(block_x, xsize - xoff)
+        height = min(block_y, ysize - yoff)
+        gdal.ErrorReset()
+        sample = band.ReadRaster(xoff, yoff, width, height)
+        if sample is None:
+            return False
+        if gdal.GetLastErrorType() != 0:
+            return False
+    return True
+
+
+def _write_hls_band_lists(temp_dir: Path, scenes: Sequence[Dict[str, object]]) -> Dict[str, Path]:
+    band_keys = {"B02": "blue", "B03": "green", "B04": "red"}
+    lists: Dict[str, List[str]] = {label: [] for label in band_keys.values()}
+    for scene in scenes:
+        bands = scene.get("bands")
+        if not isinstance(bands, dict):
+            continue
+        for band, label in band_keys.items():
+            url = bands.get(band)
+            if isinstance(url, str) and url:
+                lists[label].append(url)
+    paths: Dict[str, Path] = {}
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    for label, urls in lists.items():
+        if not urls:
+            raise ValueError(f"No HLS sources found for {label} band")
+        list_path = temp_dir / f"hls_{label}_sources.txt"
+        list_path.write_text("\n".join(urls), encoding="utf-8")
+        paths[label] = list_path
+    return paths
+
+
+def _build_hls_band_vrts(
+    runner: CommandRunner,
+    band_lists: Dict[str, Path],
+    temp_dir: Path,
+) -> Dict[str, Path]:
+    vrts: Dict[str, Path] = {}
+    for label, list_path in band_lists.items():
+        vrt_path = temp_dir / f"hls_{label}_mosaic.vrt"
+        command = [
+            "gdalbuildvrt",
+            "-input_file_list",
+            str(list_path),
+            str(vrt_path),
+        ]
+        runner.run(command, description=f"mosaic HLS {label} band")
+        vrts[label] = vrt_path
+    return vrts
+
+
+def _build_hls_rgb_vrt(
+    runner: CommandRunner,
+    band_vrts: Dict[str, Path],
+    temp_dir: Path,
+) -> Path:
+    rgb_vrt = temp_dir / "hls_rgb.vrt"
+    command = [
+        "gdalbuildvrt",
+        "-separate",
+        str(rgb_vrt),
+        str(band_vrts["red"]),
+        str(band_vrts["green"]),
+        str(band_vrts["blue"]),
+    ]
+    runner.run(command, description="combine HLS bands into RGB VRT")
+    return rgb_vrt
+
+
+def _translate_hls_rgb(
+    runner: CommandRunner,
+    rgb_vrt: Path,
+    output_path: Path,
+    *,
+    region_geometry: Optional["ogr.Geometry"] = None,
+) -> Path:
+    translate_input = rgb_vrt
+    if region_geometry is not None:
+        cutline = output_path.with_suffix(".geojson")
+        _write_geometry_geojson(region_geometry, cutline)
+        cropped = output_path.with_suffix(".cropped.tif")
+        if cropped.exists():
+            cropped.unlink()
+        command = [
+            "gdalwarp",
+            "-cutline",
+            str(cutline),
+            "-cutline_srs",
+            "EPSG:4326",
+            "-t_srs",
+            "EPSG:4326",
+            "-crop_to_cutline",
+            "-overwrite",
+            "-of",
+            "GTiff",
+            str(rgb_vrt),
+            str(cropped),
+        ]
+        runner.run(command, description="crop HLS mosaic to region")
+        translate_input = cropped
+    if output_path.exists():
+        output_path.unlink()
+    command = [
+        "gdal_translate",
+        "-of",
+        "GTiff",
+        "-co",
+        "TILED=YES",
+        "-co",
+        "COMPRESS=DEFLATE",
+        "-co",
+        "PHOTOMETRIC=RGB",
+        "-ot",
+        "Byte",
+        "-scale",
+        "0",
+        "10000",
+        "0",
+        "255",
+        "-a_nodata",
+        "0",
+        str(translate_input),
+        str(output_path),
+    ]
+    runner.run(command, description="convert HLS RGB mosaic to GeoTIFF")
+    return output_path
+
+
+def _write_geometry_geojson(geometry: "ogr.Geometry", path: Path) -> None:
+    try:
+        from osgeo import ogr  # type: ignore
+        from osgeo import osr  # type: ignore
+    except Exception as exc:  # pragma: no cover - depends on GDAL availability
+        raise RuntimeError("GDAL (osgeo.ogr) is required for region clipping") from exc
+    driver = ogr.GetDriverByName("GeoJSON")
+    if driver is None:
+        raise RuntimeError("GeoJSON driver not available in GDAL")
+    if path.exists():
+        path.unlink()
+    dataset = driver.CreateDataSource(str(path))
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(4326)
+    layer = dataset.CreateLayer("region", srs=srs, geom_type=ogr.wkbMultiPolygon)
+    feature = ogr.Feature(layer.GetLayerDefn())
+    feature.SetGeometry(geometry)
+    layer.CreateFeature(feature)
+    feature = None
+    dataset = None
 
 def _collect_copernicus_tiles(
     layer_dir: Path,

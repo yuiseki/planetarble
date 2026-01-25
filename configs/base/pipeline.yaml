@@ -24,15 +24,15 @@ hls:
   enabled: true
   stac_api: "https://planetarycomputer.microsoft.com/api/stac/v1"
   collections:
-    - "HLSS30"
-    - "HLSL30"
+    - "hls2-s30"
+    - "hls2-l30"
   fallback_collections:
     - "landsat-c2-l2"
   land_mask_path: null
   land_buffer_km: 20.0
-  max_cloud: 40.0
-  fallback_max_cloud: 60.0
-  max_scene_age_days: 365
+  max_cloud: 80.0
+  fallback_max_cloud: 90.0
+  max_scene_age_days: 3650
   qa_mask_flags:
     - "cloud"
     - "cloud_shadow"
@@ -51,6 +51,15 @@ hls:
     - "B03"
     - "B04"
   qa_asset_key: "Fmask"
+  # Optional regional plan filters to make HLS acquisition incremental.
+  plan_regions:
+    - name: "tokyo_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Tokyo'"
+      land_only: true
+  # plan_region: "tokyo_land"
+  # plan_include_global: false
   seasonal_windows:
     - name: "northern_growing_season"
       hemisphere: "north"

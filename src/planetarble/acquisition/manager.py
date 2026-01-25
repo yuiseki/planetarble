@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from planetarble.core.models import AssetManifest, CopernicusConfig, HLSConfig
+from planetarble.core.models import AssetManifest, CopernicusConfig, HLSConfig, HLSPlanRegion
 from planetarble.logging import get_logger
 
 from .appeears import (
@@ -32,7 +32,12 @@ from .base import DataAcquisition
 from .catalog import AssetCatalog, AssetRecord
 from .download import DownloadError, DownloadManager, DownloadResult, calculate_sha256
 from .manifest import build_manifest, write_manifest
-from .hls import HLSMosaicPlanner, HLSPlanSummary
+from .hls import (
+    HLSMosaicPlanner,
+    HLSPlanSummary,
+    load_land_geometry,
+    load_region_geometry,
+)
 
 LOGGER = get_logger(__name__)
 
@@ -87,6 +92,59 @@ class AcquisitionManager(DataAcquisition):
         summary = planner.write_plan(plan_path)
         return summary
 
+    def build_hls_plans(
+        self,
+        config: HLSConfig,
+        *,
+        force: bool = False,
+        selected_region: Optional[str] = None,
+    ) -> Dict[str, HLSPlanSummary]:
+        if not config.enabled:
+            LOGGER.info("HLS acquisition disabled; skipping plan generation")
+            return {}
+        regions = list(config.plan_regions)
+        if selected_region:
+            regions = [region for region in regions if region.name == selected_region]
+            if not regions:
+                raise ValueError(f"Unknown HLS plan region: {selected_region}")
+        summaries: Dict[str, HLSPlanSummary] = {}
+        for region in regions:
+            summary = self._build_hls_plan_for_region(config, region, force=force)
+            summaries[region.name] = summary
+        return summaries
+
+    def _build_hls_plan_for_region(
+        self,
+        config: HLSConfig,
+        region: HLSPlanRegion,
+        *,
+        force: bool = False,
+    ) -> HLSPlanSummary:
+        planner = HLSMosaicPlanner(config)
+        plan_path = (
+            self._data_directory
+            / "plans"
+            / f"hls_z{config.target_zoom}_plan_{region.name}.ndjson"
+        )
+        plan_path = plan_path.resolve()
+        if plan_path.exists() and not force:
+            LOGGER.info("reusing existing HLS plan", extra={"path": str(plan_path)})
+            return self._summarize_plan(plan_path, config.target_zoom)
+        region_geometry = load_region_geometry(region, data_dir=self._data_directory)
+        land_geometry = None
+        if region.land_only:
+            land_geometry = load_land_geometry(
+                land_mask_path=config.land_mask_path,
+                data_dir=self._data_directory,
+                region_geometry=region_geometry,
+            )
+        summary = planner.write_plan(
+            plan_path,
+            region_geometry=region_geometry,
+            land_geometry=land_geometry,
+        )
+        return summary
+
     def download_bmng(self, resolution: str = "500m", force: bool = False) -> Path:
         if resolution == "500m":
             panel_ids = [
@@ -112,10 +170,18 @@ class AcquisitionManager(DataAcquisition):
         result = self._downloader.download("gebco_latest_grid", force=force)
         return result.path
 
-    def download_natural_earth(self, scale: str = "10m", force: bool = False) -> Path:
+    def download_natural_earth(
+        self,
+        scale: str = "10m",
+        *,
+        force: bool = False,
+        include_admin: bool = False,
+    ) -> Path:
         if scale != "10m":
             raise ValueError("Only 10m Natural Earth data is configured")
         ids = ["natural_earth_land_10m", "natural_earth_ocean_10m", "natural_earth_coastline_10m"]
+        if include_admin:
+            ids.extend(["natural_earth_admin_0_10m", "natural_earth_admin_1_10m"])
         self._downloader.download_many(ids, force=force)
         return (self._data_directory / "natural_earth").resolve()
 

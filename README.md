@@ -54,10 +54,58 @@ The default configuration keeps plan and manifest artefacts under `data/`, scrat
 
 ## Imagery Options
 
-- **HLS v2 (default)** — `processing.tile_source: hls` activates the new global workflow. `planetarble acquire` writes an `hls_z10_plan.ndjson`; `planetarble process` expands it into `output/processing/hls_scene_manifest.json` with MPC-signed URLs for the required `B02/B03/B04` COGs and QA masks. Seasonal windows default to April–October for the northern hemisphere and October–April for the southern hemisphere.
+- **HLS v2 (default)** — `processing.tile_source: hls` activates the new global workflow. `planetarble acquire` writes an `hls_z10_plan.ndjson`; `planetarble process` expands it into `output/processing/hls_scene_manifest.json` with MPC-signed URLs for the required `B02/B03/B04` COGs and QA masks. Seasonal windows default to April–October for the northern hemisphere and October–April for the southern hemisphere. Default collections use `hls2-s30` and `hls2-l30`.
 - **Landsat Collection 2 Level-2 SR fallback** — listed in `hls.fallback_collections`. When the primary HLS collections cannot clear clouds, the manifest builder records low-cloud Landsat scenes that align with the same tile footprints and QA masks.
 - **NOAA ETOPO 2022 ocean rendering** — `ocean.enabled: true` combines the CC0 bathymetry grid with a configurable color ramp and lambertian hillshade. `planetarble acquire` downloads the global 15 arc-second bedrock GeoTIFF to `data/etopo/ETOPO_2022_15s_bed.tif`; you can point `ocean.source_id` at a custom path if you maintain your own copy.
 - **Legacy BMNG / MODIS / VIIRS / Copernicus** — set `processing.tile_source` back to `bmng` (and toggle the respective blocks) to reuse the historical workflow that mosaics BMNG, optional MODIS/VIIRS reflectance, and Copernicus WMS tiles. All legacy commands remain available for backwards compatibility and regional experiments.
+
+## Regional HLS Planning
+
+HLS plan generation can be split into deterministic regions so you can make steady progress under rate limits.
+Define `hls.plan_regions` in your config and optionally select a single region with `--plan-region`.
+
+Example (Tokyo with land-only filtering):
+
+```yaml
+hls:
+  plan_regions:
+    - name: "tokyo_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Tokyo'"
+      land_only: true
+```
+
+Generate the plan:
+
+```bash
+planetarble acquire --config configs/base/pipeline.yaml --plan-region tokyo_land
+```
+
+Process the plan:
+
+```bash
+planetarble process --config configs/base/pipeline.yaml --plan-region tokyo_land
+```
+
+Natural Earth admin boundaries (`ne_10m_admin_0_countries.zip`, `ne_10m_admin_1_states_provinces.zip`) are downloaded on-demand
+when a plan region references them.
+
+To generate regional HLS tiles and overlay them onto a BMNG basemap:
+
+```bash
+# build HLS mosaic (regional) + scene manifest
+planetarble process --config configs/base/pipeline.yaml --plan-region tokyo_land
+
+# tile only z11-12 for HLS
+planetarble tile --config configs/base/pipeline.yaml --plan-region tokyo_land --min-zoom 11 --max-zoom 12
+
+# merge HLS tiles onto the BMNG MBTiles
+planetarble tiling merge-mbtiles \
+  --base output/tiling/planet_2024_12z.mbtiles \
+  --overlay output/tiling/planet_hls_tokyo_land_12z.mbtiles \
+  --out output/tiling/planet_2024_tokyo_hls_12z.mbtiles
+```
 
 ## Quality Tuning
 

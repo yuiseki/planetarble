@@ -72,12 +72,14 @@ class TilingManager(TileGenerator):
         output = self._temp_dir / f"{input_path.stem}_3857.vrt"
         if output.exists() and not self._dry_run:
             output.unlink()
-        tile_dimension = 256 * (2 ** self._config.max_zoom)
-
-        LOGGER.info("warp params",
-            extra={"dst_srs": "EPSG:3857",
-                    "tile_dim": tile_dimension,
-                    "world_extent": "[-20037508.342789244, 20037508.342789244]"})
+        LOGGER.info(
+            "warp params",
+            extra={
+                "dst_srs": "EPSG:3857",
+                "extent": "auto",
+                "resolution": "auto",
+            },
+        )
 
         command = [
             "gdalwarp",
@@ -87,16 +89,6 @@ class TilingManager(TileGenerator):
             "bilinear",
             "-multi",
             "-dstalpha",
-            "-te",
-            "-20037508.342789244",
-            "-20037508.342789244",
-            "20037508.342789244",
-            "20037508.342789244",
-            "-te_srs",
-            "EPSG:3857",
-            "-ts",
-            str(tile_dimension),
-            str(tile_dimension),
             "-overwrite",
             "-of",
             "VRT",
@@ -111,10 +103,13 @@ class TilingManager(TileGenerator):
         source_path: Path,
         format: str | None = None,
         quality: int | None = None,
+        destination: Path | None = None,
     ) -> Path:
         tile_format = (format or self._config.tile_format).upper()
         quality_value = str(quality or self._config.tile_quality)
-        mbtiles_path = self._tiling_dir / f"planet_{self._config.gebco_year}_{self._config.max_zoom}z.mbtiles"
+        mbtiles_path = destination or (
+            self._tiling_dir / f"planet_{self._config.gebco_year}_{self._config.max_zoom}z.mbtiles"
+        )
         tiler_preference = (self._config.mbtiles_tiler or "auto").lower()
         preferred = tiler_preference in {"gdal2mbtiles", "pyvips"}
         auto_mode = tiler_preference == "auto"
@@ -185,6 +180,7 @@ class TilingManager(TileGenerator):
         tile_format_lower = format_map.get(tile_format)
         if tile_format_lower:
             command.append(f"--format={tile_format_lower}")
+        command.append(f"--min-resolution={self._config.min_zoom}")
         command.append(f"--max-resolution={self._config.max_zoom}")
         command.extend([str(input_path), str(destination)])
         self._runner.run(command, description="generate MBTiles pyramid via gdal2mbtiles")
@@ -224,7 +220,7 @@ class TilingManager(TileGenerator):
             "-co",
             f"QUALITY={quality_value}",
             "-co",
-            f"MINZOOM=0",
+            f"MINZOOM={self._config.min_zoom}",
             "-co",
             f"MAXZOOM={self._config.max_zoom}",
             "-co",
@@ -255,4 +251,6 @@ class TilingManager(TileGenerator):
     def _compute_overview_factors(self) -> list[str]:
         # Overviews are powers of two down to zoom level 0.
         max_zoom = max(0, self._config.max_zoom)
-        return [str(2**level) for level in range(1, max_zoom + 1)]
+        min_zoom = max(0, self._config.min_zoom)
+        levels = max(0, max_zoom - min_zoom)
+        return [str(2**level) for level in range(1, levels + 1)]

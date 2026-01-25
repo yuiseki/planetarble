@@ -126,6 +126,24 @@ assets:
     license: "Public Domain"
     attribution: "Natural Earth"
     media_type: vector
+  natural_earth_admin_0_10m:
+    name: Natural Earth Admin 0 Countries (10m)
+    description: Country polygons at 1:10m scale for regional filtering.
+    urls:
+      - https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_0_countries.zip
+    destination: natural_earth/ne_10m_admin_0_countries.zip
+    license: "Public Domain"
+    attribution: "Natural Earth"
+    media_type: vector
+  natural_earth_admin_1_10m:
+    name: Natural Earth Admin 1 States/Provinces (10m)
+    description: State/province polygons at 1:10m scale for regional filtering.
+    urls:
+      - https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_1_states_provinces.zip
+    destination: natural_earth/ne_10m_admin_1_states_provinces.zip
+    license: "Public Domain"
+    attribution: "Natural Earth"
+    media_type: vector
   modis_mcd43a4_2025233_h27v04:
     name: MODIS MCD43A4 (2025-08-21, h27v04)
     description: MODIS Terra/Aqua BRDF-corrected surface reflectance at 500 m for tile h27v04.

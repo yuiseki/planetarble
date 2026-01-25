@@ -118,13 +118,32 @@ class HLSSeasonWindow:
     end_day: int
 
 
+@dataclass(frozen=True)
+class NaturalEarthRegion:
+    """Describe a Natural Earth feature selection used for regional planning."""
+
+    dataset: str
+    where: str
+    path: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class HLSPlanRegion:
+    """Define a named subset for HLS plan generation."""
+
+    name: str
+    bbox: Optional[Tuple[float, float, float, float]] = None
+    natural_earth: Optional[NaturalEarthRegion] = None
+    land_only: bool = False
+
+
 @dataclass
 class HLSConfig:
     """Configuration for Harmonized Landsat and Sentinel-2 acquisition and mosaicking."""
 
     enabled: bool = True
     stac_api: str = "https://planetarycomputer.microsoft.com/api/stac/v1"
-    collections: Tuple[str, ...] = ("HLSS30", "HLSL30")
+    collections: Tuple[str, ...] = ("hls2-s30", "hls2-l30")
     seasonal_windows: Tuple[HLSSeasonWindow, ...] = (
         HLSSeasonWindow(
             name="northern_growing_season",
@@ -162,6 +181,9 @@ class HLSConfig:
     spectral_bands: Tuple[str, ...] = ("B02", "B03", "B04")
     qa_asset_key: str = "Fmask"
     cache_ttl_days: int = 30
+    plan_region: Optional[str] = None
+    plan_regions: Tuple[HLSPlanRegion, ...] = field(default_factory=tuple)
+    plan_include_global: bool = False
 
 
 @dataclass

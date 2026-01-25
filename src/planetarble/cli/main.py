@@ -21,12 +21,13 @@ from planetarble.acquisition import (
     get_available_layers,
     verify_copernicus_connection,
 )
-from planetarble.config import load_config
+from planetarble.config import PipelineConfig, load_config
 from planetarble.core.models import CopernicusLayerConfig, ProcessingConfig, TileMetadata
 from planetarble.logging import configure_logging, get_logger
 from planetarble.packaging import PackagingManager
 from planetarble.processing import ProcessingManager
 from planetarble.tiling import PmtilesTilingManager, TilingManager
+from planetarble.tiling.mbtiles import merge_mbtiles
 
 LOGGER = get_logger(__name__)
 
@@ -70,6 +71,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicit manifest output path (defaults to output_dir/MANIFEST.json)",
     )
     acquire.add_argument(
+        "--plan-region",
+        default=None,
+        help="Named HLS plan region to generate (matches hls.plan_regions entries)",
+    )
+    acquire.add_argument(
         "--bmng-resolution",
         choices=["500m", "2km"],
         default="500m",
@@ -94,6 +100,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to pipeline configuration file (YAML or JSON)",
     )
     process.add_argument(
+        "--plan-region",
+        default=None,
+        help="Named HLS plan region to process (matches hls.plan_regions entries)",
+    )
+    process.add_argument(
         "--dry-run",
         action="store_true",
         help="Print commands without executing them",
@@ -107,9 +118,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to pipeline configuration file (YAML or JSON)",
     )
     tile.add_argument(
+        "--plan-region",
+        default=None,
+        help="Named HLS plan region to tile when tile_source is hls",
+    )
+    tile.add_argument(
         "--dry-run",
         action="store_true",
         help="Print tiling commands without executing",
+    )
+    tile.add_argument(
+        "--min-zoom",
+        type=int,
+        default=None,
+        help="Override minimum zoom level",
     )
     tile.add_argument(
         "--max-zoom",
@@ -206,6 +228,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print commands without executing them",
     )
+
+    tiling_merge = tiling_subcommands.add_parser(
+        "merge-mbtiles",
+        help="Overlay tiles from one MBTiles archive onto another",
+    )
+    tiling_merge.add_argument("--base", type=Path, required=True, help="Base MBTiles archive")
+    tiling_merge.add_argument("--overlay", type=Path, required=True, help="Overlay MBTiles archive")
+    tiling_merge.add_argument("--out", type=Path, required=True, help="Output MBTiles archive")
 
     mpc_fetch = subcommands.add_parser(
         "mpc-fetch",
@@ -330,6 +360,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Filename for the PMTiles archive (defaults to planet_<year>_<max_zoom_level>z.pmtiles)",
     )
     package.add_argument(
+        "--input",
+        type=Path,
+        default=None,
+        help="Path to an MBTiles archive to package (defaults to the latest tiling output)",
+    )
+    package.add_argument(
         "--dry-run",
         action="store_true",
         help="Print packaging commands without executing",
@@ -368,6 +404,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     if args.command == "tiling":
         if args.tiling_command == "pmtiles":
             return _handle_tiling_pmtiles(args)
+        if args.tiling_command == "merge-mbtiles":
+            return _handle_merge_mbtiles(args)
         parser.error("Unknown tiling subcommand")
         return 1
     if args.command == "mpc-fetch":
@@ -417,6 +455,19 @@ def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_") or "layer"
 
 
+def _resolve_hls_plan_path(cfg: PipelineConfig, plan_region: Optional[str]) -> Path:
+    region = plan_region or cfg.hls.plan_region
+    if region:
+        return cfg.data_dir / "plans" / f"hls_z{cfg.hls.target_zoom}_plan_{region}.ndjson"
+    return cfg.data_dir / "plans" / f"hls_z{cfg.hls.target_zoom}_plan.ndjson"
+
+
+def _resolve_hls_scene_manifest_path(cfg: PipelineConfig, plan_region: Optional[str]) -> Path:
+    region = plan_region or cfg.hls.plan_region
+    filename = "hls_scene_manifest.json" if not region else f"hls_scene_manifest_{region}.json"
+    return (cfg.output_dir / "processing" / filename).resolve()
+
+
 def _handle_acquire(args: argparse.Namespace) -> int:
     config_path = _resolve_config_path(args.config)
     cfg = load_config(config_path)
@@ -444,15 +495,49 @@ def _handle_acquire(args: argparse.Namespace) -> int:
                 "--bmng-resolution is ignored when tile_source is 'hls'",
                 extra={"bmng_resolution": args.bmng_resolution},
             )
-        plan_path = cfg.data_dir / "plans" / f"hls_z{cfg.hls.target_zoom}_plan.ndjson"
-        summary = manager.build_hls_plan(cfg.hls, destination=plan_path, force=args.force)
-        if summary:
-            generation_params["hls_plan"] = {
-                "path": str(summary.path),
-                "zoom": summary.zoom,
-                "tiles": summary.tile_count,
-                "season_counts": summary.season_counts,
-            }
+        plan_region = args.plan_region or cfg.hls.plan_region
+        if cfg.hls.plan_regions:
+            needs_admin = any(region.natural_earth for region in cfg.hls.plan_regions)
+            needs_land = any(region.land_only for region in cfg.hls.plan_regions)
+            if needs_admin or needs_land:
+                try:
+                    manager.download_natural_earth(force=args.force, include_admin=needs_admin)
+                except Exception as exc:
+                    LOGGER.warning("natural earth acquisition skipped: %s", exc)
+            summaries = manager.build_hls_plans(cfg.hls, force=args.force, selected_region=plan_region)
+            if summaries:
+                generation_params["hls_plan_regions"] = [
+                    {
+                        "region": name,
+                        "path": str(summary.path),
+                        "zoom": summary.zoom,
+                        "tiles": summary.tile_count,
+                        "season_counts": summary.season_counts,
+                    }
+                    for name, summary in summaries.items()
+                ]
+            if cfg.hls.plan_include_global:
+                plan_path = cfg.data_dir / "plans" / f"hls_z{cfg.hls.target_zoom}_plan.ndjson"
+                summary = manager.build_hls_plan(cfg.hls, destination=plan_path, force=args.force)
+                if summary:
+                    generation_params["hls_plan"] = {
+                        "path": str(summary.path),
+                        "zoom": summary.zoom,
+                        "tiles": summary.tile_count,
+                        "season_counts": summary.season_counts,
+                    }
+        else:
+            if plan_region:
+                raise SystemExit("hls.plan_regions is empty; remove --plan-region or define regions in config")
+            plan_path = cfg.data_dir / "plans" / f"hls_z{cfg.hls.target_zoom}_plan.ndjson"
+            summary = manager.build_hls_plan(cfg.hls, destination=plan_path, force=args.force)
+            if summary:
+                generation_params["hls_plan"] = {
+                    "path": str(summary.path),
+                    "zoom": summary.zoom,
+                    "tiles": summary.tile_count,
+                    "season_counts": summary.season_counts,
+                }
     else:
         LOGGER.info(
             "HLS acquisition disabled or tile_source != 'hls'; running legacy Blue Marble pipeline",
@@ -516,12 +601,17 @@ def _handle_process(args: argparse.Namespace) -> int:
         dry_run=args.dry_run,
     )
     if cfg.processing.tile_source.lower() == "hls":
-        plan_path = cfg.data_dir / "plans" / f"hls_z{cfg.hls.target_zoom}_plan.ndjson"
+        plan_path = _resolve_hls_plan_path(cfg, args.plan_region)
         if not plan_path.exists():
             raise SystemExit(
                 f"HLS plan not found at {plan_path}; run 'planetarble acquire' before processing"
             )
-        scene_manifest = manager.prepare_hls_scene_manifest(plan_path)
+        scene_manifest = manager.prepare_hls_scene_manifest(
+            plan_path,
+            destination=_resolve_hls_scene_manifest_path(cfg, args.plan_region),
+        )
+        if scene_manifest and (args.plan_region or cfg.hls.plan_region):
+            manager.build_hls_mosaic(scene_manifest, plan_region=args.plan_region)
 
         ocean_outputs: Dict[str, Path] = {}
         if cfg.ocean.enabled:
@@ -649,6 +739,10 @@ def _handle_tile(args: argparse.Namespace) -> int:
         cfg.processing.tile_format = args.tile_format
     if args.quality is not None:
         cfg.processing.tile_quality = args.quality
+    if args.min_zoom is not None:
+        cfg.processing.min_zoom = args.min_zoom
+    if args.max_zoom is not None:
+        cfg.processing.max_zoom = args.max_zoom
 
     manager = TilingManager(
         cfg.processing,
@@ -694,10 +788,25 @@ def _handle_tile(args: argparse.Namespace) -> int:
         source_raster = gsi_candidate
     elif tile_source == "blend":
         raise SystemExit("tile_source=blend is not implemented yet")
+    elif tile_source == "hls":
+        region = args.plan_region or cfg.hls.plan_region
+        if not region:
+            raise SystemExit("tile_source=hls requires --plan-region or hls.plan_region in config")
+        source_raster = (cfg.output_dir / "processing" / f"hls_mosaic_{region}_cog.tif").resolve()
+        if not source_raster.exists():
+            raise SystemExit(f"HLS mosaic COG not found: {source_raster}")
     elif tile_source != "bmng":
         raise SystemExit(f"Unsupported tile_source value: {cfg.processing.tile_source}")
 
-    mbtiles_path = manager.create_mbtiles(source_raster)
+    mbtiles_destination = None
+    if tile_source == "hls":
+        region = args.plan_region or cfg.hls.plan_region or "region"
+        mbtiles_destination = (
+            cfg.output_dir
+            / "tiling"
+            / f"planet_hls_{region}_{cfg.processing.max_zoom}z.mbtiles"
+        )
+    mbtiles_path = manager.create_mbtiles(source_raster, destination=mbtiles_destination)
 
     LOGGER.info("tiling outputs", extra={
         "source": str(source_raster),
@@ -783,6 +892,18 @@ def _handle_tiling_pmtiles(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_merge_mbtiles(args: argparse.Namespace) -> int:
+    base = args.base.resolve()
+    overlay = args.overlay.resolve()
+    out = args.out.resolve()
+    merged = merge_mbtiles(base, overlay, destination=out)
+    LOGGER.info(
+        "mbtiles merge complete",
+        extra={"base": str(base), "overlay": str(overlay), "output": str(merged)},
+    )
+    return 0
+
+
 def _handle_package(args: argparse.Namespace) -> int:
     config_path = _resolve_config_path(args.config)
     cfg = load_config(config_path)
@@ -790,10 +911,17 @@ def _handle_package(args: argparse.Namespace) -> int:
     tiling_dir = (cfg.output_dir / "tiling").resolve()
     if not tiling_dir.exists():
         raise SystemExit(f"Tiling directory not found: {tiling_dir}")
-    mbtiles_candidates = sorted(tiling_dir.glob(f"planet_{cfg.processing.gebco_year}_{cfg.processing.max_zoom}z.mbtiles"))
-    if not mbtiles_candidates:
-        raise SystemExit("No MBTiles archive found; run the tile stage first")
-    mbtiles_path = mbtiles_candidates[0]
+    if args.input is not None:
+        mbtiles_path = args.input.resolve()
+        if not mbtiles_path.exists():
+            raise SystemExit(f"MBTiles archive not found: {mbtiles_path}")
+    else:
+        mbtiles_candidates = sorted(
+            tiling_dir.glob(f"planet_{cfg.processing.gebco_year}_{cfg.processing.max_zoom}z.mbtiles")
+        )
+        if not mbtiles_candidates:
+            raise SystemExit("No MBTiles archive found; run the tile stage first")
+        mbtiles_path = mbtiles_candidates[0]
 
     pmtiles_name = args.pmtiles_name or f"planet_{cfg.processing.gebco_year}_{cfg.processing.max_zoom}z.pmtiles"
     pmtiles_destination = tiling_dir / pmtiles_name

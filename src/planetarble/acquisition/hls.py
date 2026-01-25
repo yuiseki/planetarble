@@ -30,7 +30,7 @@ except Exception as exc:  # pragma: no cover - executed when sqlite is missing
     _PYSTAC_IMPORT_ERROR = exc
     _PYSTAC_ERRORS = (Exception,)
 
-from planetarble.core.models import HLSConfig, HLSSeasonWindow
+from planetarble.core.models import HLSConfig, HLSPlanRegion, HLSSeasonWindow, NaturalEarthRegion
 from planetarble.logging import get_logger
 
 from .mpc import MPCError, STAC_API_ROOT, append_sas_token, fetch_sas_token
@@ -186,12 +186,22 @@ class HLSMosaicPlanner:
                     fallback_max_cloud=self._config.fallback_max_cloud,
                 )
 
-    def write_plan(self, destination: Path) -> HLSPlanSummary:
+    def write_plan(
+        self,
+        destination: Path,
+        *,
+        region_geometry: Optional["ogr.Geometry"] = None,
+        land_geometry: Optional["ogr.Geometry"] = None,
+    ) -> HLSPlanSummary:
         destination.parent.mkdir(parents=True, exist_ok=True)
         counter: Counter[str] = Counter()
         total = 0
         with destination.open("w", encoding="utf-8") as handle:
             for task in self.iter_tasks():
+                if region_geometry is not None and not _geom_intersects_bbox(region_geometry, task.bbox):
+                    continue
+                if land_geometry is not None and not _geom_intersects_bbox(land_geometry, task.bbox):
+                    continue
                 handle.write(json.dumps(task.to_mapping(), sort_keys=True))
                 handle.write("\n")
                 counter[task.season_name] += 1
@@ -205,6 +215,120 @@ class HLSMosaicPlanner:
             },
         )
         return HLSPlanSummary(path=destination, zoom=self._zoom, tile_count=total, season_counts=dict(counter))
+
+
+def load_region_geometry(
+    region: HLSPlanRegion,
+    *,
+    data_dir: Path,
+) -> Optional["ogr.Geometry"]:
+    if region.bbox:
+        return _bbox_to_geometry(region.bbox)
+    if region.natural_earth:
+        return _load_natural_earth_geometry(region.natural_earth, data_dir=data_dir)
+    return None
+
+
+def load_land_geometry(
+    *,
+    land_mask_path: Optional[str],
+    data_dir: Path,
+    region_geometry: Optional["ogr.Geometry"] = None,
+) -> Optional["ogr.Geometry"]:
+    if land_mask_path:
+        path = Path(land_mask_path)
+    else:
+        path = (data_dir / "natural_earth" / "ne_10m_land.zip").resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"Land mask not found at {path}")
+    return _load_geometry_union(path, layer_name="ne_10m_land", region_geometry=region_geometry)
+
+
+def _ogr() -> "ogr":
+    try:
+        from osgeo import ogr  # type: ignore
+    except Exception as exc:  # pragma: no cover - depends on GDAL availability
+        raise RuntimeError("GDAL (osgeo.ogr) is required for regional HLS planning") from exc
+    return ogr
+
+
+def _bbox_to_geometry(bbox: Tuple[float, float, float, float]) -> "ogr.Geometry":
+    ogr = _ogr()
+    minx, miny, maxx, maxy = bbox
+    ring = ogr.Geometry(ogr.wkbLinearRing)
+    ring.AddPoint(minx, miny)
+    ring.AddPoint(maxx, miny)
+    ring.AddPoint(maxx, maxy)
+    ring.AddPoint(minx, maxy)
+    ring.AddPoint(minx, miny)
+    poly = ogr.Geometry(ogr.wkbPolygon)
+    poly.AddGeometry(ring)
+    return poly
+
+
+def _geom_intersects_bbox(geometry: "ogr.Geometry", bbox: Tuple[float, float, float, float]) -> bool:
+    bbox_geom = _bbox_to_geometry(bbox)
+    return bool(geometry.Intersects(bbox_geom))
+
+
+def _load_natural_earth_geometry(
+    region: NaturalEarthRegion,
+    *,
+    data_dir: Path,
+) -> "ogr.Geometry":
+    dataset = region.dataset.lower().strip()
+    if dataset in {"admin_0", "admin0", "countries"}:
+        filename = "ne_10m_admin_0_countries.zip"
+        layer_name = "ne_10m_admin_0_countries"
+    elif dataset in {"admin_1", "admin1", "states", "provinces"}:
+        filename = "ne_10m_admin_1_states_provinces.zip"
+        layer_name = "ne_10m_admin_1_states_provinces"
+    else:
+        raise ValueError(f"Unsupported Natural Earth dataset: {region.dataset}")
+    path = Path(region.path) if region.path else (data_dir / "natural_earth" / filename)
+    return _load_geometry_union(path, layer_name=layer_name, where=region.where)
+
+
+def _load_geometry_union(
+    path: Path,
+    *,
+    layer_name: str,
+    where: Optional[str] = None,
+    region_geometry: Optional["ogr.Geometry"] = None,
+) -> "ogr.Geometry":
+    ogr = _ogr()
+    open_path = _resolve_vector_path(path)
+    dataset = ogr.Open(open_path, 0)
+    if dataset is None:
+        raise FileNotFoundError(f"Unable to open vector dataset: {path}")
+    layer = dataset.GetLayer(layer_name)
+    if layer is None:
+        raise ValueError(f"Layer {layer_name} not found in {path}")
+    if where:
+        layer.SetAttributeFilter(where)
+    if region_geometry is not None:
+        layer.SetSpatialFilter(region_geometry)
+    selected: list["ogr.Geometry"] = []
+    for feature in layer:
+        geom = feature.GetGeometryRef()
+        if geom is None:
+            continue
+        selected.append(geom.Clone())
+    if not selected:
+        detail = f" (where={where})" if where else ""
+        raise RuntimeError(f"No geometry selected from {path}{detail}")
+    if len(selected) == 1:
+        return selected[0]
+    collection = ogr.Geometry(ogr.wkbGeometryCollection)
+    for geom in selected:
+        collection.AddGeometry(geom)
+    return collection
+
+
+def _resolve_vector_path(path: Path) -> str:
+    if path.suffix.lower() == ".zip":
+        return f"/vsizip/{path.as_posix()}"
+    return path.as_posix()
 
 
 class HLSSTACClient:

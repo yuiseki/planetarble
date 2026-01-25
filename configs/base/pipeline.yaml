@@ -133,6 +133,41 @@ hls:
         dataset: "admin_1"
         where: "adm0_a3='JPN' AND name='Aichi'"
       land_only: true
+    - name: "mie_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Mie'"
+      land_only: true
+    - name: "shiga_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Shiga'"
+      land_only: true
+    - name: "kyoto_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Kyōto'"
+      land_only: true
+    - name: "osaka_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Ōsaka'"
+      land_only: true
+    - name: "hyogo_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Hyōgo'"
+      land_only: true
+    - name: "nara_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Nara'"
+      land_only: true
+    - name: "wakayama_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Wakayama'"
+      land_only: true
   # plan_region: "tokyo_land"
   # plan_include_global: false
   seasonal_windows:

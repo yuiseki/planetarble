@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
+import shutil
+import sqlite3
+import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, Iterable
+from typing import Dict, Iterable, Optional
 
 from planetarble.acquisition import (
     AcquisitionManager,
@@ -468,6 +472,80 @@ def _resolve_hls_scene_manifest_path(cfg: PipelineConfig, plan_region: Optional[
     return (cfg.output_dir / "processing" / filename).resolve()
 
 
+def _is_valid_hls_scene_manifest(path: Path) -> bool:
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    scenes = data.get("scenes")
+    summary = data.get("summary")
+    if not isinstance(scenes, list) or not scenes:
+        return False
+    if not isinstance(summary, dict):
+        return False
+    return True
+
+
+def _is_valid_raster(path: Path) -> bool:
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    try:
+        from osgeo import gdal  # type: ignore
+    except Exception:
+        return True
+    dataset = gdal.Open(str(path), gdal.GA_ReadOnly)
+    if dataset is None:
+        return False
+    if dataset.RasterXSize <= 0 or dataset.RasterYSize <= 0:
+        return False
+    return dataset.RasterCount > 0
+
+
+def _is_valid_mbtiles(path: Path) -> bool:
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    try:
+        conn = sqlite3.connect(str(path), timeout=1)
+    except sqlite3.Error:
+        return False
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='tiles'")
+        if cur.fetchone() is None:
+            return False
+        cur.execute("SELECT COUNT(*) FROM tiles")
+        count = cur.fetchone()[0]
+        return count > 0
+    finally:
+        conn.close()
+
+
+def _is_valid_pmtiles(path: Path) -> bool:
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    pmtiles_cli = shutil.which("pmtiles")
+    if pmtiles_cli is None:
+        return True
+    try:
+        subprocess.run([pmtiles_cli, "verify", str(path)], check=True, capture_output=True)
+    except subprocess.CalledProcessError:
+        return False
+    return True
+
+
+def _is_valid_tilejson(path: Path) -> bool:
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    required = ("tilejson", "tiles", "minzoom", "maxzoom", "bounds")
+    return all(key in data for key in required)
+
+
 def _handle_acquire(args: argparse.Namespace) -> int:
     config_path = _resolve_config_path(args.config)
     cfg = load_config(config_path)
@@ -606,12 +684,23 @@ def _handle_process(args: argparse.Namespace) -> int:
             raise SystemExit(
                 f"HLS plan not found at {plan_path}; run 'planetarble acquire' before processing"
             )
-        scene_manifest = manager.prepare_hls_scene_manifest(
-            plan_path,
-            destination=_resolve_hls_scene_manifest_path(cfg, args.plan_region),
-        )
-        if scene_manifest and (args.plan_region or cfg.hls.plan_region):
-            manager.build_hls_mosaic(scene_manifest, plan_region=args.plan_region)
+        manifest_path = _resolve_hls_scene_manifest_path(cfg, args.plan_region)
+        scene_manifest: Optional[Path] = None
+        if _is_valid_hls_scene_manifest(manifest_path):
+            LOGGER.info("HLS scene manifest valid; skipping build", extra={"path": str(manifest_path)})
+            scene_manifest = manifest_path
+        else:
+            scene_manifest = manager.prepare_hls_scene_manifest(
+                plan_path,
+                destination=manifest_path,
+            )
+        region = args.plan_region or cfg.hls.plan_region
+        if scene_manifest and region:
+            mosaic_path = (cfg.output_dir / "processing" / f"hls_mosaic_{region}_cog.tif").resolve()
+            if _is_valid_raster(mosaic_path):
+                LOGGER.info("HLS mosaic valid; skipping build", extra={"path": str(mosaic_path)})
+            else:
+                manager.build_hls_mosaic(scene_manifest, plan_region=args.plan_region)
 
         ocean_outputs: Dict[str, Path] = {}
         if cfg.ocean.enabled:
@@ -806,6 +895,15 @@ def _handle_tile(args: argparse.Namespace) -> int:
             / "tiling"
             / f"planet_hls_{region}_{cfg.processing.max_zoom}z.mbtiles"
         )
+    if mbtiles_destination is None:
+        mbtiles_destination = (
+            cfg.output_dir
+            / "tiling"
+            / f"planet_{cfg.processing.gebco_year}_{cfg.processing.max_zoom}z.mbtiles"
+        )
+    if _is_valid_mbtiles(mbtiles_destination):
+        LOGGER.info("MBTiles valid; skipping tile generation", extra={"path": str(mbtiles_destination)})
+        return 0
     mbtiles_path = manager.create_mbtiles(source_raster, destination=mbtiles_destination)
 
     LOGGER.info("tiling outputs", extra={
@@ -925,6 +1023,13 @@ def _handle_package(args: argparse.Namespace) -> int:
 
     pmtiles_name = args.pmtiles_name or f"planet_{cfg.processing.gebco_year}_{cfg.processing.max_zoom}z.pmtiles"
     pmtiles_destination = tiling_dir / pmtiles_name
+    tilejson_destination = pmtiles_destination.with_suffix(".tilejson.json")
+    if _is_valid_pmtiles(pmtiles_destination) and _is_valid_tilejson(tilejson_destination):
+        LOGGER.info(
+            "PMTiles and TileJSON valid; skipping packaging",
+            extra={"pmtiles": str(pmtiles_destination), "tilejson": str(tilejson_destination)},
+        )
+        return 0
 
     packaging = PackagingManager(dry_run=args.dry_run)
     pmtiles_path = packaging.convert_to_pmtiles(mbtiles_path, destination=pmtiles_destination)

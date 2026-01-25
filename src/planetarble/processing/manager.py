@@ -768,6 +768,9 @@ def _cache_hls_assets(
     start_time = time.monotonic()
     completed = 0
     progress_interval = 10
+    cache_hits = 0
+    downloads = 0
+    redownloads = 0
     updated: List[Dict[str, object]] = []
     for scene in scenes:
         collection = scene.get("collection_id")
@@ -781,13 +784,19 @@ def _cache_hls_assets(
         for band, href in bands.items():
             if not isinstance(href, str) or not href:
                 continue
-            local_path = _cache_hls_asset(
+            local_path, status = _cache_hls_asset(
                 href,
                 cache_dir=cache_dir / collection / item_id,
                 timeout=timeout,
             )
             local_bands[band] = str(local_path)
             completed += 1
+            if status == "hit":
+                cache_hits += 1
+            elif status == "download":
+                downloads += 1
+            elif status == "redownload":
+                redownloads += 1
             if total_assets and (completed % progress_interval == 0 or completed == total_assets):
                 elapsed = max(time.monotonic() - start_time, 0.001)
                 rate = completed / elapsed
@@ -804,6 +813,20 @@ def _cache_hls_assets(
                 )
         scene["bands"] = local_bands
         updated.append(scene)
+    if total_assets:
+        hit_rate = cache_hits / total_assets
+        redownload_rate = redownloads / total_assets
+        LOGGER.info(
+            "hls asset cache summary",
+            extra={
+                "assets": total_assets,
+                "hits": cache_hits,
+                "downloads": downloads,
+                "redownloads": redownloads,
+                "hit_rate": round(hit_rate, 4),
+                "redownload_rate": round(redownload_rate, 4),
+            },
+        )
     return updated
 
 
@@ -824,25 +847,27 @@ def _format_duration(seconds: float) -> str:
     return f"{minutes:02d}:{seconds:02d}"
 
 
-def _cache_hls_asset(url: str, *, cache_dir: Path, timeout: int) -> Path:
+def _cache_hls_asset(url: str, *, cache_dir: Path, timeout: int) -> tuple[Path, str]:
     from urllib.parse import urlsplit
 
     cache_dir.mkdir(parents=True, exist_ok=True)
     path = urlsplit(url).path
     filename = Path(path).name or "asset.tif"
     destination = cache_dir / filename
+    redownloaded = False
     if destination.exists():
         if _is_valid_hls_asset(destination):
             LOGGER.info(
                 "hls asset cache hit",
                 extra={"url": url, "path": str(destination)},
             )
-            return destination
+            return destination, "hit"
+        quarantined = _quarantine_hls_asset(destination, reason="invalid cache")
         LOGGER.warning(
-            "hls asset cache invalid; redownloading",
-            extra={"url": url, "path": str(destination)},
+            "hls asset cache invalid; quarantined",
+            extra={"url": url, "path": str(destination), "quarantine": str(quarantined)},
         )
-        destination.unlink(missing_ok=True)
+        redownloaded = True
     LOGGER.info("downloading hls asset", extra={"url": url, "path": str(destination)})
     temp_path = destination.with_suffix(destination.suffix + ".part")
     temp_path.unlink(missing_ok=True)
@@ -853,10 +878,29 @@ def _cache_hls_asset(url: str, *, cache_dir: Path, timeout: int) -> Path:
                 break
             handle.write(chunk)
     if not _is_valid_hls_asset(temp_path):
-        temp_path.unlink(missing_ok=True)
+        quarantined = _quarantine_hls_asset(temp_path, reason="invalid download")
+        LOGGER.warning(
+            "hls asset download invalid; quarantined",
+            extra={"url": url, "path": str(destination), "quarantine": str(quarantined)},
+        )
         raise RuntimeError(f"Downloaded HLS asset is invalid: {destination}")
     temp_path.replace(destination)
-    return destination
+    status = "redownload" if redownloaded else "download"
+    return destination, status
+
+
+def _quarantine_hls_asset(path: Path, *, reason: str) -> Path:
+    timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    quarantined = path.with_name(f"{path.name}.corrupt-{timestamp}")
+    try:
+        path.rename(quarantined)
+    except FileNotFoundError:
+        return path
+    LOGGER.info(
+        "hls asset quarantined",
+        extra={"path": str(path), "quarantine": str(quarantined), "reason": reason},
+    )
+    return quarantined
 
 
 def _is_valid_hls_asset(path: Path) -> bool:

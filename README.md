@@ -91,6 +91,8 @@ planetarble process --config configs/base/pipeline.yaml --plan-region tokyo_land
 Natural Earth admin boundaries (`ne_10m_admin_0_countries.zip`, `ne_10m_admin_1_states_provinces.zip`) are downloaded on-demand
 when a plan region references them.
 
+For a Japan-wide incremental plan and rate-limit guidance, see `docs/operations/hls-japan-plan.md`.
+
 To generate regional HLS tiles and overlay them onto a BMNG basemap:
 
 ```bash

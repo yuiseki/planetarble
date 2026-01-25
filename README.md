@@ -8,7 +8,7 @@ When HLS mode is enabled—the new default configuration—the pipeline orchestr
 
 1. **Acquire** — build an `hls_z{zoom}_plan.ndjson` that enumerates every land ZL10 tile, its seasonal window, and fallback collections, without downloading multi-terabyte imagery up front.
 2. **Process** — resolve the plan into a deduplicated, SAS-signed HLS scene manifest and pre-render NOAA ETOPO ocean shading ready for compositing.
-3. **Package** — tile the composited land/ocean rasters and emit a PMTiles bundle with empty attribution (recommended credits are documented separately).
+3. **Package** — convert the generated MBTiles into a PMTiles bundle (recommended credits are documented separately).
 
 The legacy BMNG/GEBCO/Natural Earth workflow remains available by switching `processing.tile_source` back to `bmng`.
 
@@ -97,14 +97,17 @@ To generate regional HLS tiles and overlay them onto a BMNG basemap:
 # build HLS mosaic (regional) + scene manifest
 planetarble process --config configs/base/pipeline.yaml --plan-region tokyo_land
 
-# tile only z11-12 for HLS
-planetarble tile --config configs/base/pipeline.yaml --plan-region tokyo_land --min-zoom 11 --max-zoom 12
+# tile only z11 for HLS (z12 is oversampled at display time)
+planetarble tile --config configs/base/pipeline.yaml --plan-region tokyo_land --min-zoom 11 --max-zoom 11
 
 # merge HLS tiles onto the BMNG MBTiles
 planetarble tiling merge-mbtiles \
   --base output/tiling/planet_2024_12z.mbtiles \
   --overlay output/tiling/planet_hls_tokyo_land_12z.mbtiles \
   --out output/tiling/planet_2024_tokyo_hls_12z.mbtiles
+
+Note: HLS imagery has ~30 m effective resolution, which maps to about z11 in Web Mercator.
+Serving z12 is typically done via client-side overscaling of z11 tiles rather than generating new data.
 ```
 
 ## Quality Tuning

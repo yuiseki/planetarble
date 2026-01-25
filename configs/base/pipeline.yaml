@@ -88,6 +88,51 @@ hls:
         dataset: "admin_1"
         where: "adm0_a3='JPN' AND name='Gunma'"
       land_only: true
+    - name: "niigata_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Niigata'"
+      land_only: true
+    - name: "toyama_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Toyama'"
+      land_only: true
+    - name: "ishikawa_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Ishikawa'"
+      land_only: true
+    - name: "fukui_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Fukui'"
+      land_only: true
+    - name: "yamanashi_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Yamanashi'"
+      land_only: true
+    - name: "nagano_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Nagano'"
+      land_only: true
+    - name: "gifu_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Gifu'"
+      land_only: true
+    - name: "shizuoka_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Shizuoka'"
+      land_only: true
+    - name: "aichi_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Aichi'"
+      land_only: true
   # plan_region: "tokyo_land"
   # plan_include_global: false
   seasonal_windows:

@@ -249,6 +249,11 @@ def _ogr() -> "ogr":
         from osgeo import ogr  # type: ignore
     except Exception as exc:  # pragma: no cover - depends on GDAL availability
         raise RuntimeError("GDAL (osgeo.ogr) is required for regional HLS planning") from exc
+    try:
+        ogr.UseExceptions()
+    except AttributeError:
+        # Older GDAL builds may not expose UseExceptions; ignore.
+        pass
     return ogr
 
 

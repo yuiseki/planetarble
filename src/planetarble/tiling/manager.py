@@ -72,12 +72,13 @@ class TilingManager(TileGenerator):
         output = self._temp_dir / f"{input_path.stem}_3857.vrt"
         if output.exists() and not self._dry_run:
             output.unlink()
+        target_res = _webmercator_resolution(self._config.max_zoom)
         LOGGER.info(
             "warp params",
             extra={
                 "dst_srs": "EPSG:3857",
                 "extent": "auto",
-                "resolution": "auto",
+                "resolution": target_res,
             },
         )
 
@@ -88,6 +89,9 @@ class TilingManager(TileGenerator):
             "-r",
             "bilinear",
             "-multi",
+            "-tr",
+            f"{target_res}",
+            f"{target_res}",
             "-dstalpha",
             "-overwrite",
             "-of",
@@ -261,3 +265,8 @@ class TilingManager(TileGenerator):
         min_zoom = max(0, self._config.min_zoom)
         levels = max(0, max_zoom - min_zoom)
         return [str(2**level) for level in range(1, levels + 1)]
+
+
+def _webmercator_resolution(zoom: int) -> float:
+    zoom = max(0, int(zoom))
+    return 156543.03392804097 / (2 ** zoom)

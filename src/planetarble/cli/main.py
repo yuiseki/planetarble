@@ -1197,7 +1197,7 @@ def _handle_serve(args: argparse.Namespace) -> int:
         pmtiles_cli,
         "serve",
         str(pmtiles_path),
-        "--host",
+        "--interface",
         tiles_host,
         "--port",
         str(tiles_port),

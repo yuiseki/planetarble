@@ -1021,6 +1021,23 @@ def _is_valid_hls_asset(path: Path) -> bool:
     return True
 
 
+def _is_valid_raster(path: Path) -> bool:
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    try:
+        from osgeo import gdal  # type: ignore
+    except Exception:
+        return True
+    gdal.ErrorReset()
+    dataset = gdal.Open(str(path), gdal.GA_ReadOnly)
+    if dataset is None:
+        return False
+    band = dataset.GetRasterBand(1)
+    if band is None:
+        return False
+    return True
+
+
 def _write_hls_band_lists(temp_dir: Path, scenes: Sequence[Dict[str, object]]) -> Dict[str, Path]:
     band_keys = {"B02": "blue", "B03": "green", "B04": "red"}
     lists: Dict[str, List[str]] = {label: [] for label in band_keys.values()}

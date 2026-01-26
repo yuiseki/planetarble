@@ -19,7 +19,7 @@ processing:
   gdal_cachemax: "50%"
   pmtiles_dedup: true
   mbtiles_tiler: "auto"
-  tile_source: copernicus
+  tile_source: sentinel2
 hls:
   enabled: true
   stac_api: "https://planetarycomputer.microsoft.com/api/stac/v1"
@@ -201,14 +201,14 @@ viirs:
   enabled: false
   tiles: []
 copernicus:
-  enabled: true
+  enabled: false
   bbox: [139.760, 35.700, 139.805, 35.735]
   min_zoom: 12
   max_zoom: 14
   layers:
     - name: "TRUE_COLOR"
 sentinel2:
-  enabled: false
+  enabled: true
   bbox: [139.760, 35.700, 139.805, 35.735]
   start_date: "2023-01-01"
   end_date: "2024-12-31"

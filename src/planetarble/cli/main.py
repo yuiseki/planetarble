@@ -1265,6 +1265,8 @@ class _RangeRequestHandler(http.server.SimpleHTTPRequestHandler):
         path = self.translate_path(self.path)
         if not os.path.exists(path):
             return super().send_head()
+        if os.path.isdir(path):
+            return super().send_head()
 
         f = None
         try:
@@ -1297,6 +1299,7 @@ class _RangeRequestHandler(http.server.SimpleHTTPRequestHandler):
         except OSError:
             if f:
                 f.close()
+            self.send_error(404, "File not found")
             return None
 
     def _parse_range(self, header: str, size: int) -> tuple[Optional[int], int]:

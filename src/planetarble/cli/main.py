@@ -1219,7 +1219,9 @@ def _handle_serve(args: argparse.Namespace) -> int:
 
     LOGGER.info("serve starting", extra={"pmtiles": str(pmtiles_path), "viewer": str(viewer_root)})
     LOGGER.info("serve commands", extra={"pmtiles": " ".join(pmtiles_cmd), "ui": " ".join(ui_cmd)})
-    LOGGER.info("serve urls", extra={"viewer": f"{ui_url}?pmtiles={pmtiles_url}", "pmtiles": pmtiles_url})
+    viewer_url = f"{ui_url}?pmtiles={pmtiles_url}"
+    LOGGER.info("serve urls", extra={"viewer": viewer_url, "pmtiles": pmtiles_url})
+    LOGGER.info("open viewer", extra={"url": viewer_url})
 
     pmtiles_proc = subprocess.Popen(pmtiles_cmd)
     ui_proc = subprocess.Popen(ui_cmd)

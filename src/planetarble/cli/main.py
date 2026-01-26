@@ -1162,8 +1162,13 @@ def _handle_serve(args: argparse.Namespace) -> int:
         cfg = load_config(_resolve_config_path(args.config))
         region = args.region
         distribution_dir = (cfg.output_dir / "distribution").resolve()
-        pattern = f"planet_{cfg.processing.gebco_year}_*z_{region}_hls.pmtiles"
-        candidates = sorted(distribution_dir.glob(pattern))
+        region_variants = [region]
+        if region.endswith("_land"):
+            region_variants.append(region[: -len("_land")])
+        candidates: list[Path] = []
+        for variant in region_variants:
+            pattern = f"planet_{cfg.processing.gebco_year}_*z_{variant}_hls.pmtiles"
+            candidates.extend(distribution_dir.glob(pattern))
         if not candidates:
             pmtiles_name = f"planet_{cfg.processing.gebco_year}_{cfg.processing.max_zoom}z_{region}_hls.pmtiles"
             pmtiles_path = (distribution_dir / pmtiles_name).resolve()

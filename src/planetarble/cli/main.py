@@ -375,6 +375,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print packaging commands without executing",
     )
 
+    serve = subcommands.add_parser("serve", help="Serve PMTiles with a simple web viewer")
+    serve.add_argument("--pmtiles", type=Path, required=True, help="Path to the PMTiles archive")
+    serve.add_argument("--host", default="0.0.0.0", help="Host interface to bind (default: 0.0.0.0)")
+    serve.add_argument("--tiles-port", type=int, default=8080, help="Port for pmtiles server")
+    serve.add_argument("--ui-port", type=int, default=8081, help="Port for the viewer UI")
+    serve.add_argument(
+        "--viewer-root",
+        type=Path,
+        default=Path("src/planetarble/viewer"),
+        help="Directory containing viewer assets",
+    )
+    serve.add_argument("--open", action="store_true", help="Open the viewer URL in a browser")
+
     copernicus_layers = subcommands.add_parser(
         "copernicus-layers",
         help="List available Copernicus WMS layers for the configured instance",
@@ -418,6 +431,8 @@ def main(argv: Iterable[str] | None = None) -> int:
         return _handle_gsi_fetch(args)
     if args.command == "package":
         return _handle_package(args)
+    if args.command == "serve":
+        return _handle_serve(args)
     if args.command == "copernicus-layers":
         return _handle_copernicus_layers(args)
     parser.error("Unknown command")
@@ -1121,6 +1136,74 @@ def _handle_package(args: argparse.Namespace) -> int:
         "tilejson": str(tilejson_path),
         "distribution": str(package_dir),
     })
+    return 0
+
+
+def _handle_serve(args: argparse.Namespace) -> int:
+    pmtiles_path = args.pmtiles.resolve()
+    if not pmtiles_path.exists():
+        raise SystemExit(f"PMTiles file not found: {pmtiles_path}")
+
+    viewer_root = args.viewer_root.resolve()
+    if not viewer_root.exists():
+        raise SystemExit(f"Viewer directory not found: {viewer_root}")
+
+    pmtiles_cli = shutil.which("pmtiles")
+    if pmtiles_cli is None:
+        raise SystemExit("pmtiles CLI not found in PATH")
+
+    tiles_host = args.host
+    tiles_port = args.tiles_port
+    ui_port = args.ui_port
+
+    pmtiles_cmd = [
+        pmtiles_cli,
+        "serve",
+        str(pmtiles_path),
+        "--host",
+        tiles_host,
+        "--port",
+        str(tiles_port),
+    ]
+    ui_cmd = [
+        sys.executable,
+        "-m",
+        "http.server",
+        str(ui_port),
+        "--bind",
+        tiles_host,
+        "--directory",
+        str(viewer_root),
+    ]
+
+    bind_host = tiles_host if tiles_host != "0.0.0.0" else "localhost"
+    ui_url = f"http://{bind_host}:{ui_port}/"
+    pmtiles_url = f"http://{bind_host}:{tiles_port}/{pmtiles_path.name}"
+
+    LOGGER.info("serve starting", extra={"pmtiles": str(pmtiles_path), "viewer": str(viewer_root)})
+    LOGGER.info("serve commands", extra={"pmtiles": " ".join(pmtiles_cmd), "ui": " ".join(ui_cmd)})
+    LOGGER.info("serve urls", extra={"viewer": f"{ui_url}?pmtiles={pmtiles_url}", "pmtiles": pmtiles_url})
+
+    pmtiles_proc = subprocess.Popen(pmtiles_cmd)
+    ui_proc = subprocess.Popen(ui_cmd)
+
+    try:
+        if args.open:
+            import webbrowser
+
+            webbrowser.open(f"{ui_url}?pmtiles={pmtiles_url}")
+        pmtiles_proc.wait()
+    except KeyboardInterrupt:
+        LOGGER.info("serve interrupted; shutting down")
+    finally:
+        for proc in (pmtiles_proc, ui_proc):
+            if proc.poll() is None:
+                proc.terminate()
+        for proc in (pmtiles_proc, ui_proc):
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
     return 0
 
 

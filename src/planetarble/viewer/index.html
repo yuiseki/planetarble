@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Planetarble Viewer</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
+      }
+      #map {
+        width: 100%;
+        height: 100%;
+      }
+      .panel {
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        z-index: 10;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(6px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        max-width: 320px;
+      }
+      .panel h1 {
+        margin: 0 0 6px;
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .panel p {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .panel code {
+        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div class="panel">
+      <h1>Planetarble Viewer</h1>
+      <p>Pass <code>?pmtiles=http://host:port/file.pmtiles</code> to point at a tileset.</p>
+    </div>
+    <script src="https://unpkg.com/pmtiles@3.0.6/dist/index.js"></script>
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const pmtilesUrl =
+        params.get("pmtiles") || "http://localhost:8080/tiles.pmtiles";
+
+      const protocol = new pmtiles.Protocol();
+      maplibregl.addProtocol("pmtiles", protocol.tile);
+
+      const map = new maplibregl.Map({
+        container: "map",
+        style: {
+          version: 8,
+          sources: {
+            basemap: {
+              type: "raster",
+              url: `pmtiles://${pmtilesUrl}`,
+              tileSize: 256,
+            },
+          },
+          layers: [
+            {
+              id: "basemap",
+              type: "raster",
+              source: "basemap",
+            },
+          ],
+        },
+        center: [139.76, 35.68],
+        zoom: 8,
+      });
+    </script>
+  </body>
+</html>

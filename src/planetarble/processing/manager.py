@@ -1196,9 +1196,11 @@ def _download_with_aria2(url: str, destination: Path, *, timeout: int) -> None:
     command = [
         "aria2c",
         "--continue=true",
-        "--allow-overwrite=true",
+        "--allow-overwrite=false",
         "--auto-file-renaming=false",
         "--file-allocation=none",
+        "--remove-control-file=false",
+        "--auto-save-interval=5",
         "--summary-interval=10",
         "--console-log-level=warn",
         f"--timeout={timeout}",

@@ -215,7 +215,9 @@ sentinel2:
   end_date: "2024-12-31"
   max_cloud: 10.0
   assets:
-    - "visual"
+    - "B02"
+    - "B03"
+    - "B04"
   max_items: 20
 gsi_orthophotos:
   enabled: false

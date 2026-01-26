@@ -115,6 +115,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print commands without executing them",
     )
+    process.add_argument(
+        "--force",
+        action="store_true",
+        help="Regenerate processing outputs even if cached",
+    )
 
     tile = subcommands.add_parser("tile", help="Generate MBTiles output")
     tile.add_argument(
@@ -806,7 +811,7 @@ def _handle_process(args: argparse.Namespace) -> int:
             )
         manifest_path = _resolve_hls_scene_manifest_path(cfg, args.plan_region)
         scene_manifest: Optional[Path] = None
-        if _is_valid_hls_scene_manifest(manifest_path):
+        if _is_valid_hls_scene_manifest(manifest_path) and not args.force:
             log_skip(LOGGER, phase="process", reason="valid HLS scene manifest", path=str(manifest_path))
             scene_manifest = manifest_path
         else:
@@ -817,7 +822,7 @@ def _handle_process(args: argparse.Namespace) -> int:
         region = args.plan_region or cfg.hls.plan_region
         if scene_manifest and region:
             mosaic_path = (cfg.output_dir / "processing" / f"hls_mosaic_{region}_cog.tif").resolve()
-            if _is_valid_raster(mosaic_path):
+            if _is_valid_raster(mosaic_path) and not args.force:
                 log_skip(LOGGER, phase="process", reason="valid HLS mosaic", path=str(mosaic_path))
             else:
                 manager.build_hls_mosaic(scene_manifest, plan_region=args.plan_region)
@@ -865,14 +870,14 @@ def _handle_process(args: argparse.Namespace) -> int:
             raise SystemExit("Sentinel-2 processing requested but sentinel2.enabled is false")
         manifest_path = (cfg.output_dir / "processing" / "sentinel2_scene_manifest.json").resolve()
         scene_manifest: Optional[Path] = None
-        if _is_valid_sentinel2_scene_manifest(manifest_path, required_assets=cfg.sentinel2.assets):
+        if _is_valid_sentinel2_scene_manifest(manifest_path, required_assets=cfg.sentinel2.assets) and not args.force:
             log_skip(LOGGER, phase="process", reason="valid Sentinel-2 scene manifest", path=str(manifest_path))
             scene_manifest = manifest_path
         else:
             scene_manifest = manager.prepare_sentinel2_scene_manifest(destination=manifest_path)
         if scene_manifest:
             mosaic_path = (cfg.output_dir / "processing" / "sentinel2_mosaic_cog.tif").resolve()
-            if _is_valid_raster(mosaic_path):
+            if _is_valid_raster(mosaic_path) and not args.force:
                 log_skip(LOGGER, phase="process", reason="valid Sentinel-2 mosaic", path=str(mosaic_path))
             else:
                 manager.build_sentinel2_mosaic(scene_manifest)
@@ -885,7 +890,7 @@ def _handle_process(args: argparse.Namespace) -> int:
         if not cfg.copernicus.enabled:
             raise SystemExit("Copernicus processing requested but copernicus.enabled is false")
         try:
-            copernicus_cogs = manager.prepare_copernicus_layers(force=args.dry_run)
+            copernicus_cogs = manager.prepare_copernicus_layers(force=args.force or args.dry_run)
         except (SystemExit, KeyboardInterrupt):
             raise
         except Exception as exc:

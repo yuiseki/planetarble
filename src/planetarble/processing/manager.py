@@ -1059,7 +1059,6 @@ def _cache_hls_asset(url: str, *, cache_dir: Path, timeout: int) -> tuple[Path, 
         redownloaded = True
     LOGGER.info("downloading hls asset", extra={"url": url, "path": str(destination)})
     temp_path = destination.with_suffix(destination.suffix + ".part")
-    temp_path.unlink(missing_ok=True)
     with urlopen(url, timeout=timeout) as response, temp_path.open("wb") as handle:
         while True:
             chunk = response.read(1024 * 1024)
@@ -1100,12 +1099,18 @@ def _cache_sentinel2_asset(
                 extra={"url": url, "path": str(destination)},
             )
             return destination, "hit"
-        quarantined = _quarantine_hls_asset(destination, reason="invalid cache")
-        LOGGER.warning(
-            "sentinel2 asset cache invalid; quarantined",
-            extra={"url": url, "path": str(destination), "quarantine": str(quarantined)},
-        )
-        redownloaded = True
+        if _aria2c_available() and destination.with_suffix(destination.suffix + ".aria2").exists():
+            LOGGER.info(
+                "sentinel2 asset resume pending",
+                extra={"path": str(destination)},
+            )
+        else:
+            quarantined = _quarantine_hls_asset(destination, reason="invalid cache")
+            LOGGER.warning(
+                "sentinel2 asset cache invalid; quarantined",
+                extra={"url": url, "path": str(destination), "quarantine": str(quarantined)},
+            )
+            redownloaded = True
     LOGGER.info("downloading sentinel2 asset", extra={"url": url, "path": str(destination)})
     temp_path = destination.with_suffix(destination.suffix + ".part")
     temp_path.unlink(missing_ok=True)
@@ -1121,6 +1126,7 @@ def _cache_sentinel2_asset(
                 )
                 return None, "failed"
         else:
+            temp_path.unlink(missing_ok=True)
             with urlopen(url, timeout=timeout) as response, temp_path.open("wb") as handle:
                 total_size = None
                 try:

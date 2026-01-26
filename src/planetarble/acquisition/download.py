@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, Optional
 
-from planetarble.logging import get_logger
+from planetarble.logging import get_logger, log_progress, log_skip
 
 from .catalog import AssetCatalog, AssetRecord
 
@@ -79,8 +79,12 @@ class DownloadManager:
         if target.exists() and not force:
             sha256 = calculate_sha256(target)
             size_bytes = target.stat().st_size
-            LOGGER.info(
-                "asset %s already present at %s", asset_id, target
+            log_skip(
+                LOGGER,
+                phase="acquire",
+                reason="asset cached",
+                path=str(target),
+                extra={"asset_id": asset_id},
             )
             cached_url = asset.urls[0] if asset.urls else "cached"
             result = DownloadResult(
@@ -134,7 +138,26 @@ class DownloadManager:
         raise DownloadError(f"Unable to download asset {asset_id}") from last_error
 
     def download_many(self, asset_ids: Iterable[str], *, force: bool = False) -> Dict[str, DownloadResult]:
-        return {asset_id: self.download(asset_id, force=force) for asset_id in asset_ids}
+        ids = list(asset_ids)
+        total = len(ids)
+        results: Dict[str, DownloadResult] = {}
+        start_time = time.monotonic()
+        for index, asset_id in enumerate(ids, start=1):
+            result = self.download(asset_id, force=force)
+            results[asset_id] = result
+            elapsed = time.monotonic() - start_time
+            if total:
+                percent = round((index / total) * 100, 1)
+                log_progress(
+                    LOGGER,
+                    phase="acquire",
+                    step="download assets",
+                    current=index,
+                    total=total,
+                    percent=percent,
+                    elapsed=f"{elapsed:.1f}s",
+                )
+        return results
 
     def _fetch(self, url: str, destination: Path) -> tuple[str, int]:
         if self._use_aria2:

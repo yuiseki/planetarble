@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from planetarble.core.models import TileMetadata
-from planetarble.logging import get_logger
+from planetarble.logging import get_logger, log_step
 
 from .base import PackagingManager as PackagingProtocol
 
@@ -38,7 +38,7 @@ class PackagingManager(PackagingProtocol):
             str(mbtiles_path),
             str(pmtiles_path),
         ]
-        LOGGER.info("packaging step", extra={"description": "convert MBTiles to PMTiles", "command": " ".join(command)})
+        log_step(LOGGER, phase="package", step="convert MBTiles to PMTiles", command=command)
         if not self._dry_run:
             try:
                 subprocess.run(command, check=True)
@@ -64,7 +64,7 @@ class PackagingManager(PackagingProtocol):
             "tiles": [f"pmtiles://{pmtiles_path.name}"],
             "created_at": datetime.utcnow().isoformat() + "Z",
         }
-        LOGGER.info("packaging step", extra={"description": "write TileJSON metadata", "path": str(tilejson_path)})
+        log_step(LOGGER, phase="package", step="write TileJSON metadata", extra={"path": str(tilejson_path)})
         if not self._dry_run:
             tilejson_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         return tilejson_path
@@ -81,7 +81,12 @@ class PackagingManager(PackagingProtocol):
         package_dir = destination or pmtiles_path.parent / "distribution"
         package_dir.mkdir(parents=True, exist_ok=True)
 
-        LOGGER.info("packaging step", extra={"description": "assemble distribution package", "directory": str(package_dir)})
+        log_step(
+            LOGGER,
+            phase="package",
+            step="assemble distribution package",
+            extra={"directory": str(package_dir)},
+        )
         if not self._dry_run:
             shutil.copy2(pmtiles_path, package_dir / pmtiles_path.name)
             shutil.copy2(tilejson_path, package_dir / tilejson_path.name)

@@ -27,7 +27,7 @@ from planetarble.acquisition import (
 )
 from planetarble.config import PipelineConfig, load_config
 from planetarble.core.models import CopernicusLayerConfig, ProcessingConfig, TileMetadata
-from planetarble.logging import configure_logging, get_logger
+from planetarble.logging import configure_logging, get_logger, log_skip
 from planetarble.packaging import PackagingManager
 from planetarble.processing import ProcessingManager
 from planetarble.tiling import PmtilesTilingManager, TilingManager
@@ -713,7 +713,7 @@ def _handle_process(args: argparse.Namespace) -> int:
         manifest_path = _resolve_hls_scene_manifest_path(cfg, args.plan_region)
         scene_manifest: Optional[Path] = None
         if _is_valid_hls_scene_manifest(manifest_path):
-            LOGGER.info("HLS scene manifest valid; skipping build", extra={"path": str(manifest_path)})
+            log_skip(LOGGER, phase="process", reason="valid HLS scene manifest", path=str(manifest_path))
             scene_manifest = manifest_path
         else:
             scene_manifest = manager.prepare_hls_scene_manifest(
@@ -724,7 +724,7 @@ def _handle_process(args: argparse.Namespace) -> int:
         if scene_manifest and region:
             mosaic_path = (cfg.output_dir / "processing" / f"hls_mosaic_{region}_cog.tif").resolve()
             if _is_valid_raster(mosaic_path):
-                LOGGER.info("HLS mosaic valid; skipping build", extra={"path": str(mosaic_path)})
+                log_skip(LOGGER, phase="process", reason="valid HLS mosaic", path=str(mosaic_path))
             else:
                 manager.build_hls_mosaic(scene_manifest, plan_region=args.plan_region)
 
@@ -745,8 +745,10 @@ def _handle_process(args: argparse.Namespace) -> int:
                 if cfg.ocean.apply_hillshade:
                     hillshade_ok = _is_valid_raster(hillshade_path)
                 if color_ok and hillshade_ok:
-                    LOGGER.info(
-                        "ocean shading outputs valid; skipping render",
+                    log_skip(
+                        LOGGER,
+                        phase="process",
+                        reason="valid ocean shading outputs",
                         extra={"color": str(color_path), "hillshade": str(hillshade_path)},
                     )
                     ocean_outputs = {
@@ -945,7 +947,7 @@ def _handle_tile(args: argparse.Namespace) -> int:
             / f"planet_{cfg.processing.gebco_year}_{cfg.processing.max_zoom}z.mbtiles"
         )
     if _is_valid_mbtiles(mbtiles_destination):
-        LOGGER.info("MBTiles valid; skipping tile generation", extra={"path": str(mbtiles_destination)})
+        log_skip(LOGGER, phase="tile", reason="valid MBTiles", path=str(mbtiles_destination))
         return 0
     mbtiles_path = manager.create_mbtiles(source_raster, destination=mbtiles_destination)
 
@@ -1068,8 +1070,10 @@ def _handle_package(args: argparse.Namespace) -> int:
     pmtiles_destination = tiling_dir / pmtiles_name
     tilejson_destination = pmtiles_destination.with_suffix(".tilejson.json")
     if _is_valid_pmtiles(pmtiles_destination) and _is_valid_tilejson(tilejson_destination):
-        LOGGER.info(
-            "PMTiles and TileJSON valid; skipping packaging",
+        log_skip(
+            LOGGER,
+            phase="package",
+            reason="valid PMTiles and TileJSON",
             extra={"pmtiles": str(pmtiles_destination), "tilejson": str(tilejson_destination)},
         )
         return 0

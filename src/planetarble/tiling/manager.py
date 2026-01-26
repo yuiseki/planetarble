@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List
 
 from planetarble.core.models import ProcessingConfig
-from planetarble.logging import get_logger
+from planetarble.logging import get_logger, log_step
 
 from .base import TileGenerator
 
@@ -28,7 +28,7 @@ class TileRunner:
         self._dry_run = dry_run
 
     def run(self, command: List[str], *, description: str) -> None:
-        LOGGER.info("tiling step", extra={"description": description, "command": " ".join(command)})
+        log_step(LOGGER, phase="tile", step=description, command=command)
         if self._dry_run:
             return
         try:

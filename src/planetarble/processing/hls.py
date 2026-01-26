@@ -11,7 +11,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from planetarble.acquisition.hls import HLSMosaicTask, HLSScene, HLSSTACClient, iter_plan
 from planetarble.core.models import HLSConfig
-from planetarble.logging import get_logger
+from planetarble.logging import get_logger, log_progress
 
 LOGGER = get_logger(__name__)
 
@@ -177,15 +177,16 @@ def _emit_progress(*, tiles_processed: int, tiles_total_estimate: Optional[int],
         )
     else:
         message = f"{message}: {tiles_processed} tiles elapsed={_format_duration(elapsed)}"
-    LOGGER.info(
-        message,
-        extra={
-            "tiles_processed": tiles_processed,
-            "tiles_total_estimate": estimate or None,
-            "percent_complete": percent,
-            "elapsed": _format_duration(elapsed),
-            "eta": eta_str,
-        },
+    log_progress(
+        LOGGER,
+        phase="process",
+        step="hls scene manifest",
+        current=tiles_processed,
+        total=estimate or None,
+        percent=percent,
+        elapsed=_format_duration(elapsed),
+        eta=eta_str,
+        extra={"message": message},
     )
 
 

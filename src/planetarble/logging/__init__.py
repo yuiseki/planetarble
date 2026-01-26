@@ -9,6 +9,83 @@ from logging.config import dictConfig
 from typing import Optional
 
 
+def log_step(
+    logger: Logger,
+    *,
+    phase: str,
+    step: str,
+    command: Optional[list[str]] = None,
+    extra: Optional[dict] = None,
+) -> None:
+    payload = {"phase": phase, "step": step}
+    if command:
+        payload["command"] = " ".join(command)
+    if extra:
+        payload.update(extra)
+    logger.info("%s step: %s", phase, step, extra=payload)
+
+
+def log_skip(
+    logger: Logger,
+    *,
+    phase: str,
+    reason: str,
+    path: Optional[str] = None,
+    extra: Optional[dict] = None,
+) -> None:
+    payload = {"phase": phase, "reason": reason}
+    if path:
+        payload["path"] = path
+    if extra:
+        payload.update(extra)
+    logger.info("%s skip: %s", phase, reason, extra=payload)
+
+
+def log_progress(
+    logger: Logger,
+    *,
+    phase: str,
+    step: str,
+    current: int,
+    total: Optional[int] = None,
+    percent: Optional[float] = None,
+    elapsed: Optional[str] = None,
+    eta: Optional[str] = None,
+    extra: Optional[dict] = None,
+) -> None:
+    payload = {
+        "phase": phase,
+        "step": step,
+        "current": current,
+        "total": total,
+        "percent": percent,
+        "elapsed": elapsed,
+        "eta": eta,
+    }
+    if extra:
+        payload.update(extra)
+    if total:
+        logger.info(
+            "%s progress: %d/%d (%.1f%%)%s%s",
+            phase,
+            current,
+            total,
+            percent or 0.0,
+            f" elapsed={elapsed}" if elapsed else "",
+            f" eta={eta}" if eta else "",
+            extra=payload,
+        )
+    else:
+        logger.info(
+            "%s progress: %d%s%s",
+            phase,
+            current,
+            f" elapsed={elapsed}" if elapsed else "",
+            f" eta={eta}" if eta else "",
+            extra=payload,
+        )
+
+
 class JSONFormatter(logging.Formatter):
     """Structured JSON formatter for pipeline logs."""
 

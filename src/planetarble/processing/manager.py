@@ -23,7 +23,7 @@ from planetarble.core.models import (
     ProcessingConfig,
     ViirsConfig,
 )
-from planetarble.logging import get_logger
+from planetarble.logging import get_logger, log_progress, log_step
 
 from .base import DataProcessor
 from .hls import HLSSceneManifestBuilder
@@ -47,7 +47,7 @@ class CommandRunner:
         self._dry_run = dry_run
 
     def run(self, command: Sequence[str], *, description: str) -> None:
-        LOGGER.info("processing step", extra={"description": description, "command": " ".join(command)})
+        log_step(LOGGER, phase="process", step=description, command=list(command))
         if self._dry_run:
             return
         try:
@@ -802,14 +802,17 @@ def _cache_hls_assets(
                 rate = completed / elapsed
                 remaining = max(total_assets - completed, 0)
                 eta = remaining / rate if rate > 0 else 0.0
-                LOGGER.info(
-                    "hls asset cache progress %s %d/%d (%.1f%%) elapsed=%s eta=%s",
-                    _format_progress_bar(completed, total_assets),
-                    completed,
-                    total_assets,
-                    (completed / total_assets) * 100.0,
-                    _format_duration(elapsed),
-                    _format_duration(eta),
+                percent = (completed / total_assets) * 100.0
+                log_progress(
+                    LOGGER,
+                    phase="process",
+                    step="hls asset cache",
+                    current=completed,
+                    total=total_assets,
+                    percent=round(percent, 1),
+                    elapsed=_format_duration(elapsed),
+                    eta=_format_duration(eta),
+                    extra={"progress_bar": _format_progress_bar(completed, total_assets)},
                 )
         scene["bands"] = local_bands
         updated.append(scene)

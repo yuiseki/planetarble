@@ -363,6 +363,10 @@ def _download_layer_tiles(
                 ext = _extension_for_format(layer_config.format)
                 tile_path = layer_dir / str(zoom) / str(x) / f"{y}.{ext}"
                 if tile_path.exists() and not force:
+                    LOGGER.info(
+                        "copernicus tile cache hit",
+                        extra={"layer": layer_config.name, "zoom": zoom, "x": x, "y": y, "path": str(tile_path)},
+                    )
                     tiles_skipped += 1
                     continue
                 minx, miny, maxx, maxy = _tile_bounds(x, y, zoom)

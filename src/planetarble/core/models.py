@@ -50,6 +50,7 @@ class ProcessingConfig:
     gdal_cachemax: str = "50%"
     pmtiles_dedup: bool = True
     mbtiles_tiler: str = "auto"
+    zoom_level_strategy: str = "LOWER"
 
 
 @dataclass

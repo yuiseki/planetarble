@@ -201,6 +201,13 @@ class TilingManager(TileGenerator):
         tile_format: str,
         quality_value: str,
     ) -> None:
+        strategy = (self._config.zoom_level_strategy or "LOWER").upper()
+        if strategy not in {"LOWER", "UPPER", "AUTO"}:
+            LOGGER.warning(
+                "unknown zoom level strategy '%s'; defaulting to LOWER",
+                self._config.zoom_level_strategy,
+            )
+            strategy = "LOWER"
         command = [
             "gdal_translate",
             "--config",
@@ -224,7 +231,7 @@ class TilingManager(TileGenerator):
             "-co",
             f"MAXZOOM={self._config.max_zoom}",
             "-co",
-            "ZOOM_LEVEL_STRATEGY=LOWER",
+            f"ZOOM_LEVEL_STRATEGY={strategy}",
             str(pyramid_path),
             str(destination),
         ]

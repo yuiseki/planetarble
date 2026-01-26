@@ -19,6 +19,7 @@ processing:
   gdal_cachemax: "50%"
   pmtiles_dedup: true
   mbtiles_tiler: "auto"
+  zoom_level_strategy: "UPPER"
   tile_source: sentinel2
 hls:
   enabled: true

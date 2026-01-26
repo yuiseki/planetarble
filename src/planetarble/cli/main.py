@@ -157,6 +157,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override tile encoding quality",
     )
+    tile.add_argument(
+        "--force",
+        action="store_true",
+        help="Regenerate tiles even if output exists",
+    )
 
     tiling = subcommands.add_parser("tiling", help="Advanced tiling utilities")
     tiling_subcommands = tiling.add_subparsers(dest="tiling_command", required=True)
@@ -376,6 +381,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print packaging commands without executing",
     )
+    package.add_argument(
+        "--force",
+        action="store_true",
+        help="Regenerate PMTiles even if output exists",
+    )
 
     serve = subcommands.add_parser("serve", help="Serve PMTiles with a simple web viewer")
     serve.add_argument("--pmtiles", type=Path, default=None, help="Path to the PMTiles archive")
@@ -576,6 +586,56 @@ def _is_valid_mbtiles(path: Path) -> bool:
         cur.execute("SELECT COUNT(*) FROM tiles")
         count = cur.fetchone()[0]
         return count > 0
+    finally:
+        conn.close()
+
+
+def _read_mbtiles_metadata(path: Path) -> dict[str, object]:
+    if not path.exists() or path.stat().st_size == 0:
+        return {}
+    try:
+        conn = sqlite3.connect(str(path), timeout=1)
+    except sqlite3.Error:
+        return {}
+    try:
+        cur = conn.cursor()
+        meta_exists = cur.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='metadata'"
+        ).fetchone()
+        metadata: dict[str, object] = {}
+        if meta_exists:
+            for key, value in cur.execute("SELECT name, value FROM metadata"):
+                metadata[str(key)] = value
+        min_zoom = metadata.get("minzoom")
+        max_zoom = metadata.get("maxzoom")
+        if min_zoom is None or max_zoom is None:
+            row = cur.execute("SELECT MIN(zoom_level), MAX(zoom_level) FROM tiles").fetchone()
+            if row:
+                if min_zoom is None:
+                    min_zoom = row[0]
+                if max_zoom is None:
+                    max_zoom = row[1]
+        if min_zoom is not None:
+            metadata["minzoom"] = int(min_zoom)
+        if max_zoom is not None:
+            metadata["maxzoom"] = int(max_zoom)
+        bounds = metadata.get("bounds")
+        if isinstance(bounds, str):
+            parts = [p.strip() for p in bounds.split(",")]
+            if len(parts) == 4:
+                try:
+                    metadata["bounds"] = [float(part) for part in parts]
+                except ValueError:
+                    pass
+        center = metadata.get("center")
+        if isinstance(center, str):
+            parts = [p.strip() for p in center.split(",")]
+            if len(parts) == 3:
+                try:
+                    metadata["center"] = [float(parts[0]), float(parts[1]), int(float(parts[2]))]
+                except ValueError:
+                    pass
+        return metadata
     finally:
         conn.close()
 
@@ -1023,9 +1083,11 @@ def _handle_tile(args: argparse.Namespace) -> int:
             / "tiling"
             / f"planet_{cfg.processing.gebco_year}_{cfg.processing.max_zoom}z.mbtiles"
         )
-    if _is_valid_mbtiles(mbtiles_destination):
+    if _is_valid_mbtiles(mbtiles_destination) and not args.force:
         log_skip(LOGGER, phase="tile", reason="valid MBTiles", path=str(mbtiles_destination))
         return 0
+    if args.force and mbtiles_destination.exists() and not args.dry_run:
+        mbtiles_destination.unlink()
     mbtiles_path = manager.create_mbtiles(source_raster, destination=mbtiles_destination)
 
     LOGGER.info("tiling outputs", extra={
@@ -1146,7 +1208,7 @@ def _handle_package(args: argparse.Namespace) -> int:
     pmtiles_name = args.pmtiles_name or f"planet_{cfg.processing.gebco_year}_{cfg.processing.max_zoom}z.pmtiles"
     pmtiles_destination = tiling_dir / pmtiles_name
     tilejson_destination = pmtiles_destination.with_suffix(".tilejson.json")
-    if _is_valid_pmtiles(pmtiles_destination) and _is_valid_tilejson(tilejson_destination):
+    if _is_valid_pmtiles(pmtiles_destination) and _is_valid_tilejson(tilejson_destination) and not args.force:
         log_skip(
             LOGGER,
             phase="package",
@@ -1180,18 +1242,25 @@ def _handle_package(args: argparse.Namespace) -> int:
         imagery_label = "NASA Blue Marble Next Generation (2004)"
         imagery_attribution = "Imagery: NASA Blue Marble (2004)."
 
+    mbtiles_meta = _read_mbtiles_metadata(mbtiles_path)
+    bounds = tuple(mbtiles_meta.get("bounds") or (-180.0, -85.0511, 180.0, 85.0511))
+    center = tuple(mbtiles_meta.get("center") or (0.0, 0.0, 2))
+    minzoom = int(mbtiles_meta.get("minzoom") or 0)
+    maxzoom = int(mbtiles_meta.get("maxzoom") or cfg.processing.max_zoom)
+    tile_format = str(mbtiles_meta.get("format") or cfg.processing.tile_format)
+
     metadata = TileMetadata(
         name=f"Planetarble {cfg.processing.gebco_year}",
         description=f"Global basemap composed from {imagery_label} and GEBCO bathymetry.",
         version=str(cfg.processing.gebco_year),
-        bounds=(-180.0, -85.0511, 180.0, 85.0511),
-        center=(0.0, 0.0, 2),
-        minzoom=0,
-        maxzoom=cfg.processing.max_zoom,
+        bounds=bounds,
+        center=center,
+        minzoom=minzoom,
+        maxzoom=maxzoom,
         attribution=(
             f"{imagery_attribution} Bathymetry: GEBCO 2024. Masks: Natural Earth 10m."
         ),
-        format=cfg.processing.tile_format,
+        format=tile_format,
     )
     tilejson_path = packaging.generate_tilejson(pmtiles_path, metadata)
 

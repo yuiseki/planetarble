@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import re
+import shutil
 import subprocess
 import time
 import zipfile
@@ -1098,43 +1099,47 @@ def _cache_sentinel2_asset(
     LOGGER.info("downloading sentinel2 asset", extra={"url": url, "path": str(destination)})
     temp_path = destination.with_suffix(destination.suffix + ".part")
     temp_path.unlink(missing_ok=True)
+    use_aria2c = _aria2c_available()
     try:
-        with urlopen(url, timeout=timeout) as response, temp_path.open("wb") as handle:
-            total_size = None
-            try:
-                header_value = response.getheader("Content-Length")
-                if header_value:
-                    total_size = int(header_value)
-            except (ValueError, TypeError):
+        if use_aria2c:
+            _download_with_aria2(url, destination, timeout=timeout)
+        else:
+            with urlopen(url, timeout=timeout) as response, temp_path.open("wb") as handle:
                 total_size = None
-            downloaded = 0
-            log_threshold = 10 * 1024 * 1024
-            next_log = log_threshold
-            start_time = time.monotonic()
-            while True:
-                chunk = response.read(1024 * 1024)
-                if not chunk:
-                    break
-                handle.write(chunk)
-                downloaded += len(chunk)
-                if downloaded >= next_log:
-                    elapsed = max(time.monotonic() - start_time, 0.001)
-                    rate = downloaded / elapsed
-                    percent = None
-                    if total_size:
-                        percent = (downloaded / total_size) * 100.0
-                    log_progress(
-                        LOGGER,
-                        phase="process",
-                        step="sentinel2 asset download",
-                        current=downloaded,
-                        total=total_size,
-                        percent=round(percent, 1) if percent is not None else None,
-                        elapsed=_format_duration(elapsed),
-                        eta=_format_duration((total_size - downloaded) / rate) if total_size and rate > 0 else None,
-                        extra={"path": str(destination), "bytes_per_sec": round(rate, 1)},
-                    )
-                    next_log += log_threshold
+                try:
+                    header_value = response.getheader("Content-Length")
+                    if header_value:
+                        total_size = int(header_value)
+                except (ValueError, TypeError):
+                    total_size = None
+                downloaded = 0
+                log_threshold = 10 * 1024 * 1024
+                next_log = log_threshold
+                start_time = time.monotonic()
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    handle.write(chunk)
+                    downloaded += len(chunk)
+                    if downloaded >= next_log:
+                        elapsed = max(time.monotonic() - start_time, 0.001)
+                        rate = downloaded / elapsed
+                        percent = None
+                        if total_size:
+                            percent = (downloaded / total_size) * 100.0
+                        log_progress(
+                            LOGGER,
+                            phase="process",
+                            step="sentinel2 asset download",
+                            current=downloaded,
+                            total=total_size,
+                            percent=round(percent, 1) if percent is not None else None,
+                            elapsed=_format_duration(elapsed),
+                            eta=_format_duration((total_size - downloaded) / rate) if total_size and rate > 0 else None,
+                            extra={"path": str(destination), "bytes_per_sec": round(rate, 1)},
+                        )
+                        next_log += log_threshold
     except HTTPError as exc:
         LOGGER.warning(
             "sentinel2 asset download failed",
@@ -1151,16 +1156,47 @@ def _cache_sentinel2_asset(
         if temp_path.exists():
             temp_path.unlink()
         return None, "failed"
-    if not _is_valid_sentinel2_asset(temp_path):
-        quarantined = _quarantine_hls_asset(temp_path, reason="invalid download")
+    downloaded_path = destination if use_aria2c else temp_path
+    if not _is_valid_sentinel2_asset(downloaded_path):
+        quarantined = _quarantine_hls_asset(downloaded_path, reason="invalid download")
         LOGGER.warning(
             "sentinel2 asset download invalid; quarantined",
             extra={"url": url, "path": str(destination), "quarantine": str(quarantined)},
         )
         return None, "failed"
-    temp_path.replace(destination)
+    if not use_aria2c:
+        temp_path.replace(destination)
     status = "redownload" if redownloaded else "download"
     return destination, status
+
+
+def _aria2c_available() -> bool:
+    return shutil.which("aria2c") is not None
+
+
+def _download_with_aria2(url: str, destination: Path, *, timeout: int) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    command = [
+        "aria2c",
+        "--continue=true",
+        "--allow-overwrite=true",
+        "--auto-file-renaming=false",
+        "--file-allocation=none",
+        "--summary-interval=10",
+        "--console-log-level=warn",
+        f"--timeout={timeout}",
+        f"--connect-timeout={timeout}",
+        "--dir",
+        str(destination.parent),
+        "--out",
+        destination.name,
+        url,
+    ]
+    LOGGER.info("sentinel2 asset download via aria2c", extra={"command": " ".join(command)})
+    try:
+        subprocess.run(command, check=True)  # pragma: no cover - requires aria2c
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"aria2c failed for {url}") from exc
 
 
 def _quarantine_hls_asset(path: Path, *, reason: str) -> Path:

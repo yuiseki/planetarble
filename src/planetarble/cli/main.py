@@ -1205,23 +1205,17 @@ def _handle_serve(args: argparse.Namespace) -> int:
     if not viewer_root.exists():
         raise SystemExit(f"Viewer directory not found: {viewer_root}")
 
-    pmtiles_cli = shutil.which("pmtiles")
-    if pmtiles_cli is None:
-        raise SystemExit("pmtiles CLI not found in PATH")
-
     tiles_host = args.host
-    tiles_port = args.tiles_port
     ui_port = args.ui_port
 
-    pmtiles_cmd = [
-        pmtiles_cli,
-        "serve",
-        str(pmtiles_path),
-        "--interface",
-        tiles_host,
-        "--port",
-        str(tiles_port),
-    ]
+    distribution_dir = pmtiles_path.parent
+    viewer_target = distribution_dir / "viewer"
+    viewer_target.mkdir(parents=True, exist_ok=True)
+    source_index = viewer_root / "index.html"
+    if not source_index.exists():
+        raise SystemExit(f"Viewer index not found: {source_index}")
+    shutil.copy2(source_index, viewer_target / "index.html")
+
     ui_cmd = [
         sys.executable,
         "-m",
@@ -1230,22 +1224,24 @@ def _handle_serve(args: argparse.Namespace) -> int:
         "--bind",
         tiles_host,
         "--directory",
-        str(viewer_root),
+        str(distribution_dir),
     ]
 
     bind_host = tiles_host if tiles_host != "0.0.0.0" else "localhost"
-    ui_url = f"http://{bind_host}:{ui_port}/"
-    pmtiles_url = f"http://{bind_host}:{tiles_port}/{pmtiles_path.name}"
+    ui_url = f"http://{bind_host}:{ui_port}/viewer/"
+    pmtiles_url = f"http://{bind_host}:{ui_port}/{pmtiles_path.name}"
 
-    LOGGER.info("serve starting", extra={"pmtiles": str(pmtiles_path), "viewer": str(viewer_root)})
-    LOGGER.info("serve commands", extra={"pmtiles": " ".join(pmtiles_cmd), "ui": " ".join(ui_cmd)})
+    LOGGER.info(
+        "serve starting",
+        extra={"pmtiles": str(pmtiles_path), "viewer": str(viewer_target)},
+    )
+    LOGGER.info("serve commands", extra={"ui": " ".join(ui_cmd)})
     viewer_url = f"{ui_url}?pmtiles={pmtiles_url}"
     if center is not None:
         viewer_url = f"{viewer_url}&lon={center[0]}&lat={center[1]}&zoom=8"
     LOGGER.info("serve urls", extra={"viewer": viewer_url, "pmtiles": pmtiles_url})
     LOGGER.info("open viewer: %s", viewer_url)
 
-    pmtiles_proc = subprocess.Popen(pmtiles_cmd)
     ui_proc = subprocess.Popen(ui_cmd)
 
     try:
@@ -1253,14 +1249,14 @@ def _handle_serve(args: argparse.Namespace) -> int:
             import webbrowser
 
             webbrowser.open(f"{ui_url}?pmtiles={pmtiles_url}")
-        pmtiles_proc.wait()
+        ui_proc.wait()
     except KeyboardInterrupt:
         LOGGER.info("serve interrupted; shutting down")
     finally:
-        for proc in (pmtiles_proc, ui_proc):
+        for proc in (ui_proc,):
             if proc.poll() is None:
                 proc.terminate()
-        for proc in (pmtiles_proc, ui_proc):
+        for proc in (ui_proc,):
             try:
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:

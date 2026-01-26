@@ -206,7 +206,7 @@ def _build_scene(item: Item, *, collection: str, token: str, assets: Iterable[st
         asset = item.assets.get(asset_name)
         if asset is None or not asset.href:
             return None
-        assets_map[asset_name] = append_sas_token(asset.href, token)
+        assets_map[asset_name] = asset.href
     acquisition = item.datetime or datetime.now(timezone.utc)
     return Sentinel2Scene(
         item_id=item.id,

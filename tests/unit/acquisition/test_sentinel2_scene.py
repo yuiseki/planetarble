@@ -30,9 +30,9 @@ def test_build_scene_signs_assets() -> None:
     assert scene is not None
     assert scene.item_id == "sentinel-item"
     assert scene.cloud_cover == 5.0
-    assert scene.assets["B02"].endswith("sig=abc")
-    assert scene.assets["B03"].endswith("sig=abc")
-    assert scene.assets["B04"].endswith("sig=abc")
+    assert scene.assets["B02"].endswith("B02.tif")
+    assert scene.assets["B03"].endswith("B03.tif")
+    assert scene.assets["B04"].endswith("B04.tif")
 
 
 def test_build_scene_requires_assets() -> None:

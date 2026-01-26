@@ -958,6 +958,16 @@ def _cache_sentinel2_assets(
                 timeout=timeout,
                 asset_name=str(asset_name),
             )
+            if status == "failed":
+                token = fetch_sas_token(collection, timeout=timeout)
+                tokens[collection] = token
+                signed = append_sas_token(unsigned, token)
+                local_path, status = _cache_sentinel2_asset(
+                    signed,
+                    cache_dir=cache_dir / collection / item_id,
+                    timeout=timeout,
+                    asset_name=str(asset_name),
+                )
             completed += 1
             if status == "hit":
                 cache_hits += 1
@@ -1102,7 +1112,14 @@ def _cache_sentinel2_asset(
     use_aria2c = _aria2c_available()
     try:
         if use_aria2c:
-            _download_with_aria2(url, destination, timeout=timeout)
+            try:
+                _download_with_aria2(url, destination, timeout=timeout)
+            except RuntimeError as exc:
+                LOGGER.warning(
+                    "sentinel2 asset download failed",
+                    extra={"url": url, "path": str(destination), "error": str(exc)},
+                )
+                return None, "failed"
         else:
             with urlopen(url, timeout=timeout) as response, temp_path.open("wb") as handle:
                 total_size = None

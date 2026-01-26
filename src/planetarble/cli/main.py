@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import http.server
+import functools
 import os
 import re
 import shutil
@@ -1243,8 +1244,7 @@ def _handle_serve(args: argparse.Namespace) -> int:
             import webbrowser
 
             webbrowser.open(f"{ui_url}?pmtiles={pmtiles_url}")
-        handler = _RangeRequestHandler
-        handler.directory = str(distribution_dir)
+        handler = functools.partial(_RangeRequestHandler, directory=str(distribution_dir))
         httpd = http.server.ThreadingHTTPServer((tiles_host, ui_port), handler)
         LOGGER.info("serve http", extra={"address": f"{tiles_host}:{ui_port}"})
         httpd.serve_forever()

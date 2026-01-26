@@ -58,7 +58,7 @@
       <h1>Planetarble Viewer</h1>
       <p>Pass <code>?pmtiles=http://host:port/file.pmtiles</code> to point at a tileset.</p>
     </div>
-    <script src="https://unpkg.com/pmtiles@3.0.6/dist/index.js"></script>
+    <script src="https://unpkg.com/pmtiles@3.0.6/dist/pmtiles.js"></script>
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
     <script>
       const params = new URLSearchParams(window.location.search);
@@ -68,7 +68,7 @@
       const centerLat = parseFloat(params.get("lat") || "35.68");
       const startZoom = parseFloat(params.get("zoom") || "8");
 
-      const protocol = new pmtiles.Protocol();
+      const protocol = new window.pmtiles.Protocol();
       maplibregl.addProtocol("pmtiles", protocol.tile);
 
       const map = new maplibregl.Map({

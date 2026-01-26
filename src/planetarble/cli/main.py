@@ -1161,8 +1161,18 @@ def _handle_serve(args: argparse.Namespace) -> int:
     else:
         cfg = load_config(_resolve_config_path(args.config))
         region = args.region
-        pmtiles_name = f"planet_{cfg.processing.gebco_year}_{cfg.processing.max_zoom}z_{region}_hls.pmtiles"
-        pmtiles_path = (cfg.output_dir / "distribution" / pmtiles_name).resolve()
+        distribution_dir = (cfg.output_dir / "distribution").resolve()
+        pattern = f"planet_{cfg.processing.gebco_year}_*z_{region}_hls.pmtiles"
+        candidates = sorted(distribution_dir.glob(pattern))
+        if not candidates:
+            pmtiles_name = f"planet_{cfg.processing.gebco_year}_{cfg.processing.max_zoom}z_{region}_hls.pmtiles"
+            pmtiles_path = (distribution_dir / pmtiles_name).resolve()
+        else:
+            def zoom_key(path: Path) -> int:
+                match = re.search(r"_(\d+)z_", path.name)
+                return int(match.group(1)) if match else -1
+
+            pmtiles_path = max(candidates, key=zoom_key).resolve()
     if not pmtiles_path.exists():
         raise SystemExit(f"PMTiles file not found: {pmtiles_path}")
 

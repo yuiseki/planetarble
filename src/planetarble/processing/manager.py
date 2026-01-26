@@ -1295,6 +1295,31 @@ def _is_valid_sentinel2_asset(path: Path) -> bool:
     band = dataset.GetRasterBand(1)
     if band is None:
         return False
+    block_x, block_y = band.GetBlockSize()
+    xsize = band.XSize
+    ysize = band.YSize
+    if block_x <= 0 or block_y <= 0 or xsize <= 0 or ysize <= 0:
+        return False
+    tiles_x = math.ceil(xsize / block_x)
+    tiles_y = math.ceil(ysize / block_y)
+    sample_tiles = {
+        (0, 0),
+        (tiles_x // 2, 0),
+        (0, tiles_y // 2),
+        (tiles_x // 2, tiles_y // 2),
+        (tiles_x - 1, tiles_y - 1),
+    }
+    for tx, ty in sample_tiles:
+        xoff = min(max(tx * block_x, 0), xsize - 1)
+        yoff = min(max(ty * block_y, 0), ysize - 1)
+        width = min(block_x, xsize - xoff)
+        height = min(block_y, ysize - yoff)
+        gdal.ErrorReset()
+        sample = band.ReadRaster(xoff, yoff, width, height)
+        if sample is None:
+            return False
+        if gdal.GetLastErrorType() != 0:
+            return False
     return True
 
 

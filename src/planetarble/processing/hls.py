@@ -186,7 +186,7 @@ def _emit_progress(*, tiles_processed: int, tiles_total_estimate: Optional[int],
         percent=percent,
         elapsed=_format_duration(elapsed),
         eta=eta_str,
-        extra={"message": message},
+        extra={"detail": message},
     )
 
 

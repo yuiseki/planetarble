@@ -71,4 +71,4 @@ def test_manifest_builder_deduplicates_scenes(tmp_path: Path, caplog: pytest.Log
     assert len(manifest.scenes) == 1
     mapping = scene_to_mapping(manifest.scenes[0])
     assert mapping["collection_id"] == "HLSS30"
-    assert any(record.message.startswith("hls scene manifest progress") for record in caplog.records)
+    assert any(record.message.startswith("process progress") for record in caplog.records)

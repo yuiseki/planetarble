@@ -1250,8 +1250,6 @@ def _handle_serve(args: argparse.Namespace) -> int:
     )
     LOGGER.info("serve commands", extra={"ui": f"python -m planetarble serve {tiles_host}:{ui_port}"})
     viewer_url = f"{ui_url}?pmtiles={pmtiles_url}"
-    if center is not None:
-        viewer_url = f"{viewer_url}&lon={center[0]}&lat={center[1]}&zoom=8"
     LOGGER.info("serve urls", extra={"viewer": viewer_url, "pmtiles": pmtiles_url})
     LOGGER.info("open viewer: %s", viewer_url)
 

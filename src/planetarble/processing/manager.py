@@ -1095,10 +1095,22 @@ def _collect_copernicus_tiles(
 ) -> List[Tuple[Path, int, int, int]]:
     records: List[Tuple[Path, int, int, int]] = []
     valid_suffixes = {".jpg", ".jpeg", ".png", ".webp"}
+    available_zooms = []
     for zoom in range(config.min_zoom, config.max_zoom + 1):
         zoom_dir = layer_dir / str(zoom)
         if not zoom_dir.exists():
             continue
+        available_zooms.append(zoom)
+    if not available_zooms:
+        return records
+    target_zoom = config.max_zoom if config.max_zoom in available_zooms else max(available_zooms)
+    if target_zoom != config.max_zoom:
+        LOGGER.warning(
+            "copernicus max zoom tiles missing; using highest available zoom",
+            extra={"requested": config.max_zoom, "available": target_zoom},
+        )
+    for zoom in [target_zoom]:
+        zoom_dir = layer_dir / str(zoom)
         for x_dir in sorted(p for p in zoom_dir.iterdir() if p.is_dir()):
             try:
                 x = int(x_dir.name)

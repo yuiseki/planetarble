@@ -376,7 +376,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     serve = subcommands.add_parser("serve", help="Serve PMTiles with a simple web viewer")
-    serve.add_argument("--pmtiles", type=Path, required=True, help="Path to the PMTiles archive")
+    serve.add_argument("--pmtiles", type=Path, default=None, help="Path to the PMTiles archive")
+    serve.add_argument("--region", type=str, default=None, help="Region name to resolve PMTiles from distribution")
+    serve.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Path to pipeline configuration file (YAML or JSON) for region resolution",
+    )
     serve.add_argument("--host", default="0.0.0.0", help="Host interface to bind (default: 0.0.0.0)")
     serve.add_argument("--tiles-port", type=int, default=8080, help="Port for pmtiles server")
     serve.add_argument("--ui-port", type=int, default=8081, help="Port for the viewer UI")
@@ -1140,7 +1147,18 @@ def _handle_package(args: argparse.Namespace) -> int:
 
 
 def _handle_serve(args: argparse.Namespace) -> int:
-    pmtiles_path = args.pmtiles.resolve()
+    if args.pmtiles is None and not args.region:
+        raise SystemExit("--pmtiles or --region must be provided")
+    if args.pmtiles is not None and args.region:
+        raise SystemExit("--pmtiles and --region are mutually exclusive")
+
+    if args.pmtiles is not None:
+        pmtiles_path = args.pmtiles.resolve()
+    else:
+        cfg = load_config(_resolve_config_path(args.config))
+        region = args.region
+        pmtiles_name = f"planet_{cfg.processing.gebco_year}_{cfg.processing.max_zoom}z_{region}_hls.pmtiles"
+        pmtiles_path = (cfg.output_dir / "distribution" / pmtiles_name).resolve()
     if not pmtiles_path.exists():
         raise SystemExit(f"PMTiles file not found: {pmtiles_path}")
 

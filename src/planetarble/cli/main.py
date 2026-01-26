@@ -512,6 +512,22 @@ def _is_valid_hls_scene_manifest(path: Path) -> bool:
     return True
 
 
+def _is_valid_sentinel2_scene_manifest(path: Path) -> bool:
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    scenes = data.get("scenes")
+    summary = data.get("summary")
+    if not isinstance(scenes, list) or not scenes:
+        return False
+    if not isinstance(summary, dict):
+        return False
+    return True
+
+
 def _is_valid_raster(path: Path) -> bool:
     if not path.exists() or path.stat().st_size == 0:
         return False
@@ -700,6 +716,7 @@ def _handle_process(args: argparse.Namespace) -> int:
         output_dir=cfg.output_dir,
         data_dir=cfg.data_dir,
         copernicus=cfg.copernicus,
+        sentinel2=cfg.sentinel2,
         modis=cfg.modis,
         viirs=cfg.viirs,
         hls=cfg.hls,
@@ -767,6 +784,27 @@ def _handle_process(args: argparse.Namespace) -> int:
                 "scene_manifest": str(scene_manifest) if scene_manifest else None,
                 "ocean_outputs": {key: str(value) for key, value in ocean_outputs.items() if value},
             },
+        )
+        return 0
+    if tile_source == "sentinel2":
+        if not cfg.sentinel2.enabled:
+            raise SystemExit("Sentinel-2 processing requested but sentinel2.enabled is false")
+        manifest_path = (cfg.output_dir / "processing" / "sentinel2_scene_manifest.json").resolve()
+        scene_manifest: Optional[Path] = None
+        if _is_valid_sentinel2_scene_manifest(manifest_path):
+            log_skip(LOGGER, phase="process", reason="valid Sentinel-2 scene manifest", path=str(manifest_path))
+            scene_manifest = manifest_path
+        else:
+            scene_manifest = manager.prepare_sentinel2_scene_manifest(destination=manifest_path)
+        if scene_manifest:
+            mosaic_path = (cfg.output_dir / "processing" / "sentinel2_mosaic_cog.tif").resolve()
+            if _is_valid_raster(mosaic_path):
+                log_skip(LOGGER, phase="process", reason="valid Sentinel-2 mosaic", path=str(mosaic_path))
+            else:
+                manager.build_sentinel2_mosaic(scene_manifest)
+        LOGGER.info(
+            "Sentinel-2 preprocessing complete",
+            extra={"scene_manifest": str(scene_manifest) if scene_manifest else None},
         )
         return 0
     if tile_source == "copernicus":
@@ -931,6 +969,13 @@ def _handle_tile(args: argparse.Namespace) -> int:
                 "Copernicus tile source selected but no copernicus_*_cog.tif found; run process stage"
             )
         source_raster = copernicus_candidates[0]
+    elif tile_source == "sentinel2":
+        sentinel2_candidate = (cfg.output_dir / "processing" / "sentinel2_mosaic_cog.tif").resolve()
+        if not sentinel2_candidate.exists():
+            raise SystemExit(
+                "Sentinel-2 tile source selected but no sentinel2_mosaic_cog.tif found; run process stage"
+            )
+        source_raster = sentinel2_candidate
     elif tile_source == "gsi_orthophotos":
         gsi_candidate = (cfg.output_dir / "processing" / f"{cfg.gsi_orthophotos.output_basename}.tif").resolve()
         if not gsi_candidate.exists():
@@ -1111,6 +1156,9 @@ def _handle_package(args: argparse.Namespace) -> int:
     elif tile_source == "copernicus":
         imagery_label = "Copernicus Sentinel-2 Level-2A"
         imagery_attribution = "Imagery: Copernicus Sentinel-2 (European Space Agency)."
+    elif tile_source == "sentinel2":
+        imagery_label = "Sentinel-2 L2A (Microsoft Planetary Computer)"
+        imagery_attribution = "Imagery: Copernicus Sentinel-2 (European Space Agency)."
     elif tile_source == "gsi_orthophotos":
         imagery_label = "GSI Seamless Orthophoto"
         imagery_attribution = "Imagery: Geospatial Information Authority of Japan (GSI) Seamless Orthophotography."
@@ -1138,6 +1186,7 @@ def _handle_package(args: argparse.Namespace) -> int:
         "modis": "- MODIS MCD43A4 BRDF-Corrected Reflectance (NASA LP DAAC).",
         "viirs": "- VIIRS Corrected Reflectance (VNP09GA, NASA LP DAAC).",
         "copernicus": "- Copernicus Sentinel-2 Level-2A (European Space Agency).",
+        "sentinel2": "- Copernicus Sentinel-2 Level-2A via Microsoft Planetary Computer.",
         "gsi_orthophotos": "- Geospatial Information Authority of Japan Seamless Orthophotography.",
     }.get(tile_source, "- NASA Blue Marble Next Generation (2004).")
 

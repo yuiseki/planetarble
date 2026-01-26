@@ -19,3 +19,5 @@ dist/
 .venv/
 venv/
 ENV/
+
+.coverage

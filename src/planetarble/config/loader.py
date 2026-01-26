@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 from planetarble.core.models import (
     CopernicusConfig,
     CopernicusLayerConfig,
+    Sentinel2Config,
     GSIOrthophotoConfig,
     HLSPlanRegion,
     HLSConfig,
@@ -38,6 +39,7 @@ class PipelineConfig:
     modis: ModisConfig = field(default_factory=ModisConfig)
     viirs: ViirsConfig = field(default_factory=ViirsConfig)
     copernicus: CopernicusConfig = field(default_factory=CopernicusConfig)
+    sentinel2: Sentinel2Config = field(default_factory=Sentinel2Config)
     hls: HLSConfig = field(default_factory=HLSConfig)
     ocean: OceanConfig = field(default_factory=OceanConfig)
     gsi_orthophotos: GSIOrthophotoConfig = field(default_factory=GSIOrthophotoConfig)
@@ -154,6 +156,26 @@ class ConfigLoader:
             )
         copernicus = CopernicusConfig(**copernicus_data)
 
+        sentinel2_payload = payload.get("sentinel2") or {}
+        if not isinstance(sentinel2_payload, dict):
+            raise ValueError("sentinel2 section must be a mapping")
+        sentinel2_data = dict(sentinel2_payload)
+        bbox = sentinel2_data.get("bbox")
+        if bbox is not None:
+            if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                raise ValueError("sentinel2.bbox must be a list of four numbers")
+            sentinel2_data["bbox"] = tuple(float(value) for value in bbox)
+        if "assets" in sentinel2_data and sentinel2_data["assets"] is not None:
+            sentinel2_data["assets"] = tuple(sentinel2_data.get("assets") or [])
+        for key in ("max_items", "cache_ttl_days", "request_timeout_seconds", "max_retries"):
+            if key in sentinel2_data and sentinel2_data[key] is not None:
+                sentinel2_data[key] = int(sentinel2_data[key])
+        if "max_cloud" in sentinel2_data and sentinel2_data["max_cloud"] is not None:
+            sentinel2_data["max_cloud"] = float(sentinel2_data["max_cloud"])
+        if "backoff_factor" in sentinel2_data and sentinel2_data["backoff_factor"] is not None:
+            sentinel2_data["backoff_factor"] = float(sentinel2_data["backoff_factor"])
+        sentinel2 = Sentinel2Config(**sentinel2_data)
+
         hls_payload = payload.get("hls") or {}
         if not isinstance(hls_payload, dict):
             raise ValueError("hls section must be a mapping")
@@ -244,6 +266,7 @@ class ConfigLoader:
             modis=modis,
             viirs=viirs,
             copernicus=copernicus,
+            sentinel2=sentinel2,
             hls=hls,
             ocean=ocean,
             gsi_orthophotos=gsi_orthophotos,

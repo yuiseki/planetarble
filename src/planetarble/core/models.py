@@ -110,6 +110,25 @@ class CopernicusConfig:
 
 
 @dataclass
+class Sentinel2Config:
+    """Configuration controlling Sentinel-2 L2A acquisition via MPC STAC."""
+
+    enabled: bool = False
+    stac_api: str = "https://planetarycomputer.microsoft.com/api/stac/v1"
+    collection: str = "sentinel-2-l2a"
+    bbox: Tuple[float, float, float, float] = (139.760, 35.700, 139.805, 35.735)
+    start_date: str = "2023-01-01"
+    end_date: str = "2024-12-31"
+    max_cloud: float = 20.0
+    assets: Tuple[str, ...] = ("B02", "B03", "B04")
+    max_items: int = 50
+    cache_ttl_days: int = 30
+    request_timeout_seconds: int = 60
+    max_retries: int = 5
+    backoff_factor: float = 1.8
+
+
+@dataclass
 class HLSSeasonWindow:
     """Define a hemisphere-specific seasonal window for HLS compositing."""
 

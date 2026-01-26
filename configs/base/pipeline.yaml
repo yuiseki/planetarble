@@ -9,17 +9,17 @@ processing:
   color_enhancement: 1.0
   hillshade_opacity: 0.12
   min_zoom: 0
-  max_zoom: 10
+  max_zoom: 13
   resampling: "lanczos"
   tile_format: "WEBP"
   tile_quality: 82
-  tile_source: "hls"
   tile_name: "Planetarble HLS Mosaic"
   tile_attribution: ""
   gdal_num_threads: "ALL_CPUS"
   gdal_cachemax: "50%"
   pmtiles_dedup: true
   mbtiles_tiler: "auto"
+  tile_source: copernicus
 hls:
   enabled: true
   stac_api: "https://planetarycomputer.microsoft.com/api/stac/v1"
@@ -201,7 +201,22 @@ viirs:
   enabled: false
   tiles: []
 copernicus:
+  enabled: true
+  bbox: [139.760, 35.700, 139.805, 35.735]
+  min_zoom: 12
+  max_zoom: 14
+  layers:
+    - name: "TRUE_COLOR"
+sentinel2:
   enabled: false
-  layers: []
+  bbox: [139.760, 35.700, 139.805, 35.735]
+  start_date: "2023-01-01"
+  end_date: "2024-12-31"
+  max_cloud: 10.0
+  assets:
+    - "B02"
+    - "B03"
+    - "B04"
+  max_items: 20
 gsi_orthophotos:
   enabled: false

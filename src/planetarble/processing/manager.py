@@ -21,15 +21,17 @@ from planetarble.core.models import (
     ModisConfig,
     OceanConfig,
     ProcessingConfig,
+    Sentinel2Config,
     ViirsConfig,
 )
-from planetarble.logging import get_logger, log_progress, log_step
+from planetarble.logging import get_logger, log_progress, log_step, log_skip
 
 from .base import DataProcessor
 from .hls import HLSSceneManifestBuilder
 from .ocean import OceanRenderer
 from planetarble.acquisition.hls import load_region_geometry, _geom_intersects_bbox
 from planetarble.acquisition.mpc import append_sas_token, fetch_sas_token
+from planetarble.acquisition.sentinel_2 import Sentinel2SceneManifestBuilder
 
 LOGGER = get_logger(__name__)
 
@@ -67,6 +69,7 @@ class ProcessingManager(DataProcessor):
         output_dir: Path,
         data_dir: Path,
         copernicus: Optional[CopernicusConfig] = None,
+        sentinel2: Optional[Sentinel2Config] = None,
         modis: Optional[ModisConfig] = None,
         viirs: Optional[ViirsConfig] = None,
         hls: Optional[HLSConfig] = None,
@@ -81,6 +84,7 @@ class ProcessingManager(DataProcessor):
         self._data_dir = data_dir
         self._processing_dir = self._output_dir / "processing"
         self._copernicus = copernicus
+        self._sentinel2 = sentinel2 or Sentinel2Config(enabled=False)
         self._hls = hls or HLSConfig(enabled=False)
         self._ocean = ocean or OceanConfig(enabled=False)
         self._runner = CommandRunner(dry_run=dry_run)
@@ -172,6 +176,73 @@ class ProcessingManager(DataProcessor):
             region_geometry=region_geometry,
         )
         return self.create_cog(cropped)
+
+    def prepare_sentinel2_scene_manifest(
+        self,
+        *,
+        destination: Optional[Path] = None,
+        max_items: Optional[int] = None,
+    ) -> Optional[Path]:
+        if not self._sentinel2.enabled:
+            LOGGER.info("Sentinel-2 processing disabled; skipping scene manifest generation")
+            return None
+        dest = destination or (self._processing_dir / "sentinel2_scene_manifest.json")
+        if self._dry_run:
+            LOGGER.info(
+                "dry-run: would build Sentinel-2 scene manifest",
+                extra={"destination": str(dest)},
+            )
+            return dest
+        builder = Sentinel2SceneManifestBuilder(
+            self._sentinel2,
+            cache_dir=self._data_dir / "cache" / "sentinel2",
+            cache_ttl_days=self._sentinel2.cache_ttl_days,
+        )
+        manifest = builder.build(bbox=self._sentinel2.bbox, max_items=max_items)
+        manifest.write(dest)
+        return dest
+
+    def build_sentinel2_mosaic(
+        self,
+        scene_manifest_path: Path,
+        *,
+        destination: Optional[Path] = None,
+    ) -> Optional[Path]:
+        if not self._sentinel2.enabled:
+            LOGGER.info("Sentinel-2 processing disabled; skipping mosaic generation")
+            return None
+        scenes = _load_sentinel2_scene_manifest(scene_manifest_path)
+        if not scenes:
+            raise ValueError(f"No Sentinel-2 scenes found in {scene_manifest_path}")
+        scenes = _refresh_sentinel2_scene_urls(scenes, self._sentinel2)
+        output_path = destination or (self._processing_dir / "sentinel2_mosaic_cog.tif")
+        if _is_valid_raster(output_path) and not self._dry_run:
+            log_skip(LOGGER, phase="process", reason="valid Sentinel-2 mosaic", path=str(output_path))
+            return output_path
+
+        assets = tuple(self._sentinel2.assets or ())
+        mode = _select_sentinel2_asset_mode(assets)
+        if mode == "visual":
+            list_path = _write_sentinel2_visual_list(self._temp_dir, scenes, assets[0])
+            visual_vrt = _build_sentinel2_visual_vrt(self._runner, list_path, self._temp_dir)
+            return _translate_sentinel2_rgb(
+                self._runner,
+                visual_vrt,
+                output_path,
+                bbox=self._sentinel2.bbox,
+                scale_to_byte=False,
+            )
+
+        band_lists = _write_sentinel2_band_lists(self._temp_dir, scenes, assets)
+        band_vrts = _build_sentinel2_band_vrts(self._runner, band_lists, self._temp_dir)
+        rgb_vrt = _build_sentinel2_rgb_vrt(self._runner, band_vrts, self._temp_dir)
+        return _translate_sentinel2_rgb(
+            self._runner,
+            rgb_vrt,
+            output_path,
+            bbox=self._sentinel2.bbox,
+            scale_to_byte=True,
+        )
 
     def render_ocean(self, etopo_path: Path) -> Dict[str, Path]:
         if not self._ocean.enabled:
@@ -1066,6 +1137,228 @@ def _translate_hls_rgb(
         str(output_path),
     ]
     runner.run(command, description="convert HLS RGB mosaic to GeoTIFF")
+    return output_path
+
+
+def _load_sentinel2_scene_manifest(path: Path) -> List[Dict[str, object]]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    scenes = payload.get("scenes") if isinstance(payload, dict) else None
+    if not isinstance(scenes, list):
+        return []
+    return [scene for scene in scenes if isinstance(scene, dict)]
+
+
+def _refresh_sentinel2_scene_urls(
+    scenes: Sequence[Dict[str, object]],
+    config: Sentinel2Config,
+) -> List[Dict[str, object]]:
+    refreshed: List[Dict[str, object]] = []
+    tokens: Dict[str, str] = {}
+    for scene in scenes:
+        collection = scene.get("collection_id") or config.collection
+        if not isinstance(collection, str) or not collection:
+            continue
+        token = tokens.get(collection)
+        if token is None:
+            token = fetch_sas_token(collection, timeout=config.request_timeout_seconds)
+            tokens[collection] = token
+        assets = scene.get("assets")
+        if isinstance(assets, dict):
+            updated_assets = {}
+            for asset_name, href in assets.items():
+                if not isinstance(href, str) or not href:
+                    continue
+                updated_assets[asset_name] = append_sas_token(_strip_query(href), token)
+            scene["assets"] = updated_assets
+        refreshed.append(scene)
+    return refreshed
+
+
+def _select_sentinel2_asset_mode(assets: Sequence[str]) -> str:
+    normalized = [asset.strip() for asset in assets if asset]
+    if not normalized:
+        raise ValueError("sentinel2.assets must contain at least one asset name")
+    if len(normalized) == 1 and normalized[0].lower() == "visual":
+        return "visual"
+    band_set = {asset.upper() for asset in normalized}
+    if band_set == {"B02", "B03", "B04"}:
+        return "bands"
+    raise ValueError("sentinel2.assets must be ['visual'] or ['B02','B03','B04']")
+
+
+def _write_sentinel2_visual_list(
+    temp_dir: Path,
+    scenes: Sequence[Dict[str, object]],
+    asset_name: str,
+) -> Path:
+    urls: List[str] = []
+    for scene in scenes:
+        assets = scene.get("assets")
+        if not isinstance(assets, dict):
+            continue
+        url = assets.get(asset_name)
+        if isinstance(url, str) and url:
+            urls.append(url)
+    if not urls:
+        raise ValueError("No Sentinel-2 visual assets found in manifest")
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    list_path = temp_dir / "sentinel2_visual_sources.txt"
+    list_path.write_text("\n".join(urls), encoding="utf-8")
+    return list_path
+
+
+def _build_sentinel2_visual_vrt(
+    runner: CommandRunner,
+    list_path: Path,
+    temp_dir: Path,
+) -> Path:
+    vrt_path = temp_dir / "sentinel2_visual_mosaic.vrt"
+    command = [
+        "gdalbuildvrt",
+        "-allow_projection_difference",
+        "-resolution",
+        "highest",
+        "-input_file_list",
+        str(list_path),
+        str(vrt_path),
+    ]
+    runner.run(command, description="mosaic Sentinel-2 visual assets")
+    return vrt_path
+
+
+def _write_sentinel2_band_lists(
+    temp_dir: Path,
+    scenes: Sequence[Dict[str, object]],
+    assets: Sequence[str],
+) -> Dict[str, Path]:
+    band_keys = {"B02": "blue", "B03": "green", "B04": "red"}
+    lists: Dict[str, List[str]] = {label: [] for label in band_keys.values()}
+    asset_set = {asset.upper() for asset in assets}
+    for scene in scenes:
+        bands = scene.get("assets")
+        if not isinstance(bands, dict):
+            continue
+        for band, label in band_keys.items():
+            if band not in asset_set:
+                continue
+            url = bands.get(band)
+            if isinstance(url, str) and url:
+                lists[label].append(url)
+    paths: Dict[str, Path] = {}
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    for label, urls in lists.items():
+        if not urls:
+            raise ValueError(f"No Sentinel-2 sources found for {label} band")
+        list_path = temp_dir / f"sentinel2_{label}_sources.txt"
+        list_path.write_text("\n".join(urls), encoding="utf-8")
+        paths[label] = list_path
+    return paths
+
+
+def _build_sentinel2_band_vrts(
+    runner: CommandRunner,
+    band_lists: Dict[str, Path],
+    temp_dir: Path,
+) -> Dict[str, Path]:
+    vrts: Dict[str, Path] = {}
+    for label, list_path in band_lists.items():
+        vrt_path = temp_dir / f"sentinel2_{label}_mosaic.vrt"
+        command = [
+            "gdalbuildvrt",
+            "-allow_projection_difference",
+            "-resolution",
+            "highest",
+            "-input_file_list",
+            str(list_path),
+            str(vrt_path),
+        ]
+        runner.run(command, description=f"mosaic Sentinel-2 {label} band")
+        vrts[label] = vrt_path
+    return vrts
+
+
+def _build_sentinel2_rgb_vrt(
+    runner: CommandRunner,
+    band_vrts: Dict[str, Path],
+    temp_dir: Path,
+) -> Path:
+    rgb_vrt = temp_dir / "sentinel2_rgb.vrt"
+    command = [
+        "gdalbuildvrt",
+        "-separate",
+        str(rgb_vrt),
+        str(band_vrts["red"]),
+        str(band_vrts["green"]),
+        str(band_vrts["blue"]),
+    ]
+    runner.run(command, description="combine Sentinel-2 bands into RGB VRT")
+    return rgb_vrt
+
+
+def _translate_sentinel2_rgb(
+    runner: CommandRunner,
+    rgb_vrt: Path,
+    output_path: Path,
+    *,
+    bbox: Tuple[float, float, float, float],
+    scale_to_byte: bool,
+) -> Path:
+    translate_input = rgb_vrt
+    if bbox:
+        cropped = output_path.with_suffix(".cropped.tif")
+        if cropped.exists():
+            cropped.unlink()
+        minx, miny, maxx, maxy = (str(value) for value in bbox)
+        command = [
+            "gdalwarp",
+            "-te_srs",
+            "EPSG:4326",
+            "-te",
+            minx,
+            miny,
+            maxx,
+            maxy,
+            "-overwrite",
+            "-of",
+            "GTiff",
+            str(rgb_vrt),
+            str(cropped),
+        ]
+        runner.run(command, description="crop Sentinel-2 mosaic to bbox")
+        translate_input = cropped
+    if output_path.exists():
+        output_path.unlink()
+    command = [
+        "gdal_translate",
+        "-of",
+        "COG",
+        "-co",
+        "COMPRESS=JPEG",
+        "-co",
+        "QUALITY=90",
+        "-co",
+        "BLOCKSIZE=512",
+        "-co",
+        "NUM_THREADS=ALL_CPUS",
+        "-co",
+        "PHOTOMETRIC=RGB",
+    ]
+    if scale_to_byte:
+        command.extend(
+            [
+                "-ot",
+                "Byte",
+                "-scale",
+                "0",
+                "10000",
+                "0",
+                "255",
+                "-a_nodata",
+                "0",
+            ]
+        )
+    command.extend([str(translate_input), str(output_path)])
+    runner.run(command, description="convert Sentinel-2 mosaic to COG")
     return output_path
 
 

@@ -23,6 +23,11 @@ from planetarble.acquisition.hls import (
     HLSSTACClient,
     iter_plan,
 )
+from planetarble.acquisition.sentinel_2 import (
+    Sentinel2Scene,
+    Sentinel2SceneManifest,
+    Sentinel2SceneManifestBuilder,
+)
 from planetarble.acquisition.mpc import MPCError, append_sas_token, fetch_sas_token, fetch_true_color_tile
 from planetarble.acquisition.base import DataAcquisition
 from planetarble.acquisition.catalog import AssetCatalog, AssetRecord
@@ -50,6 +55,9 @@ __all__ = [
     "HLSSTACClient",
     "iter_plan",
     "MPCError",
+    "Sentinel2Scene",
+    "Sentinel2SceneManifest",
+    "Sentinel2SceneManifestBuilder",
     "get_available_layers",
     "fetch_gsi_ortho_clip",
     "fetch_sas_token",

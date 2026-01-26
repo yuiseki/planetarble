@@ -215,6 +215,12 @@ class ProcessingManager(DataProcessor):
         if not scenes:
             raise ValueError(f"No Sentinel-2 scenes found in {scene_manifest_path}")
         scenes = _refresh_sentinel2_scene_urls(scenes, self._sentinel2)
+        scenes = _cache_sentinel2_assets(
+            scenes,
+            cache_dir=self._data_dir / "cache" / "sentinel2" / "assets",
+            timeout=self._sentinel2.request_timeout_seconds,
+            config=self._sentinel2,
+        )
         output_path = destination or (self._processing_dir / "sentinel2_mosaic_cog.tif")
         if _is_valid_raster(output_path) and not self._dry_run:
             log_skip(LOGGER, phase="process", reason="valid Sentinel-2 mosaic", path=str(output_path))
@@ -905,6 +911,103 @@ def _cache_hls_assets(
     return updated
 
 
+def _cache_sentinel2_assets(
+    scenes: Sequence[Dict[str, object]],
+    *,
+    cache_dir: Path,
+    timeout: int,
+    config: Sentinel2Config,
+) -> List[Dict[str, object]]:
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    total_assets = 0
+    for scene in scenes:
+        assets = scene.get("assets")
+        if isinstance(assets, dict):
+            total_assets += len([href for href in assets.values() if isinstance(href, str) and href])
+    start_time = time.monotonic()
+    completed = 0
+    progress_interval = 10
+    cache_hits = 0
+    downloads = 0
+    redownloads = 0
+    failures = 0
+    tokens: Dict[str, str] = {}
+    updated: List[Dict[str, object]] = []
+    for scene in scenes:
+        collection = scene.get("collection_id") or config.collection
+        item_id = scene.get("item_id")
+        if not isinstance(collection, str) or not isinstance(item_id, str):
+            continue
+        assets = scene.get("assets")
+        if not isinstance(assets, dict):
+            continue
+        token = tokens.get(collection)
+        if token is None:
+            token = fetch_sas_token(collection, timeout=timeout)
+            tokens[collection] = token
+        local_assets: Dict[str, str] = {}
+        for asset_name, href in assets.items():
+            if not isinstance(href, str) or not href:
+                continue
+            unsigned = _strip_query(href)
+            signed = append_sas_token(unsigned, token)
+            local_path, status = _cache_sentinel2_asset(
+                signed,
+                cache_dir=cache_dir / collection / item_id,
+                timeout=timeout,
+                asset_name=str(asset_name),
+            )
+            completed += 1
+            if status == "hit":
+                cache_hits += 1
+            elif status == "download":
+                downloads += 1
+            elif status == "redownload":
+                redownloads += 1
+            elif status == "failed":
+                failures += 1
+            if local_path is not None:
+                local_assets[asset_name] = str(local_path)
+            if total_assets and (completed % progress_interval == 0 or completed == total_assets):
+                elapsed = max(time.monotonic() - start_time, 0.001)
+                rate = completed / elapsed
+                remaining = max(total_assets - completed, 0)
+                eta = remaining / rate if rate > 0 else 0.0
+                percent = (completed / total_assets) * 100.0
+                log_progress(
+                    LOGGER,
+                    phase="process",
+                    step="sentinel2 asset cache",
+                    current=completed,
+                    total=total_assets,
+                    percent=round(percent, 1),
+                    elapsed=_format_duration(elapsed),
+                    eta=_format_duration(eta),
+                    extra={"progress_bar": _format_progress_bar(completed, total_assets)},
+                )
+        if local_assets:
+            scene["assets"] = local_assets
+            updated.append(scene)
+    if total_assets:
+        hit_rate = cache_hits / total_assets
+        redownload_rate = redownloads / total_assets
+        failure_rate = failures / total_assets
+        LOGGER.info(
+            "sentinel2 asset cache summary",
+            extra={
+                "assets": total_assets,
+                "hits": cache_hits,
+                "downloads": downloads,
+                "redownloads": redownloads,
+                "failures": failures,
+                "hit_rate": round(hit_rate, 4),
+                "redownload_rate": round(redownload_rate, 4),
+                "failure_rate": round(failure_rate, 4),
+            },
+        )
+    return updated
+
+
 def _format_progress_bar(current: int, total: int, width: int = 30) -> str:
     if total <= 0:
         return "[" + ("-" * width) + "]"
@@ -964,6 +1067,102 @@ def _cache_hls_asset(url: str, *, cache_dir: Path, timeout: int) -> tuple[Path, 
     return destination, status
 
 
+def _cache_sentinel2_asset(
+    url: str,
+    *,
+    cache_dir: Path,
+    timeout: int,
+    asset_name: str,
+) -> tuple[Optional[Path], str]:
+    from urllib.error import HTTPError
+    from urllib.parse import urlsplit
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    path = urlsplit(url).path
+    filename = Path(path).name or f"{asset_name}.tif"
+    destination = cache_dir / filename
+    redownloaded = False
+    if destination.exists():
+        if _is_valid_sentinel2_asset(destination):
+            LOGGER.info(
+                "sentinel2 asset cache hit",
+                extra={"url": url, "path": str(destination)},
+            )
+            return destination, "hit"
+        quarantined = _quarantine_hls_asset(destination, reason="invalid cache")
+        LOGGER.warning(
+            "sentinel2 asset cache invalid; quarantined",
+            extra={"url": url, "path": str(destination), "quarantine": str(quarantined)},
+        )
+        redownloaded = True
+    LOGGER.info("downloading sentinel2 asset", extra={"url": url, "path": str(destination)})
+    temp_path = destination.with_suffix(destination.suffix + ".part")
+    temp_path.unlink(missing_ok=True)
+    try:
+        with urlopen(url, timeout=timeout) as response, temp_path.open("wb") as handle:
+            total_size = None
+            try:
+                header_value = response.getheader("Content-Length")
+                if header_value:
+                    total_size = int(header_value)
+            except (ValueError, TypeError):
+                total_size = None
+            downloaded = 0
+            log_threshold = 10 * 1024 * 1024
+            next_log = log_threshold
+            start_time = time.monotonic()
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                handle.write(chunk)
+                downloaded += len(chunk)
+                if downloaded >= next_log:
+                    elapsed = max(time.monotonic() - start_time, 0.001)
+                    rate = downloaded / elapsed
+                    percent = None
+                    if total_size:
+                        percent = (downloaded / total_size) * 100.0
+                    log_progress(
+                        LOGGER,
+                        phase="process",
+                        step="sentinel2 asset download",
+                        current=downloaded,
+                        total=total_size,
+                        percent=round(percent, 1) if percent is not None else None,
+                        elapsed=_format_duration(elapsed),
+                        eta=_format_duration((total_size - downloaded) / rate) if total_size and rate > 0 else None,
+                        extra={"path": str(destination), "bytes_per_sec": round(rate, 1)},
+                    )
+                    next_log += log_threshold
+    except HTTPError as exc:
+        LOGGER.warning(
+            "sentinel2 asset download failed",
+            extra={"url": url, "path": str(destination), "status": exc.code},
+        )
+        if temp_path.exists():
+            temp_path.unlink()
+        return None, "failed"
+    except OSError as exc:
+        LOGGER.warning(
+            "sentinel2 asset download failed",
+            extra={"url": url, "path": str(destination), "error": str(exc)},
+        )
+        if temp_path.exists():
+            temp_path.unlink()
+        return None, "failed"
+    if not _is_valid_sentinel2_asset(temp_path):
+        quarantined = _quarantine_hls_asset(temp_path, reason="invalid download")
+        LOGGER.warning(
+            "sentinel2 asset download invalid; quarantined",
+            extra={"url": url, "path": str(destination), "quarantine": str(quarantined)},
+        )
+        return None, "failed"
+    temp_path.replace(destination)
+    status = "redownload" if redownloaded else "download"
+    return destination, status
+
+
 def _quarantine_hls_asset(path: Path, *, reason: str) -> Path:
     timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     quarantined = path.with_name(f"{path.name}.corrupt-{timestamp}")
@@ -1018,6 +1217,23 @@ def _is_valid_hls_asset(path: Path) -> bool:
             return False
         if gdal.GetLastErrorType() != 0:
             return False
+    return True
+
+
+def _is_valid_sentinel2_asset(path: Path) -> bool:
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    try:
+        from osgeo import gdal
+    except Exception:
+        return True
+    gdal.ErrorReset()
+    dataset = gdal.Open(str(path), gdal.GA_ReadOnly)
+    if dataset is None:
+        return False
+    band = dataset.GetRasterBand(1)
+    if band is None:
+        return False
     return True
 
 

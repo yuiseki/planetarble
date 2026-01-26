@@ -7,3 +7,4 @@ Before performing any work, always read everything under the `.kiro` directory.
 - A conda environment named `planetarble` exists at `/home/yuiseki/anaconda3/envs/planetarble`. Prefer running via `/home/yuiseki/anaconda3/condabin/conda run -n planetarble ...` for tests and CLI checks.
 - Test entry point: `pytest` (see `pyproject.toml`); example: `conda run -n planetarble pytest tests/unit/...`.
 - Always run relevant tests before committing changes. If tests cannot be run, state why explicitly and do not commit.
+- If tests pass, commit without waiting for additional confirmation.

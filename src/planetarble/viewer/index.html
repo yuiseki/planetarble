@@ -64,6 +64,9 @@
       const params = new URLSearchParams(window.location.search);
       const pmtilesUrl =
         params.get("pmtiles") || "http://localhost:8080/tiles.pmtiles";
+      const centerLon = parseFloat(params.get("lon") || "139.76");
+      const centerLat = parseFloat(params.get("lat") || "35.68");
+      const startZoom = parseFloat(params.get("zoom") || "8");
 
       const protocol = new pmtiles.Protocol();
       maplibregl.addProtocol("pmtiles", protocol.tile);
@@ -87,8 +90,8 @@
             },
           ],
         },
-        center: [139.76, 35.68],
-        zoom: 8,
+        center: [centerLon, centerLat],
+        zoom: startZoom,
       });
     </script>
   </body>

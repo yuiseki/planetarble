@@ -1178,6 +1178,26 @@ def _handle_serve(args: argparse.Namespace) -> int:
                 return int(match.group(1)) if match else -1
 
             pmtiles_path = max(candidates, key=zoom_key).resolve()
+    center = None
+    if args.region:
+        try:
+            from planetarble.acquisition.hls import load_region_geometry
+            from osgeo import ogr  # type: ignore
+        except Exception:
+            center = None
+        else:
+            cfg = load_config(_resolve_config_path(args.config))
+            region_name = args.region
+            region_config = None
+            for item in cfg.hls.plan_regions:
+                if item.name == region_name:
+                    region_config = item
+                    break
+            if region_config is not None:
+                geometry = load_region_geometry(region_config, data_dir=cfg.data_dir)
+                if geometry is not None:
+                    envelope = geometry.GetEnvelope()
+                    center = ((envelope[0] + envelope[1]) / 2, (envelope[2] + envelope[3]) / 2)
     if not pmtiles_path.exists():
         raise SystemExit(f"PMTiles file not found: {pmtiles_path}")
 
@@ -1220,8 +1240,10 @@ def _handle_serve(args: argparse.Namespace) -> int:
     LOGGER.info("serve starting", extra={"pmtiles": str(pmtiles_path), "viewer": str(viewer_root)})
     LOGGER.info("serve commands", extra={"pmtiles": " ".join(pmtiles_cmd), "ui": " ".join(ui_cmd)})
     viewer_url = f"{ui_url}?pmtiles={pmtiles_url}"
+    if center is not None:
+        viewer_url = f"{viewer_url}&lon={center[0]}&lat={center[1]}&zoom=8"
     LOGGER.info("serve urls", extra={"viewer": viewer_url, "pmtiles": pmtiles_url})
-    LOGGER.info("open viewer", extra={"url": viewer_url})
+    LOGGER.info("open viewer: %s", viewer_url)
 
     pmtiles_proc = subprocess.Popen(pmtiles_cmd)
     ui_proc = subprocess.Popen(ui_cmd)

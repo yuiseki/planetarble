@@ -512,7 +512,7 @@ def _is_valid_hls_scene_manifest(path: Path) -> bool:
     return True
 
 
-def _is_valid_sentinel2_scene_manifest(path: Path) -> bool:
+def _is_valid_sentinel2_scene_manifest(path: Path, *, required_assets: Optional[Sequence[str]] = None) -> bool:
     if not path.exists() or path.stat().st_size == 0:
         return False
     try:
@@ -525,6 +525,20 @@ def _is_valid_sentinel2_scene_manifest(path: Path) -> bool:
         return False
     if not isinstance(summary, dict):
         return False
+    if required_assets:
+        asset_set = {asset.lower() for asset in required_assets if asset}
+        if asset_set:
+            matched = False
+            for scene in scenes:
+                assets = scene.get("assets") if isinstance(scene, dict) else None
+                if not isinstance(assets, dict):
+                    continue
+                available = {str(name).lower() for name in assets.keys()}
+                if asset_set.issubset(available):
+                    matched = True
+                    break
+            if not matched:
+                return False
     return True
 
 
@@ -791,7 +805,7 @@ def _handle_process(args: argparse.Namespace) -> int:
             raise SystemExit("Sentinel-2 processing requested but sentinel2.enabled is false")
         manifest_path = (cfg.output_dir / "processing" / "sentinel2_scene_manifest.json").resolve()
         scene_manifest: Optional[Path] = None
-        if _is_valid_sentinel2_scene_manifest(manifest_path):
+        if _is_valid_sentinel2_scene_manifest(manifest_path, required_assets=cfg.sentinel2.assets):
             log_skip(LOGGER, phase="process", reason="valid Sentinel-2 scene manifest", path=str(manifest_path))
             scene_manifest = manifest_path
         else:

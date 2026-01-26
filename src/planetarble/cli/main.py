@@ -706,7 +706,8 @@ def _handle_process(args: argparse.Namespace) -> int:
         ocean=cfg.ocean,
         dry_run=args.dry_run,
     )
-    if cfg.processing.tile_source.lower() == "hls":
+    tile_source = cfg.processing.tile_source.lower()
+    if tile_source == "hls":
         plan_path = _resolve_hls_plan_path(cfg, args.plan_region)
         if not plan_path.exists():
             raise SystemExit(
@@ -766,6 +767,21 @@ def _handle_process(args: argparse.Namespace) -> int:
                 "scene_manifest": str(scene_manifest) if scene_manifest else None,
                 "ocean_outputs": {key: str(value) for key, value in ocean_outputs.items() if value},
             },
+        )
+        return 0
+    if tile_source == "copernicus":
+        if not cfg.copernicus.enabled:
+            raise SystemExit("Copernicus processing requested but copernicus.enabled is false")
+        try:
+            copernicus_cogs = manager.prepare_copernicus_layers(force=args.dry_run)
+        except (SystemExit, KeyboardInterrupt):
+            raise
+        except Exception as exc:
+            LOGGER.warning("copernicus processing skipped: %s", exc)
+            copernicus_cogs = []
+        LOGGER.info(
+            "Copernicus preprocessing complete",
+            extra={"copernicus_cogs": [str(path) for path in copernicus_cogs]},
         )
         return 0
 

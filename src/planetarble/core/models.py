@@ -104,6 +104,9 @@ class CopernicusConfig:
     request_interval_seconds: float = 0.5
     max_retries: int = 3
     backoff_factor: float = 2.0
+    rate_limit_min_interval_seconds: float = 0.0
+    rate_limit_max_requests: Optional[int] = None
+    rate_limit_window_seconds: int = 86400
 
 
 @dataclass

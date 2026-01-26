@@ -133,12 +133,25 @@ class ConfigLoader:
             if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
                 raise ValueError("copernicus.bbox must be a list of four numbers")
             copernicus_data["bbox"] = tuple(float(value) for value in bbox)
-        for key in ("min_zoom", "max_zoom", "tile_size", "timeout_seconds", "max_tiles_per_layer", "max_retries"):
+        for key in (
+            "min_zoom",
+            "max_zoom",
+            "tile_size",
+            "timeout_seconds",
+            "max_tiles_per_layer",
+            "max_retries",
+            "rate_limit_max_requests",
+            "rate_limit_window_seconds",
+        ):
             if key in copernicus_data and copernicus_data[key] is not None:
                 copernicus_data[key] = int(copernicus_data[key])
         for key in ("request_interval_seconds", "backoff_factor"):
             if key in copernicus_data and copernicus_data[key] is not None:
                 copernicus_data[key] = float(copernicus_data[key])
+        if "rate_limit_min_interval_seconds" in copernicus_data and copernicus_data["rate_limit_min_interval_seconds"] is not None:
+            copernicus_data["rate_limit_min_interval_seconds"] = float(
+                copernicus_data["rate_limit_min_interval_seconds"]
+            )
         copernicus = CopernicusConfig(**copernicus_data)
 
         hls_payload = payload.get("hls") or {}

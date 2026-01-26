@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import re
@@ -11,6 +12,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 import requests
+import fcntl
 
 from planetarble.logging import get_logger
 from planetarble.core.models import CopernicusConfig, CopernicusLayerConfig
@@ -28,6 +30,73 @@ FORMAT_EXTENSION = {
     "image/png": "png",
     "image/webp": "webp",
 }
+
+
+class _RateLimiter:
+    """Persisted rate limiter for Copernicus requests."""
+
+    def __init__(
+        self,
+        path: Path,
+        *,
+        min_interval_seconds: float,
+        max_requests: Optional[int],
+        window_seconds: int,
+    ) -> None:
+        self._path = path
+        self._lock_path = path.with_suffix(path.suffix + ".lock")
+        self._min_interval = max(0.0, min_interval_seconds)
+        self._max_requests = max_requests
+        self._window_seconds = max(1, window_seconds)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+
+    def acquire(self, **context: object) -> None:
+        with open(self._lock_path, "w", encoding="utf-8") as lock_handle:
+            fcntl.flock(lock_handle, fcntl.LOCK_EX)
+            try:
+                now = time.time()
+                state = self._load_state()
+                window_start = float(state.get("window_start", now))
+                last_request = float(state.get("last_request", 0.0))
+                count = int(state.get("count", 0))
+
+                if now - window_start >= self._window_seconds:
+                    window_start = now
+                    count = 0
+
+                if self._max_requests is not None and count >= self._max_requests:
+                    wait_seconds = max(0.0, self._window_seconds - (now - window_start))
+                    raise CopernicusAccessError(
+                        f"Copernicus rate limit reached; wait {int(wait_seconds)}s before retrying"
+                    )
+
+                if self._min_interval > 0:
+                    wait = self._min_interval - (now - last_request)
+                    if wait > 0:
+                        LOGGER.info(
+                            "copernicus rate limiter sleeping",
+                            extra={"sleep_seconds": round(wait, 2), **context},
+                        )
+                        time.sleep(wait)
+                        now = time.time()
+
+                count += 1
+                self._save_state({"window_start": window_start, "last_request": now, "count": count})
+            finally:
+                fcntl.flock(lock_handle, fcntl.LOCK_UN)
+
+    def _load_state(self) -> Dict[str, object]:
+        if not self._path.exists():
+            return {}
+        try:
+            return json.loads(self._path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    def _save_state(self, state: Dict[str, object]) -> None:
+        tmp = self._path.with_suffix(self._path.suffix + ".tmp")
+        tmp.write_text(json.dumps(state), encoding="utf-8")
+        tmp.replace(self._path)
 
 
 class CopernicusCredentialsMissing(RuntimeError):
@@ -207,6 +276,12 @@ def download_tiles(
 
     destination.mkdir(parents=True, exist_ok=True)
     timeout = max(5, config.timeout_seconds)
+    limiter = _RateLimiter(
+        destination / ".rate_limit.json",
+        min_interval_seconds=max(config.request_interval_seconds, config.rate_limit_min_interval_seconds),
+        max_requests=config.rate_limit_max_requests,
+        window_seconds=config.rate_limit_window_seconds,
+    )
 
     session = requests.Session()
     session.headers.update({
@@ -243,6 +318,7 @@ def download_tiles(
             destination=destination,
             force=force,
             timeout=timeout,
+            rate_limiter=limiter,
         )
         summaries.append(summary)
 
@@ -260,6 +336,7 @@ def _download_layer_tiles(
     destination: Path,
     force: bool,
     timeout: int,
+    rate_limiter: Optional["_RateLimiter"] = None,
 ) -> Dict[str, object]:
     slug = _slugify(layer_config.output or layer_config.name)
     layer_dir = destination / slug
@@ -317,6 +394,7 @@ def _download_layer_tiles(
                     x=x,
                     y=y,
                     destination=tile_path,
+                    rate_limiter=rate_limiter,
                 )
                 if success:
                     tiles_written += 1
@@ -336,7 +414,8 @@ def _download_layer_tiles(
                         tiles_limit_reached = True
                         break
 
-                time.sleep(max(0.0, config.request_interval_seconds))
+                if rate_limiter is None:
+                    time.sleep(max(0.0, config.request_interval_seconds))
             if tiles_limit_reached:
                 break
         if tiles_limit_reached:
@@ -371,6 +450,7 @@ def _fetch_tile(
     x: int,
     y: int,
     destination: Path,
+    rate_limiter: Optional["_RateLimiter"],
 ) -> Tuple[bool, Optional[int]]:
     attempts = 0
     max_attempts = max(1, config.max_retries)
@@ -380,6 +460,14 @@ def _fetch_tile(
     while attempts < max_attempts:
         attempts += 1
         try:
+            if rate_limiter is not None:
+                rate_limiter.acquire(
+                    phase="copernicus",
+                    layer=layer_name,
+                    zoom=zoom,
+                    x=x,
+                    y=y,
+                )
             response = session.get(base_url, params=params, timeout=timeout)
         except requests.RequestException as exc:  # pragma: no cover - network failure path
             LOGGER.warning(

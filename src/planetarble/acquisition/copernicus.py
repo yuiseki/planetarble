@@ -498,6 +498,30 @@ def _fetch_tile(
             destination.write_bytes(response.content)
             return True, 200
 
+        if response.status_code == 429:
+            retry_after = response.headers.get("Retry-After")
+            wait_seconds: Optional[float] = None
+            if retry_after is not None:
+                try:
+                    wait_seconds = float(retry_after) / 1000.0
+                except ValueError:
+                    wait_seconds = None
+            if wait_seconds is None or wait_seconds <= 0:
+                wait_seconds = config.request_interval_seconds * (backoff ** attempts)
+            LOGGER.warning(
+                "copernicus rate limited; waiting before retry",
+                extra={
+                    "layer": layer_name,
+                    "zoom": zoom,
+                    "x": x,
+                    "y": y,
+                    "attempt": attempts,
+                    "wait_seconds": round(wait_seconds, 2),
+                },
+            )
+            time.sleep(wait_seconds)
+            continue
+
         LOGGER.warning(
             "copernicus tile request returned %s",
             response.status_code,

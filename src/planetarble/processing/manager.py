@@ -512,17 +512,18 @@ class ProcessingManager(DataProcessor):
         list_path.write_text("\n".join(str(path) for path in vrt_paths), encoding="utf-8")
 
         mosaic_vrt = self._temp_dir / f"copernicus_{slug}_mosaic.vrt"
-        if mosaic_vrt.exists() and force and not self._dry_run:
+        if mosaic_vrt.exists() and not self._dry_run:
             mosaic_vrt.unlink()
 
-        if force or not mosaic_vrt.exists():
-            command = [
-                "gdalbuildvrt",
-                "-input_file_list",
-                str(list_path),
-                str(mosaic_vrt),
-            ]
-            self._runner.run(command, description="build Copernicus mosaic VRT")
+        command = [
+            "gdalbuildvrt",
+            "-resolution",
+            "highest",
+            "-input_file_list",
+            str(list_path),
+            str(mosaic_vrt),
+        ]
+        self._runner.run(command, description="build Copernicus mosaic VRT")
 
         cog_path = self._processing_dir / f"copernicus_{slug}_cog.tif"
         if cog_path.exists() and force and not self._dry_run:

@@ -222,7 +222,6 @@ class ProcessingManager(DataProcessor):
             cache_dir=self._data_dir / "cache" / "sentinel2" / "assets",
             timeout=self._sentinel2.request_timeout_seconds,
             config=self._sentinel2,
-            force=force,
         )
         output_path = destination or (self._processing_dir / "sentinel2_mosaic_cog.tif")
         if _is_valid_raster(output_path) and not self._dry_run and not force:
@@ -922,7 +921,6 @@ def _cache_sentinel2_assets(
     cache_dir: Path,
     timeout: int,
     config: Sentinel2Config,
-    force: bool = False,
 ) -> List[Dict[str, object]]:
     cache_dir.mkdir(parents=True, exist_ok=True)
     total_assets = 0
@@ -962,7 +960,6 @@ def _cache_sentinel2_assets(
                 cache_dir=cache_dir / collection / item_id,
                 timeout=timeout,
                 asset_name=str(asset_name),
-                force=force,
             )
             if status == "failed":
                 token = fetch_sas_token(collection, timeout=timeout)
@@ -973,7 +970,6 @@ def _cache_sentinel2_assets(
                     cache_dir=cache_dir / collection / item_id,
                     timeout=timeout,
                     asset_name=str(asset_name),
-                    force=force,
                 )
             completed += 1
             if status == "hit":
@@ -1090,7 +1086,6 @@ def _cache_sentinel2_asset(
     cache_dir: Path,
     timeout: int,
     asset_name: str,
-    force: bool,
 ) -> tuple[Optional[Path], str]:
     from urllib.error import HTTPError
     from urllib.parse import urlsplit
@@ -1101,13 +1096,7 @@ def _cache_sentinel2_asset(
     destination = cache_dir / filename
     redownloaded = False
     if destination.exists():
-        if force:
-            aria2_path = destination.with_suffix(destination.suffix + ".aria2")
-            if aria2_path.exists():
-                aria2_path.unlink()
-            destination.unlink()
-            redownloaded = True
-        elif _is_valid_sentinel2_asset(destination):
+        if _is_valid_sentinel2_asset(destination):
             LOGGER.info(
                 "sentinel2 asset cache hit",
                 extra={"url": url, "path": str(destination)},

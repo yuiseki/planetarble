@@ -904,6 +904,30 @@ def _handle_process(args: argparse.Namespace) -> int:
             extra={"copernicus_cogs": [str(path) for path in copernicus_cogs]},
         )
         return 0
+    if tile_source == "gsi_orthophotos":
+        if not cfg.gsi_orthophotos.enabled:
+            raise SystemExit("GSI processing requested but gsi_orthophotos.enabled is false")
+        gsi_output = (cfg.output_dir / "processing" / f"{cfg.gsi_orthophotos.output_basename}.tif").resolve()
+        try:
+            gsi_summary = fetch_gsi_ortho_clip(
+                lat=cfg.gsi_orthophotos.lat,
+                lon=cfg.gsi_orthophotos.lon,
+                width_m=cfg.gsi_orthophotos.width_m,
+                height_m=cfg.gsi_orthophotos.height_m,
+                bbox=cfg.gsi_orthophotos.bbox,
+                zoom=cfg.gsi_orthophotos.zoom,
+                tile_template=_resolve_gsi_tile_template(cfg.gsi_orthophotos),
+                output_path=gsi_output,
+                timeout=cfg.gsi_orthophotos.timeout_seconds,
+                dry_run=args.dry_run,
+            )
+        except GSIError as exc:
+            raise SystemExit(f"Failed to fetch GSI orthophotos: {exc}") from exc
+        LOGGER.info(
+            "GSI preprocessing complete",
+            extra={"output": gsi_summary.get("output") if gsi_summary else str(gsi_output)},
+        )
+        return 0
 
     bmng_dir = (cfg.data_dir / "bmng" / cfg.processing.bmng_resolution).resolve()
     if not bmng_dir.exists():

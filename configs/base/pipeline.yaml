@@ -9,7 +9,7 @@ processing:
   color_enhancement: 1.0
   hillshade_opacity: 0.12
   min_zoom: 0
-  max_zoom: 14
+  max_zoom: 18
   resampling: "lanczos"
   tile_format: "JPEG"
   tile_quality: 95
@@ -20,7 +20,7 @@ processing:
   pmtiles_dedup: true
   mbtiles_tiler: "auto"
   zoom_level_strategy: "UPPER"
-  tile_source: sentinel2
+  tile_source: gsi_orthophotos
 hls:
   enabled: true
   stac_api: "https://planetarycomputer.microsoft.com/api/stac/v1"
@@ -219,8 +219,8 @@ sentinel2:
     - "visual"
   max_items: 1
 gsi_orthophotos:
-  enabled: false
+  enabled: true
   product: "seamlessphoto"
-  # bbox: [139.70, 35.60, 139.85, 35.75]
+  bbox: [138.7876, 35.1608, 139.9997, 36.1143]
   # tile_template: "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"
   # orthophoto template: "https://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg"

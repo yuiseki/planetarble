@@ -135,6 +135,10 @@ class Sentinel2SceneManifestBuilder:
             limit=max_items,
             query=query,
         )
+        LOGGER.info(
+            "sentinel-2 stac searching...",
+            extra={"bbox": list(bbox), "max_items": max_items, "datetime": datetime_filter},
+        )
         items = list(search.items())
         self._store_cache_items(cache_key, items)
         return items

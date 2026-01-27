@@ -753,9 +753,10 @@ def _handle_acquire(args: argparse.Namespace) -> int:
         plan_region = args.plan_region or cfg.sentinel2.plan_region
         if cfg.sentinel2.plan_regions:
             needs_admin = any(region.natural_earth for region in cfg.sentinel2.plan_regions)
-            if needs_admin:
+            needs_land = any(region.land_only for region in cfg.sentinel2.plan_regions)
+            if needs_admin or needs_land:
                 try:
-                    manager.download_natural_earth(force=args.force, include_admin=True)
+                    manager.download_natural_earth(force=args.force, include_admin=needs_admin)
                 except Exception as exc:
                     LOGGER.warning("natural earth acquisition skipped: %s", exc)
             if plan_region and not any(region.name == plan_region for region in cfg.sentinel2.plan_regions):

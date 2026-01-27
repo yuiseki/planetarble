@@ -30,7 +30,7 @@ from planetarble.logging import get_logger, log_progress, log_step, log_skip
 from .base import DataProcessor
 from .hls import HLSSceneManifestBuilder
 from .ocean import OceanRenderer
-from planetarble.acquisition.hls import load_region_geometry, _geom_intersects_bbox
+from planetarble.acquisition.hls import load_land_geometry, load_region_geometry, _geom_intersects_bbox
 from planetarble.acquisition.mpc import append_sas_token, fetch_sas_token
 from planetarble.acquisition.sentinel_2 import Sentinel2SceneManifestBuilder
 
@@ -202,10 +202,19 @@ class ProcessingManager(DataProcessor):
         if region is not None:
             if region.bbox:
                 region_bbox = region.bbox
+                region_geometry = load_region_geometry(region, data_dir=self._data_dir) if region.land_only else None
             elif region.natural_earth:
                 region_geometry = load_region_geometry(region, data_dir=self._data_dir)
                 if region_geometry is not None:
                     region_bbox = _bbox_from_geometry(region_geometry)
+            if region.land_only:
+                land_geometry = load_land_geometry(
+                    land_mask_path=self._hls.land_mask_path,
+                    data_dir=self._data_dir,
+                    region_geometry=region_geometry,
+                )
+                region_geometry = land_geometry
+                region_bbox = _bbox_from_geometry(land_geometry)
         builder = Sentinel2SceneManifestBuilder(
             self._sentinel2,
             cache_dir=self._data_dir / "cache" / "sentinel2",
@@ -236,10 +245,19 @@ class ProcessingManager(DataProcessor):
         if region is not None:
             if region.bbox:
                 region_bbox = region.bbox
+                region_geometry = load_region_geometry(region, data_dir=self._data_dir) if region.land_only else None
             elif region.natural_earth:
                 region_geometry = load_region_geometry(region, data_dir=self._data_dir)
                 if region_geometry is not None:
                     region_bbox = _bbox_from_geometry(region_geometry)
+            if region.land_only:
+                land_geometry = load_land_geometry(
+                    land_mask_path=self._hls.land_mask_path,
+                    data_dir=self._data_dir,
+                    region_geometry=region_geometry,
+                )
+                region_geometry = land_geometry
+                region_bbox = _bbox_from_geometry(land_geometry)
         scenes = _load_sentinel2_scene_manifest(scene_manifest_path)
         if not scenes:
             raise ValueError(f"No Sentinel-2 scenes found in {scene_manifest_path}")

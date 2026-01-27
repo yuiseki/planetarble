@@ -211,6 +211,16 @@ copernicus:
 sentinel2:
   enabled: true
   bbox: [138.7876, 35.1608, 139.9997, 36.1143]
+  plan_region: "tokyo_pref"
+  plan_regions:
+    - name: "tokyo_pref"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Tokyo'"
+      land_only: true
+    - name: "tokyo_bbox"
+      bbox: [139.55, 35.50, 139.92, 35.82]
+      land_only: true
   start_date: "2023-01-01"
   end_date: "2024-12-31"
   max_cloud: 10.0
@@ -221,7 +231,7 @@ sentinel2:
 gsi_orthophotos:
   enabled: true
   product: "seamlessphoto"
-  bbox: [139.762785, 35.6947040000001, 139.809714, 35.7329]
+  bbox: [139.55, 35.50, 139.92, 35.82]
   rate_limit_seconds: 0.1
   # tile_template: "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"
   # orthophoto template: "https://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg"

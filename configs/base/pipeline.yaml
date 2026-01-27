@@ -11,8 +11,8 @@ processing:
   min_zoom: 0
   max_zoom: 13
   resampling: "lanczos"
-  tile_format: "WEBP"
-  tile_quality: 82
+  tile_format: "JPEG"
+  tile_quality: 95
   tile_name: "Planetarble HLS Mosaic"
   tile_attribution: ""
   gdal_num_threads: "ALL_CPUS"
@@ -210,14 +210,13 @@ copernicus:
     - name: "TRUE_COLOR"
 sentinel2:
   enabled: true
-  bbox: [139.760, 35.700, 139.805, 35.735]
+  bbox: [138.7876, 35.1608, 139.9997, 36.1143]
   start_date: "2023-01-01"
   end_date: "2024-12-31"
   max_cloud: 10.0
+  request_timeout_seconds: 180
   assets:
-    - "B02"
-    - "B03"
-    - "B04"
+    - "visual"
   max_items: 1
 gsi_orthophotos:
   enabled: false

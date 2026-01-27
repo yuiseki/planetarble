@@ -218,6 +218,6 @@ sentinel2:
     - "B02"
     - "B03"
     - "B04"
-  max_items: 20
+  max_items: 1
 gsi_orthophotos:
   enabled: false

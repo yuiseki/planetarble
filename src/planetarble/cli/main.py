@@ -995,6 +995,9 @@ def _handle_process(args: argparse.Namespace) -> int:
     gsi_cog_path: Path | None = None
     if cfg.gsi_orthophotos.enabled:
         gsi_output = (cfg.output_dir / "processing" / f"{cfg.gsi_orthophotos.output_basename}.tif").resolve()
+        gsi_cache_root = cfg.data_dir / (
+            "gsi_seamlessphoto" if cfg.gsi_orthophotos.product == "seamlessphoto" else "gsi_orthophotos"
+        )
         try:
             gsi_summary = fetch_gsi_ortho_clip(
                 lat=cfg.gsi_orthophotos.lat,
@@ -1004,6 +1007,8 @@ def _handle_process(args: argparse.Namespace) -> int:
                 bbox=cfg.gsi_orthophotos.bbox,
                 zoom=cfg.gsi_orthophotos.zoom,
                 tile_template=_resolve_gsi_tile_template(cfg.gsi_orthophotos),
+                cache_dir=gsi_cache_root,
+                rate_limit_seconds=cfg.gsi_orthophotos.rate_limit_seconds,
                 output_path=gsi_output,
                 timeout=cfg.gsi_orthophotos.timeout_seconds,
                 dry_run=args.dry_run,

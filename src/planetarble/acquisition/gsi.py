@@ -45,6 +45,8 @@ def fetch_gsi_ortho_clip(
     output_path: Path,
     zoom: int = 19,
     tile_template: str = DEFAULT_TILE_TEMPLATE,
+    cache_dir: Path | None = None,
+    rate_limit_seconds: float = 0.1,
     gdal_translate: str = "gdal_translate",
     gdal_buildvrt: str = "gdalbuildvrt",
     gdal_warp: str = "gdalwarp",
@@ -89,16 +91,36 @@ def fetch_gsi_ortho_clip(
         LOGGER.info("gsi dry-run", extra=summary)
         return summary
 
-    with tempfile.TemporaryDirectory(prefix="planetarble_gsi_") as tmp_dir_str:
-        tmp_dir = Path(tmp_dir_str)
+    if cache_dir is None:
+        with tempfile.TemporaryDirectory(prefix="planetarble_gsi_") as tmp_dir_str:
+            tmp_dir = Path(tmp_dir_str)
+            tiles = _download_tiles(
+                tmp_dir=tmp_dir,
+                tile_template=tile_template,
+                tile_triplets=tile_bounds,
+                timeout=timeout,
+                rate_limit_seconds=rate_limit_seconds,
+            )
+            _georeference_tiles(tiles=tiles, gdal_translate=gdal_translate)
+            mosaic_vrt = tmp_dir / "mosaic.vrt"
+            _build_mosaic_vrt(tiles=tiles, mosaic_vrt=mosaic_vrt, gdal_buildvrt=gdal_buildvrt)
+            _warp_to_output(
+                source_vrt=mosaic_vrt,
+                bbox=bbox,
+                destination=output_path,
+                gdal_warp=gdal_warp,
+            )
+    else:
+        cache_dir.mkdir(parents=True, exist_ok=True)
         tiles = _download_tiles(
-            tmp_dir=tmp_dir,
+            tmp_dir=cache_dir,
             tile_template=tile_template,
             tile_triplets=tile_bounds,
             timeout=timeout,
+            rate_limit_seconds=rate_limit_seconds,
         )
         _georeference_tiles(tiles=tiles, gdal_translate=gdal_translate)
-        mosaic_vrt = tmp_dir / "mosaic.vrt"
+        mosaic_vrt = cache_dir / "mosaic.vrt"
         _build_mosaic_vrt(tiles=tiles, mosaic_vrt=mosaic_vrt, gdal_buildvrt=gdal_buildvrt)
         _warp_to_output(
             source_vrt=mosaic_vrt,
@@ -126,6 +148,7 @@ def _download_tiles(
     tile_template: str,
     tile_triplets: Sequence[Tuple[int, int, int]],
     timeout: int,
+    rate_limit_seconds: float,
 ) -> List[GSITile]:
     session = requests.Session()
     tiles: List[GSITile] = []
@@ -139,13 +162,18 @@ def _download_tiles(
         suffix = url.split(".")[-1]
         tile_path = tmp_dir / f"{z}_{x}_{y}.{suffix}"
         LOGGER.debug("downloading gsi tile", extra={"url": url, "path": str(tile_path)})
-        try:
-            response = session.get(url, timeout=timeout)
-        except requests.RequestException as exc:  # pragma: no cover - network failure path
-            raise GSIError(f"Failed to download tile {url}: {exc}") from exc
-        if response.status_code != 200:
-            raise GSIError(f"Failed to download tile {url}: {response.status_code}")
-        tile_path.write_bytes(response.content)
+        if tile_path.exists() and tile_path.stat().st_size > 0:
+            LOGGER.info("gsi tile cache hit", extra={"path": str(tile_path)})
+        else:
+            try:
+                response = session.get(url, timeout=timeout)
+            except requests.RequestException as exc:  # pragma: no cover - network failure path
+                raise GSIError(f"Failed to download tile {url}: {exc}") from exc
+            if response.status_code != 200:
+                raise GSIError(f"Failed to download tile {url}: {response.status_code}")
+            tile_path.write_bytes(response.content)
+            if rate_limit_seconds > 0:
+                time.sleep(rate_limit_seconds)
         vrt_path = tile_path.with_suffix(".vrt")
         tiles.append(GSITile(z=z, x=x, y=y, url=url, path=tile_path, vrt_path=vrt_path))
         completed += 1

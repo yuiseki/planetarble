@@ -255,7 +255,7 @@ class ConfigLoader:
             if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
                 raise ValueError("gsi_orthophotos.bbox must be a list of four numbers")
             gsi_data["bbox"] = tuple(float(value) for value in bbox)
-        for key in ("lat", "lon", "width_m", "height_m"):
+        for key in ("lat", "lon", "width_m", "height_m", "rate_limit_seconds"):
             if key in gsi_data and gsi_data[key] is not None:
                 gsi_data[key] = float(gsi_data[key])
         if "zoom" in gsi_data and gsi_data["zoom"] is not None:

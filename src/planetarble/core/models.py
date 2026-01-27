@@ -224,6 +224,7 @@ class GSIOrthophotoConfig:
     tile_template: str = "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"
     output_basename: str = "gsi_orthophotos"
     timeout_seconds: int = 60
+    rate_limit_seconds: float = 0.1
 
 
 @dataclass

@@ -221,7 +221,7 @@ sentinel2:
 gsi_orthophotos:
   enabled: true
   product: "seamlessphoto"
-  bbox: [138.7876, 35.1608, 139.9997, 36.1143]
+  bbox: [139.762785, 35.6947040000001, 139.809714, 35.7329]
   rate_limit_seconds: 0.1
   # tile_template: "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"
   # orthophoto template: "https://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg"

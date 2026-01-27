@@ -908,6 +908,11 @@ def _handle_process(args: argparse.Namespace) -> int:
         if not cfg.gsi_orthophotos.enabled:
             raise SystemExit("GSI processing requested but gsi_orthophotos.enabled is false")
         gsi_output = (cfg.output_dir / "processing" / f"{cfg.gsi_orthophotos.output_basename}.tif").resolve()
+        product_slug = "seamlessphoto" if cfg.gsi_orthophotos.product == "seamlessphoto" else "orthophoto"
+        gsi_cache_root = cfg.data_dir / "cache" / f"gsi_{product_slug}"
+        if not args.dry_run:
+            gsi_cache_root.mkdir(parents=True, exist_ok=True)
+        LOGGER.info("gsi tile cache", extra={"path": str(gsi_cache_root)})
         try:
             gsi_summary = fetch_gsi_ortho_clip(
                 lat=cfg.gsi_orthophotos.lat,
@@ -917,6 +922,8 @@ def _handle_process(args: argparse.Namespace) -> int:
                 bbox=cfg.gsi_orthophotos.bbox,
                 zoom=cfg.gsi_orthophotos.zoom,
                 tile_template=_resolve_gsi_tile_template(cfg.gsi_orthophotos),
+                cache_dir=gsi_cache_root,
+                rate_limit_seconds=cfg.gsi_orthophotos.rate_limit_seconds,
                 output_path=gsi_output,
                 timeout=cfg.gsi_orthophotos.timeout_seconds,
                 dry_run=args.dry_run,
@@ -997,6 +1004,9 @@ def _handle_process(args: argparse.Namespace) -> int:
         gsi_output = (cfg.output_dir / "processing" / f"{cfg.gsi_orthophotos.output_basename}.tif").resolve()
         product_slug = "seamlessphoto" if cfg.gsi_orthophotos.product == "seamlessphoto" else "orthophoto"
         gsi_cache_root = cfg.data_dir / "cache" / f"gsi_{product_slug}"
+        if not args.dry_run:
+            gsi_cache_root.mkdir(parents=True, exist_ok=True)
+        LOGGER.info("gsi tile cache", extra={"path": str(gsi_cache_root)})
         try:
             gsi_summary = fetch_gsi_ortho_clip(
                 lat=cfg.gsi_orthophotos.lat,

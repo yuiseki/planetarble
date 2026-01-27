@@ -160,7 +160,9 @@ def _download_tiles(
     for z, x, y in tile_triplets:
         url = tile_template.format(z=z, x=x, y=y)
         suffix = url.split(".")[-1]
-        tile_path = tmp_dir / f"{z}_{x}_{y}.{suffix}"
+        tile_dir = tmp_dir / str(z) / str(x)
+        tile_dir.mkdir(parents=True, exist_ok=True)
+        tile_path = tile_dir / f"{y}.{suffix}"
         LOGGER.debug("downloading gsi tile", extra={"url": url, "path": str(tile_path)})
         if tile_path.exists() and tile_path.stat().st_size > 0:
             LOGGER.info("gsi tile cache hit", extra={"path": str(tile_path)})

@@ -87,7 +87,7 @@ class Sentinel2SceneManifestBuilder:
 
     def build(self, *, bbox: Tuple[float, float, float, float], max_items: Optional[int] = None) -> Sentinel2SceneManifest:
         items = self._search_items(bbox=bbox, max_items=max_items or self._config.max_items)
-        scenes = self._items_to_scenes(items)
+        scenes = self._items_to_scenes(items, target_bbox=bbox)
         summary = {
             "items": len(items),
             "scenes": len(scenes),
@@ -122,7 +122,7 @@ class Sentinel2SceneManifestBuilder:
         self._store_cache_items(cache_key, items)
         return items
 
-    def _items_to_scenes(self, items: Sequence[Item]) -> List[Sentinel2Scene]:
+    def _items_to_scenes(self, items: Sequence[Item], *, target_bbox: Tuple[float, float, float, float]) -> List[Sentinel2Scene]:
         scenes: List[Sentinel2Scene] = []
         collection = self._config.collection
         token = self._tokens.get(collection)
@@ -131,12 +131,18 @@ class Sentinel2SceneManifestBuilder:
             self._tokens[collection] = token
 
         for item in items:
+            if item.bbox is None:
+                continue
+            if not _bbox_covers(tuple(float(v) for v in item.bbox), target_bbox):
+                continue
             scene = _build_scene(item, collection=collection, token=token, assets=self._config.assets)
             if scene:
                 scenes.append(scene)
         scenes.sort(key=lambda scene: (scene.cloud_cover if scene.cloud_cover is not None else 100.0, scene.acquisition_date), reverse=False)
         if self._config.max_items:
             scenes = scenes[: self._config.max_items]
+        if not scenes:
+            raise ValueError("No Sentinel-2 scenes fully cover the requested bbox")
         return scenes
 
     def _build_cache_key(self, bbox: Tuple[float, float, float, float], max_items: int) -> str:
@@ -216,3 +222,9 @@ def _build_scene(item: Item, *, collection: str, token: str, assets: Iterable[st
         bbox=(float(item.bbox[0]), float(item.bbox[1]), float(item.bbox[2]), float(item.bbox[3])),
         assets=assets_map,
     )
+
+
+def _bbox_covers(candidate: Tuple[float, float, float, float], target: Tuple[float, float, float, float]) -> bool:
+    minx, miny, maxx, maxy = candidate
+    t_minx, t_miny, t_maxx, t_maxy = target
+    return minx <= t_minx and miny <= t_miny and maxx >= t_maxx and maxy >= t_maxy

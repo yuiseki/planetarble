@@ -159,7 +159,12 @@ class Sentinel2SceneManifestBuilder:
             scene = _build_scene(item, collection=collection, token=token, assets=self._config.assets)
             if scene:
                 scenes.append(scene)
-        scenes.sort(key=lambda scene: (scene.cloud_cover if scene.cloud_cover is not None else 100.0, scene.acquisition_date), reverse=False)
+        scenes.sort(
+            key=lambda scene: (
+                scene.cloud_cover if scene.cloud_cover is not None else 100.0,
+                -scene.acquisition_date.timestamp(),
+            )
+        )
         if self._config.max_items:
             scenes = scenes[: self._config.max_items]
         if not scenes:

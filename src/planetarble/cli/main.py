@@ -880,7 +880,7 @@ def _handle_process(args: argparse.Namespace) -> int:
             if _is_valid_raster(mosaic_path) and not args.force:
                 log_skip(LOGGER, phase="process", reason="valid Sentinel-2 mosaic", path=str(mosaic_path))
             else:
-                manager.build_sentinel2_mosaic(scene_manifest)
+                manager.build_sentinel2_mosaic(scene_manifest, force=args.force)
         LOGGER.info(
             "Sentinel-2 preprocessing complete",
             extra={"scene_manifest": str(scene_manifest) if scene_manifest else None},

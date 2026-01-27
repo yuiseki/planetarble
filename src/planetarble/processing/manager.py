@@ -208,6 +208,7 @@ class ProcessingManager(DataProcessor):
         scene_manifest_path: Path,
         *,
         destination: Optional[Path] = None,
+        force: bool = False,
     ) -> Optional[Path]:
         if not self._sentinel2.enabled:
             LOGGER.info("Sentinel-2 processing disabled; skipping mosaic generation")
@@ -221,11 +222,14 @@ class ProcessingManager(DataProcessor):
             cache_dir=self._data_dir / "cache" / "sentinel2" / "assets",
             timeout=self._sentinel2.request_timeout_seconds,
             config=self._sentinel2,
+            force=force,
         )
         output_path = destination or (self._processing_dir / "sentinel2_mosaic_cog.tif")
-        if _is_valid_raster(output_path) and not self._dry_run:
+        if _is_valid_raster(output_path) and not self._dry_run and not force:
             log_skip(LOGGER, phase="process", reason="valid Sentinel-2 mosaic", path=str(output_path))
             return output_path
+        if force and output_path.exists() and not self._dry_run:
+            output_path.unlink()
 
         assets = tuple(self._sentinel2.assets or ())
         mode = _select_sentinel2_asset_mode(assets)
@@ -918,6 +922,7 @@ def _cache_sentinel2_assets(
     cache_dir: Path,
     timeout: int,
     config: Sentinel2Config,
+    force: bool = False,
 ) -> List[Dict[str, object]]:
     cache_dir.mkdir(parents=True, exist_ok=True)
     total_assets = 0
@@ -957,6 +962,7 @@ def _cache_sentinel2_assets(
                 cache_dir=cache_dir / collection / item_id,
                 timeout=timeout,
                 asset_name=str(asset_name),
+                force=force,
             )
             if status == "failed":
                 token = fetch_sas_token(collection, timeout=timeout)
@@ -967,6 +973,7 @@ def _cache_sentinel2_assets(
                     cache_dir=cache_dir / collection / item_id,
                     timeout=timeout,
                     asset_name=str(asset_name),
+                    force=force,
                 )
             completed += 1
             if status == "hit":
@@ -1083,6 +1090,7 @@ def _cache_sentinel2_asset(
     cache_dir: Path,
     timeout: int,
     asset_name: str,
+    force: bool,
 ) -> tuple[Optional[Path], str]:
     from urllib.error import HTTPError
     from urllib.parse import urlsplit
@@ -1093,13 +1101,19 @@ def _cache_sentinel2_asset(
     destination = cache_dir / filename
     redownloaded = False
     if destination.exists():
-        if _is_valid_sentinel2_asset(destination):
+        if force:
+            aria2_path = destination.with_suffix(destination.suffix + ".aria2")
+            if aria2_path.exists():
+                aria2_path.unlink()
+            destination.unlink()
+            redownloaded = True
+        elif _is_valid_sentinel2_asset(destination):
             LOGGER.info(
                 "sentinel2 asset cache hit",
                 extra={"url": url, "path": str(destination)},
             )
             return destination, "hit"
-        if _aria2c_available() and destination.with_suffix(destination.suffix + ".aria2").exists():
+        elif _aria2c_available() and destination.with_suffix(destination.suffix + ".aria2").exists():
             LOGGER.info(
                 "sentinel2 asset resume pending",
                 extra={"path": str(destination)},

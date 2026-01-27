@@ -174,6 +174,38 @@ class ConfigLoader:
             sentinel2_data["max_cloud"] = float(sentinel2_data["max_cloud"])
         if "backoff_factor" in sentinel2_data and sentinel2_data["backoff_factor"] is not None:
             sentinel2_data["backoff_factor"] = float(sentinel2_data["backoff_factor"])
+        regions_payload = sentinel2_data.pop("plan_regions", []) or []
+        region_configs = []
+        for region in regions_payload:
+            if not isinstance(region, dict):
+                raise ValueError("sentinel2.plan_regions entries must be mappings")
+            region_data = dict(region)
+            ne_payload = region_data.pop("natural_earth", None)
+            ne_config = None
+            if ne_payload is not None:
+                if not isinstance(ne_payload, dict):
+                    raise ValueError("sentinel2.plan_regions natural_earth must be a mapping")
+                ne_config = NaturalEarthRegion(
+                    dataset=str(ne_payload.get("dataset", "")),
+                    where=str(ne_payload.get("where", "")),
+                    path=ne_payload.get("path"),
+                )
+            bbox = region_data.get("bbox")
+            bbox_tuple = None
+            if bbox is not None:
+                if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                    raise ValueError("sentinel2.plan_regions bbox must be a list of four numbers")
+                bbox_tuple = tuple(float(value) for value in bbox)
+            region_configs.append(
+                HLSPlanRegion(
+                    name=str(region_data.get("name", "")),
+                    bbox=bbox_tuple,
+                    natural_earth=ne_config,
+                    land_only=bool(region_data.get("land_only", False)),
+                )
+            )
+        if region_configs:
+            sentinel2_data["plan_regions"] = tuple(region_configs)
         sentinel2 = Sentinel2Config(**sentinel2_data)
 
         hls_payload = payload.get("hls") or {}

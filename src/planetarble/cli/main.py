@@ -79,7 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     acquire.add_argument(
         "--plan-region",
         default=None,
-        help="Named HLS plan region to generate (matches hls.plan_regions entries)",
+        help="Named HLS/Sentinel-2 plan region to generate (matches hls.plan_regions entries)",
     )
     acquire.add_argument(
         "--bmng-resolution",
@@ -108,7 +108,7 @@ def build_parser() -> argparse.ArgumentParser:
     process.add_argument(
         "--plan-region",
         default=None,
-        help="Named HLS plan region to process (matches hls.plan_regions entries)",
+        help="Named HLS/Sentinel-2 plan region to process (matches plan_regions entries)",
     )
     process.add_argument(
         "--dry-run",
@@ -131,7 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
     tile.add_argument(
         "--plan-region",
         default=None,
-        help="Named HLS plan region to tile when tile_source is hls",
+        help="Named plan region to tile when tile_source is hls or sentinel2",
     )
     tile.add_argument(
         "--dry-run",
@@ -511,6 +511,16 @@ def _resolve_hls_scene_manifest_path(cfg: PipelineConfig, plan_region: Optional[
     return (cfg.output_dir / "processing" / filename).resolve()
 
 
+def _resolve_sentinel2_scene_manifest_path(cfg: PipelineConfig, plan_region: Optional[str]) -> Path:
+    region = plan_region or cfg.sentinel2.plan_region
+    filename = (
+        "sentinel2_scene_manifest.json"
+        if not region
+        else f"sentinel2_scene_manifest_{region}.json"
+    )
+    return (cfg.output_dir / "processing" / filename).resolve()
+
+
 def _is_valid_hls_scene_manifest(path: Path) -> bool:
     if not path.exists() or path.stat().st_size == 0:
         return False
@@ -739,6 +749,21 @@ def _handle_acquire(args: argparse.Namespace) -> int:
                     "tiles": summary.tile_count,
                     "season_counts": summary.season_counts,
                 }
+    elif cfg.sentinel2.enabled and cfg.processing.tile_source.lower() == "sentinel2":
+        plan_region = args.plan_region or cfg.sentinel2.plan_region
+        if cfg.sentinel2.plan_regions:
+            needs_admin = any(region.natural_earth for region in cfg.sentinel2.plan_regions)
+            if needs_admin:
+                try:
+                    manager.download_natural_earth(force=args.force, include_admin=True)
+                except Exception as exc:
+                    LOGGER.warning("natural earth acquisition skipped: %s", exc)
+            if plan_region and not any(region.name == plan_region for region in cfg.sentinel2.plan_regions):
+                raise SystemExit(f"Unknown Sentinel-2 plan region: {plan_region}")
+        LOGGER.info(
+            "Sentinel-2 acquisition does not require downloads",
+            extra={"plan_region": plan_region},
+        )
     else:
         LOGGER.info(
             "HLS acquisition disabled or tile_source != 'hls'; running legacy Blue Marble pipeline",
@@ -868,7 +893,10 @@ def _handle_process(args: argparse.Namespace) -> int:
     if tile_source == "sentinel2":
         if not cfg.sentinel2.enabled:
             raise SystemExit("Sentinel-2 processing requested but sentinel2.enabled is false")
-        manifest_path = (cfg.output_dir / "processing" / "sentinel2_scene_manifest.json").resolve()
+        plan_region = args.plan_region or cfg.sentinel2.plan_region
+        if cfg.sentinel2.plan_regions and not plan_region:
+            raise SystemExit("sentinel2.plan_regions is set; pass --plan-region or set sentinel2.plan_region")
+        manifest_path = _resolve_sentinel2_scene_manifest_path(cfg, plan_region)
         scene_manifest: Optional[Path] = None
         if _is_valid_sentinel2_scene_manifest(manifest_path, required_assets=cfg.sentinel2.assets) and not args.force:
             log_skip(LOGGER, phase="process", reason="valid Sentinel-2 scene manifest", path=str(manifest_path))
@@ -877,13 +905,19 @@ def _handle_process(args: argparse.Namespace) -> int:
             scene_manifest = manager.prepare_sentinel2_scene_manifest(
                 destination=manifest_path,
                 force_refresh=args.force,
+                plan_region=plan_region,
             )
         if scene_manifest:
-            mosaic_path = (cfg.output_dir / "processing" / "sentinel2_mosaic_cog.tif").resolve()
+            mosaic_name = (
+                f"sentinel2_mosaic_{plan_region}_cog.tif"
+                if plan_region
+                else "sentinel2_mosaic_cog.tif"
+            )
+            mosaic_path = (cfg.output_dir / "processing" / mosaic_name).resolve()
             if _is_valid_raster(mosaic_path) and not args.force:
                 log_skip(LOGGER, phase="process", reason="valid Sentinel-2 mosaic", path=str(mosaic_path))
             else:
-                manager.build_sentinel2_mosaic(scene_manifest, force=args.force)
+                manager.build_sentinel2_mosaic(scene_manifest, force=args.force, plan_region=plan_region)
         LOGGER.info(
             "Sentinel-2 preprocessing complete",
             extra={"scene_manifest": str(scene_manifest) if scene_manifest else None},
@@ -1091,7 +1125,15 @@ def _handle_tile(args: argparse.Namespace) -> int:
             )
         source_raster = copernicus_candidates[0]
     elif tile_source == "sentinel2":
-        sentinel2_candidate = (cfg.output_dir / "processing" / "sentinel2_mosaic_cog.tif").resolve()
+        plan_region = args.plan_region or cfg.sentinel2.plan_region
+        if cfg.sentinel2.plan_regions and not plan_region:
+            raise SystemExit("sentinel2.plan_regions is set; pass --plan-region or set sentinel2.plan_region")
+        filename = (
+            f"sentinel2_mosaic_{plan_region}_cog.tif"
+            if plan_region
+            else "sentinel2_mosaic_cog.tif"
+        )
+        sentinel2_candidate = (cfg.output_dir / "processing" / filename).resolve()
         if not sentinel2_candidate.exists():
             raise SystemExit(
                 "Sentinel-2 tile source selected but no sentinel2_mosaic_cog.tif found; run process stage"

@@ -184,6 +184,7 @@ class ProcessingManager(DataProcessor):
         destination: Optional[Path] = None,
         max_items: Optional[int] = None,
         force_refresh: bool = False,
+        plan_region: Optional[str] = None,
     ) -> Optional[Path]:
         if not self._sentinel2.enabled:
             LOGGER.info("Sentinel-2 processing disabled; skipping scene manifest generation")
@@ -195,13 +196,23 @@ class ProcessingManager(DataProcessor):
                 extra={"destination": str(dest)},
             )
             return dest
+        region = self._resolve_sentinel2_region(plan_region)
+        region_geometry = None
+        region_bbox = self._sentinel2.bbox
+        if region is not None:
+            if region.bbox:
+                region_bbox = region.bbox
+            elif region.natural_earth:
+                region_geometry = load_region_geometry(region, data_dir=self._data_dir)
+                if region_geometry is not None:
+                    region_bbox = _bbox_from_geometry(region_geometry)
         builder = Sentinel2SceneManifestBuilder(
             self._sentinel2,
             cache_dir=self._data_dir / "cache" / "sentinel2",
             cache_ttl_days=self._sentinel2.cache_ttl_days,
         )
         manifest = builder.build(
-            bbox=self._sentinel2.bbox,
+            bbox=region_bbox,
             max_items=max_items,
             force_refresh=force_refresh,
         )
@@ -214,10 +225,21 @@ class ProcessingManager(DataProcessor):
         *,
         destination: Optional[Path] = None,
         force: bool = False,
+        plan_region: Optional[str] = None,
     ) -> Optional[Path]:
         if not self._sentinel2.enabled:
             LOGGER.info("Sentinel-2 processing disabled; skipping mosaic generation")
             return None
+        region = self._resolve_sentinel2_region(plan_region)
+        region_geometry = None
+        region_bbox = self._sentinel2.bbox
+        if region is not None:
+            if region.bbox:
+                region_bbox = region.bbox
+            elif region.natural_earth:
+                region_geometry = load_region_geometry(region, data_dir=self._data_dir)
+                if region_geometry is not None:
+                    region_bbox = _bbox_from_geometry(region_geometry)
         scenes = _load_sentinel2_scene_manifest(scene_manifest_path)
         if not scenes:
             raise ValueError(f"No Sentinel-2 scenes found in {scene_manifest_path}")
@@ -228,7 +250,11 @@ class ProcessingManager(DataProcessor):
             timeout=self._sentinel2.request_timeout_seconds,
             config=self._sentinel2,
         )
-        output_path = destination or (self._processing_dir / "sentinel2_mosaic_cog.tif")
+        if destination:
+            output_path = destination
+        else:
+            output_name = f"sentinel2_mosaic_{region.name}_cog.tif" if region else "sentinel2_mosaic_cog.tif"
+            output_path = self._processing_dir / output_name
         if _is_valid_raster(output_path) and not self._dry_run and not force:
             log_skip(LOGGER, phase="process", reason="valid Sentinel-2 mosaic", path=str(output_path))
             return output_path
@@ -244,7 +270,8 @@ class ProcessingManager(DataProcessor):
                 self._runner,
                 visual_vrt,
                 output_path,
-                bbox=self._sentinel2.bbox,
+                bbox=region_bbox,
+                region_geometry=region_geometry,
                 scale_to_byte=False,
             )
 
@@ -255,7 +282,8 @@ class ProcessingManager(DataProcessor):
             self._runner,
             rgb_vrt,
             output_path,
-            bbox=self._sentinel2.bbox,
+            bbox=region_bbox,
+            region_geometry=region_geometry,
             scale_to_byte=True,
         )
 
@@ -794,6 +822,15 @@ class ProcessingManager(DataProcessor):
             if region.name == region_name:
                 return region
         raise ValueError(f"Unknown HLS plan region: {region_name}")
+
+    def _resolve_sentinel2_region(self, plan_region: Optional[str]) -> Optional[HLSPlanRegion]:
+        region_name = plan_region or self._sentinel2.plan_region
+        if not region_name:
+            return None
+        for region in self._sentinel2.plan_regions:
+            if region.name == region_name:
+                return region
+        raise ValueError(f"Unknown Sentinel-2 plan region: {region_name}")
 
 
 def _load_hls_scene_manifest(path: Path) -> List[Dict[str, object]]:
@@ -1628,10 +1665,34 @@ def _translate_sentinel2_rgb(
     output_path: Path,
     *,
     bbox: Tuple[float, float, float, float],
+    region_geometry: Optional["ogr.Geometry"] = None,
     scale_to_byte: bool,
 ) -> Path:
     translate_input = rgb_vrt
-    if bbox:
+    if region_geometry is not None:
+        cutline = output_path.with_suffix(".geojson")
+        _write_geometry_geojson(region_geometry, cutline)
+        cropped = output_path.with_suffix(".cropped.tif")
+        if cropped.exists():
+            cropped.unlink()
+        command = [
+            "gdalwarp",
+            "-cutline",
+            str(cutline),
+            "-cutline_srs",
+            "EPSG:4326",
+            "-t_srs",
+            "EPSG:4326",
+            "-crop_to_cutline",
+            "-overwrite",
+            "-of",
+            "GTiff",
+            str(rgb_vrt),
+            str(cropped),
+        ]
+        runner.run(command, description="crop Sentinel-2 mosaic to region")
+        translate_input = cropped
+    elif bbox:
         cropped = output_path.with_suffix(".cropped.tif")
         if cropped.exists():
             cropped.unlink()
@@ -1687,6 +1748,11 @@ def _translate_sentinel2_rgb(
     command.extend([str(translate_input), str(output_path)])
     runner.run(command, description="convert Sentinel-2 mosaic to COG")
     return output_path
+
+
+def _bbox_from_geometry(geometry: "ogr.Geometry") -> Tuple[float, float, float, float]:
+    minx, maxx, miny, maxy = geometry.GetEnvelope()
+    return (float(minx), float(miny), float(maxx), float(maxy))
 
 
 def _write_geometry_geojson(geometry: "ogr.Geometry", path: Path) -> None:

@@ -214,10 +214,12 @@ class GSIOrthophotoConfig:
     """Configuration controlling GSI orthophoto extraction."""
 
     enabled: bool = False
+    product: str = "seamlessphoto"
     lat: float = 35.681236
     lon: float = 139.767125
     width_m: float = 3000.0
     height_m: float = 3000.0
+    bbox: Optional[Tuple[float, float, float, float]] = None
     zoom: int = 18
     tile_template: str = "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"
     output_basename: str = "gsi_orthophotos"

@@ -250,6 +250,11 @@ class ConfigLoader:
 
         gsi_payload = payload.get("gsi_orthophotos", {}) or {}
         gsi_data = dict(gsi_payload)
+        bbox = gsi_data.get("bbox")
+        if bbox is not None:
+            if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                raise ValueError("gsi_orthophotos.bbox must be a list of four numbers")
+            gsi_data["bbox"] = tuple(float(value) for value in bbox)
         for key in ("lat", "lon", "width_m", "height_m"):
             if key in gsi_data and gsi_data[key] is not None:
                 gsi_data[key] = float(gsi_data[key])

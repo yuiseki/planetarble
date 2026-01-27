@@ -974,8 +974,9 @@ def _handle_process(args: argparse.Namespace) -> int:
                 lon=cfg.gsi_orthophotos.lon,
                 width_m=cfg.gsi_orthophotos.width_m,
                 height_m=cfg.gsi_orthophotos.height_m,
+                bbox=cfg.gsi_orthophotos.bbox,
                 zoom=cfg.gsi_orthophotos.zoom,
-                tile_template=cfg.gsi_orthophotos.tile_template,
+                tile_template=_resolve_gsi_tile_template(cfg.gsi_orthophotos),
                 output_path=gsi_output,
                 timeout=cfg.gsi_orthophotos.timeout_seconds,
                 dry_run=args.dry_run,
@@ -1100,6 +1101,18 @@ def _handle_tile(args: argparse.Namespace) -> int:
         "mbtiles": str(mbtiles_path),
     })
     return 0
+
+
+def _resolve_gsi_tile_template(config: GSIOrthophotoConfig) -> str:
+    template = config.tile_template
+    if template:
+        return template
+    product = (config.product or "seamlessphoto").lower()
+    if product == "seamlessphoto":
+        return "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"
+    if product == "orthophoto":
+        return "https://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg"
+    raise SystemExit(f"Unsupported gsi_orthophotos.product value: {config.product}")
 
 
 def _handle_tiling_pmtiles(args: argparse.Namespace) -> int:

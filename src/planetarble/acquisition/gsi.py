@@ -16,6 +16,7 @@ from planetarble.logging import get_logger
 LOGGER = get_logger(__name__)
 
 DEFAULT_TILE_TEMPLATE = "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"
+ORTHOPHOTO_TILE_TEMPLATE = "https://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg"
 ORIGIN_SHIFT = 20037508.342789244
 
 
@@ -39,6 +40,7 @@ def fetch_gsi_ortho_clip(
     lon: float,
     width_m: float,
     height_m: float,
+    bbox: Tuple[float, float, float, float] | None = None,
     output_path: Path,
     zoom: int = 19,
     tile_template: str = DEFAULT_TILE_TEMPLATE,
@@ -50,7 +52,10 @@ def fetch_gsi_ortho_clip(
 ) -> Dict[str, object]:
     """Download a clipped high-resolution orthophoto from the GSI XYZ tiles."""
 
-    bbox = _bbox_from_point(lat=lat, lon=lon, width_m=width_m, height_m=height_m)
+    if bbox is None:
+        bbox = _bbox_from_point(lat=lat, lon=lon, width_m=width_m, height_m=height_m)
+    else:
+        bbox = _normalize_bbox(bbox)
     tile_bounds = _tiles_for_bbox(bbox, zoom)
     if not tile_bounds:
         raise GSIError("No tiles intersect the requested area")
@@ -265,6 +270,15 @@ def _bbox_from_point(*, lat: float, lon: float, width_m: float, height_m: float)
     min_lon = max(-180.0, lon - delta_lon)
     max_lon = min(180.0, lon + delta_lon)
     return (min_lon, min_lat, max_lon, max_lat)
+
+
+def _normalize_bbox(bbox: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+    minx, miny, maxx, maxy = bbox
+    if minx > maxx:
+        minx, maxx = maxx, minx
+    if miny > maxy:
+        miny, maxy = maxy, miny
+    return (minx, miny, maxx, maxy)
 
 
 def _run(command: Sequence[str], description: str) -> None:

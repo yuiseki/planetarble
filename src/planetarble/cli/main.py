@@ -874,7 +874,10 @@ def _handle_process(args: argparse.Namespace) -> int:
             log_skip(LOGGER, phase="process", reason="valid Sentinel-2 scene manifest", path=str(manifest_path))
             scene_manifest = manifest_path
         else:
-            scene_manifest = manager.prepare_sentinel2_scene_manifest(destination=manifest_path)
+            scene_manifest = manager.prepare_sentinel2_scene_manifest(
+                destination=manifest_path,
+                force_refresh=args.force,
+            )
         if scene_manifest:
             mosaic_path = (cfg.output_dir / "processing" / "sentinel2_mosaic_cog.tif").resolve()
             if _is_valid_raster(mosaic_path) and not args.force:

@@ -9,7 +9,7 @@ processing:
   color_enhancement: 1.0
   hillshade_opacity: 0.12
   min_zoom: 0
-  max_zoom: 13
+  max_zoom: 14
   resampling: "lanczos"
   tile_format: "JPEG"
   tile_quality: 95

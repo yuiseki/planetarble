@@ -85,8 +85,18 @@ class Sentinel2SceneManifestBuilder:
         self._client = Client.open(config.stac_api, timeout=config.request_timeout_seconds)
         self._tokens: Dict[str, str] = {}
 
-    def build(self, *, bbox: Tuple[float, float, float, float], max_items: Optional[int] = None) -> Sentinel2SceneManifest:
-        items = self._search_items(bbox=bbox, max_items=max_items or self._config.max_items)
+    def build(
+        self,
+        *,
+        bbox: Tuple[float, float, float, float],
+        max_items: Optional[int] = None,
+        force_refresh: bool = False,
+    ) -> Sentinel2SceneManifest:
+        items = self._search_items(
+            bbox=bbox,
+            max_items=max_items or self._config.max_items,
+            force_refresh=force_refresh,
+        )
         scenes = self._items_to_scenes(items, target_bbox=bbox)
         summary = {
             "items": len(items),
@@ -100,17 +110,24 @@ class Sentinel2SceneManifestBuilder:
         )
         return Sentinel2SceneManifest(scenes=scenes, summary=summary)
 
-    def _search_items(self, *, bbox: Tuple[float, float, float, float], max_items: int) -> List[Item]:
+    def _search_items(
+        self,
+        *,
+        bbox: Tuple[float, float, float, float],
+        max_items: int,
+        force_refresh: bool,
+    ) -> List[Item]:
         query = {"eo:cloud_cover": {"lte": self._config.max_cloud}}
         datetime_filter = f"{self._config.start_date}/{self._config.end_date}"
         cache_key = self._build_cache_key(bbox, max_items)
-        cached_items = self._load_cache_items(cache_key)
-        if cached_items is not None:
-            LOGGER.info(
-                "sentinel-2 stac cache hit",
-                extra={"bbox": list(bbox), "max_items": max_items},
-            )
-            return cached_items
+        if not force_refresh:
+            cached_items = self._load_cache_items(cache_key)
+            if cached_items is not None:
+                LOGGER.info(
+                    "sentinel-2 stac cache hit",
+                    extra={"bbox": list(bbox), "max_items": max_items},
+                )
+                return cached_items
         search = self._client.search(
             collections=[self._config.collection],
             bbox=list(bbox),

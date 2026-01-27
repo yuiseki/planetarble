@@ -183,6 +183,7 @@ class ProcessingManager(DataProcessor):
         *,
         destination: Optional[Path] = None,
         max_items: Optional[int] = None,
+        force_refresh: bool = False,
     ) -> Optional[Path]:
         if not self._sentinel2.enabled:
             LOGGER.info("Sentinel-2 processing disabled; skipping scene manifest generation")
@@ -199,7 +200,11 @@ class ProcessingManager(DataProcessor):
             cache_dir=self._data_dir / "cache" / "sentinel2",
             cache_ttl_days=self._sentinel2.cache_ttl_days,
         )
-        manifest = builder.build(bbox=self._sentinel2.bbox, max_items=max_items)
+        manifest = builder.build(
+            bbox=self._sentinel2.bbox,
+            max_items=max_items,
+            force_refresh=force_refresh,
+        )
         manifest.write(dest)
         return dest
 

@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import math
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence, Tuple
 
 import requests
 
-from planetarble.logging import get_logger
+from planetarble.logging import get_logger, log_progress
 
 
 LOGGER = get_logger(__name__)
@@ -128,6 +129,10 @@ def _download_tiles(
 ) -> List[GSITile]:
     session = requests.Session()
     tiles: List[GSITile] = []
+    total = len(tile_triplets)
+    completed = 0
+    start_time = time.monotonic()
+    progress_interval = 10
 
     for z, x, y in tile_triplets:
         url = tile_template.format(z=z, x=x, y=y)
@@ -143,6 +148,23 @@ def _download_tiles(
         tile_path.write_bytes(response.content)
         vrt_path = tile_path.with_suffix(".vrt")
         tiles.append(GSITile(z=z, x=x, y=y, url=url, path=tile_path, vrt_path=vrt_path))
+        completed += 1
+        if total and (completed % progress_interval == 0 or completed == total):
+            elapsed = max(time.monotonic() - start_time, 0.001)
+            percent = round((completed / total) * 100, 1)
+            rate = completed / elapsed
+            remaining = max(total - completed, 0)
+            eta = remaining / rate if rate > 0 else 0.0
+            log_progress(
+                LOGGER,
+                phase="process",
+                step="gsi tile download",
+                current=completed,
+                total=total,
+                percent=percent,
+                elapsed=_format_duration(elapsed),
+                eta=_format_duration(eta),
+            )
     return tiles
 
 
@@ -279,6 +301,15 @@ def _normalize_bbox(bbox: Tuple[float, float, float, float]) -> Tuple[float, flo
     if miny > maxy:
         miny, maxy = maxy, miny
     return (minx, miny, maxx, maxy)
+
+
+def _format_duration(seconds: float) -> str:
+    seconds = max(int(seconds), 0)
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes:02d}:{seconds:02d}"
 
 
 def _run(command: Sequence[str], description: str) -> None:

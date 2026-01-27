@@ -995,9 +995,8 @@ def _handle_process(args: argparse.Namespace) -> int:
     gsi_cog_path: Path | None = None
     if cfg.gsi_orthophotos.enabled:
         gsi_output = (cfg.output_dir / "processing" / f"{cfg.gsi_orthophotos.output_basename}.tif").resolve()
-        gsi_cache_root = cfg.data_dir / (
-            "gsi_seamlessphoto" if cfg.gsi_orthophotos.product == "seamlessphoto" else "gsi_orthophotos"
-        )
+        product_slug = "seamlessphoto" if cfg.gsi_orthophotos.product == "seamlessphoto" else "orthophoto"
+        gsi_cache_root = cfg.data_dir / "cache" / f"gsi_{product_slug}"
         try:
             gsi_summary = fetch_gsi_ortho_clip(
                 lat=cfg.gsi_orthophotos.lat,

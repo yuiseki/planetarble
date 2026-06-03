@@ -213,6 +213,7 @@ class ProcessingManager(DataProcessor):
                     data_dir=self._data_dir,
                     region_geometry=region_geometry,
                 )
+                land_geometry = _clip_land_to_region(land_geometry, region_geometry)
                 region_geometry = land_geometry
                 region_bbox = _bbox_from_geometry(land_geometry)
         builder = Sentinel2SceneManifestBuilder(
@@ -256,6 +257,7 @@ class ProcessingManager(DataProcessor):
                     data_dir=self._data_dir,
                     region_geometry=region_geometry,
                 )
+                land_geometry = _clip_land_to_region(land_geometry, region_geometry)
                 region_geometry = land_geometry
                 region_bbox = _bbox_from_geometry(land_geometry)
         scenes = _load_sentinel2_scene_manifest(scene_manifest_path)
@@ -1771,6 +1773,24 @@ def _translate_sentinel2_rgb(
 def _bbox_from_geometry(geometry: "ogr.Geometry") -> Tuple[float, float, float, float]:
     minx, maxx, miny, maxy = geometry.GetEnvelope()
     return (float(minx), float(miny), float(maxx), float(maxy))
+
+
+def _clip_land_to_region(
+    land_geometry: "ogr.Geometry",
+    region_geometry: Optional["ogr.Geometry"],
+) -> "ogr.Geometry":
+    """Clip land features to the plan region before deriving a search bbox.
+
+    ne_10m_land features that merely intersect a small region are returned
+    whole (continent sized), so their raw envelope would inflate the STAC
+    search bbox to near-global coverage.
+    """
+    if region_geometry is None:
+        return land_geometry
+    clipped = land_geometry.Intersection(region_geometry)
+    if clipped is None or clipped.IsEmpty():
+        return land_geometry
+    return clipped
 
 
 def _write_geometry_geojson(geometry: "ogr.Geometry", path: Path) -> None:

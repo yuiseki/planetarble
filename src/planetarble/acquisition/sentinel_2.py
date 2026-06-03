@@ -136,7 +136,10 @@ class Sentinel2SceneManifestBuilder:
             collections=[self._config.collection],
             bbox=list(bbox),
             datetime=datetime_filter,
+            # limit is only the pystac-client page size; max_items is the total
+            # cap that stops search.items() from paging through every match.
             limit=max_items,
+            max_items=max_items,
             query=query,
         )
         LOGGER.info(

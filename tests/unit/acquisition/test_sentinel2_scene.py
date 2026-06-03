@@ -77,3 +77,36 @@ def test_search_timeout_raises_on_overrun() -> None:
 def test_search_timeout_noop_when_zero() -> None:
     with _search_timeout(0):
         pass  # zero/negative timeout must not arm a signal or raise
+
+
+def test_search_items_passes_total_cap_to_stac_search() -> None:
+    # Regression: pystac-client's limit= is only the page size. Without
+    # max_items=, search.items() pages through every match (one item per page
+    # when limit=1), and deep MPC continuation-token pagination eventually
+    # stalls into read timeouts. The total cap must be passed as max_items.
+    from planetarble.core.models import Sentinel2Config
+
+    captured: dict = {}
+
+    class _StubSearch:
+        def items(self):
+            return iter([])
+
+    class _StubClient:
+        def search(self, **kwargs):
+            captured.update(kwargs)
+            return _StubSearch()
+
+    builder = object.__new__(Sentinel2SceneManifestBuilder)
+    builder._config = Sentinel2Config()
+    builder._cache_dir = None
+    builder._cache_ttl_days = 30
+    builder._client = _StubClient()
+
+    items = builder._search_items(
+        bbox=(139.0, 35.0, 140.0, 36.0), max_items=1, force_refresh=True
+    )
+
+    assert items == []
+    assert captured.get("limit") == 1
+    assert captured.get("max_items") == 1

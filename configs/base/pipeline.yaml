@@ -249,7 +249,7 @@ sentinel2:
   request_timeout_seconds: 180
   assets:
     - "visual"
-  max_items: 1
+  max_items: 50
 gsi_orthophotos:
   enabled: true
   product: "seamlessphoto"

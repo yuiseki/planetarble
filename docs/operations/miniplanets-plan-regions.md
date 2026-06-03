@@ -180,5 +180,5 @@ planetarble split-plan --config configs/base/pipeline.yaml         # data/plans/
 残課題:
 
 - 全 shard を順次 build → 1 つの `planet.pmtiles` に集約するオーケストレーション（個別の `tiling merge-mbtiles` は既存）
-- `gen_miniplanets.py` を精緻な `ne_10m_land`（z10）land mask 対応にして再均衡化（現状は planetarble と同じ `LAND_APPROX_BBOXES` ヒューリスティックで重み付け）
+- ~~`gen_miniplanets.py` を精緻な land mask 対応にして再均衡化~~ **完了 2026-06-04**: 初版テーブル（LAND_APPROX 重み）で生成した 18 plan の実測タイル（全球 407,072 / ne_10m_land クリップ済み）を z6 集計し、`gen_miniplanets.py --plans` で再均衡化。shard あたり 19,772〜24,981 タイル（**最大/最小比 19.2 → 1.26**）。東京の z6 セルは引き続き mp_12
 - 3.9 環境では既存 `tests/unit/acquisition/test_copernicus_rate_limit.py` が `str | None`(PEP 604) で collection error（本変更とは無関係、プロジェクトは 3.10+ 前提）

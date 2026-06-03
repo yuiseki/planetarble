@@ -109,18 +109,55 @@ def build_land_weight_grid(base_zoom: int, target_zoom: int, land_buffer_km: flo
     return grid
 
 
+def build_plan_weight_grid(base_zoom: int, target_zoom: int, plan_glob: str) -> List[List[float]]:
+    """Aggregate measured plan entries (ndjson, z/x/y) into an NxN weight grid.
+
+    This weights cells by the tiles planetarble actually planned (i.e. after the
+    precise ne_10m_land clip), which balances far better than the coarse
+    LAND_APPROX heuristic.
+    """
+    import glob as globlib
+    import json
+
+    if target_zoom < base_zoom:
+        raise ValueError("target_zoom must be >= base_zoom")
+    shift = target_zoom - base_zoom
+    n_base = 1 << base_zoom
+    grid = [[0.0] * n_base for _ in range(n_base)]
+    paths = sorted(globlib.glob(plan_glob))
+    if not paths:
+        raise SystemExit(f"no plan files matched: {plan_glob}")
+    for path in paths:
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                entry = json.loads(line)
+                grid[int(entry["x"]) >> shift][int(entry["y"]) >> shift] += 1.0
+    return grid
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-zoom", type=int, default=6)
     parser.add_argument("--target-zoom", type=int, default=10)
     parser.add_argument("--land-buffer-km", type=float, default=20.0)
     parser.add_argument("--regions", type=int, default=18)
+    parser.add_argument(
+        "--plans",
+        default=None,
+        help="Glob of generated plan ndjson files; weights cells by measured tiles instead of the LAND_APPROX heuristic",
+    )
     args = parser.parse_args()
 
     # Import here so the heavy land-grid build can stand alone if the package import fails.
     from planetarble.acquisition.miniplanets import compute_subdivisions
 
-    grid = build_land_weight_grid(args.base_zoom, args.target_zoom, args.land_buffer_km)
+    if args.plans:
+        grid = build_plan_weight_grid(args.base_zoom, args.target_zoom, args.plans)
+    else:
+        grid = build_land_weight_grid(args.base_zoom, args.target_zoom, args.land_buffer_km)
     total = sum(sum(col) for col in grid)
     n_base = 1 << args.base_zoom
     subs = compute_subdivisions(grid, args.regions, extent=(0, 0, n_base - 1, n_base - 1))

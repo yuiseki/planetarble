@@ -12,6 +12,46 @@ When HLS mode is enabled—the new default configuration—the pipeline orchestr
 
 The legacy BMNG/GEBCO/Natural Earth workflow remains available by switching `processing.tile_source` back to `bmng`.
 
+## Try it in five minutes
+
+Build a small but complete global basemap PMTiles from NASA Blue Marble (2 km). No terabytes involved; the whole run takes well under a minute once the image is built.
+
+```bash
+docker build -t planetarble .
+mkdir -p workspace
+docker run --rm -v "$PWD/workspace:/workspace" --entrypoint bash planetarble -c '
+  curl -sL -o bmng.jpg "https://eoimages.gsfc.nasa.gov/images/imagerecords/73000/73776/world.topo.bathy.200408.3x5400x2700.jpg" &&
+  gdal_translate -q -a_srs EPSG:4326 -a_ullr -180 90 180 -90 bmng.jpg bmng.tif &&
+  planetarble tiling pmtiles --input bmng.tif --out . --min-zoom 0 --max-zoom 5 --format webp --bounds-mode global'
+```
+
+This writes `workspace/bmng_0-5.pmtiles` (about 4 MB, zoom 0-5, the full globe). Drop the file onto <https://pmtiles.io> to view it. The same three commands work without Docker if you have the toolchain from [Requirements](#requirements) installed.
+
+Where to go next:
+
+- `configs/profiles/` contains ready-made recipes for the real pipelines (global BMNG at z8, regional HLS at z11, Sentinel-2 at z14); each file's header documents the exact commands.
+- If you just want a planet file without building anything, see [Prebuilt artifacts](#prebuilt-artifacts).
+
+## Prebuilt artifacts
+
+A prebuilt global PMTiles produced by this pipeline is available for download and direct use with MapLibre GL + pmtiles.js:
+
+- <https://z.yuiseki.net/static/planetarble/planet.pmtiles> (BMNG-based global basemap; preview it on [pmtiles.io](https://pmtiles.io/#url=https%3A%2F%2Fz.yuiseki.net%2Fstatic%2Fplanetarble%2Fplanet.pmtiles&map=1.88/0/0))
+
+## Run with Docker
+
+The bundled `Dockerfile` packages the complete toolchain (GDAL 3.11 with the unified `gdal` CLI, go-pmtiles, mb-util, aria2) together with the `planetarble` CLI, so none of it needs to be installed on the host.
+
+```bash
+docker build -t planetarble .
+
+# data/, tmp/, and output/ resolve relative to /workspace inside the container
+docker run --rm -v "$PWD/workspace:/workspace" planetarble --help
+docker run --rm -v "$PWD/workspace:/workspace" planetarble acquire --config /opt/planetarble/configs/profiles/bmng-global-z8.yaml
+```
+
+Mount a host directory at `/workspace` to keep downloaded data and generated tiles between runs.
+
 ## Quickstart
 
 ```bash
@@ -138,7 +178,10 @@ Serving z12 is typically done via client-side overscaling of z11 tiles rather th
 
 ## Requirements
 
-- GDAL ≥ 3.x must be installed locally to run the processing and tiling commands (`gdalbuildvrt`, `gdal_translate`, `gdaldem`, `gdalwarp`, `gdaladdo`).
-- The PMTiles CLI (`pmtiles convert`) is required to produce the final `planet_{YYYY}_{max_zoom_level}z.pmtiles` artifact.
+The bundled `Dockerfile` provides everything below in one image (see [Run with Docker](#run-with-docker)); install the toolchain manually only if you prefer running on the host.
+
+- GDAL ≥ 3.11 must be installed locally to run the processing and tiling commands (`gdalbuildvrt`, `gdal_translate`, `gdaldem`, `gdalwarp`, `gdaladdo`, and the unified `gdal` CLI used by `gdal raster tile`).
+- The go-pmtiles CLI (`pmtiles convert`) is required to produce the final `planet_{YYYY}_{max_zoom_level}z.pmtiles` artifact.
+- `mb-util` (`pip install mbutil`) is required to package XYZ tile pyramids into MBTiles.
 - `aria2c` is expected for the default acquisition workflow so downloads can resume cleanly; the CLI falls back to Python’s downloader if aria2c is missing, but installing it avoids broken transfers.
-- Python dependencies are recorded in `pyproject.toml` (PyYAML is required for configuration loading).
+- Python dependencies are recorded in `pyproject.toml` (PyYAML is required for configuration loading); regional HLS/Sentinel-2 planning additionally needs the GDAL Python bindings (`osgeo`).

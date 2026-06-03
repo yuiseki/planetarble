@@ -92,8 +92,14 @@ assets:
     media_type: raster
   etopo_2022_15s_bedrock_cog:
     name: NOAA ETOPO 2022 15 arc-second bedrock (COG)
-    description: Global 15 arc-second bedrock bathymetry/topography GeoTIFF derived from NOAA ETOPO 2022.
+    description: >-
+      Global 15 arc-second bedrock bathymetry/topography GeoTIFF derived from NOAA ETOPO 2022.
+      NOAA NCEI distributes 15s data only as 15x15 degree tiles (bed tiles exist solely for the
+      ice-sheet bands); this single-file global COG was assembled by the Stanford NatCap project.
+      The first URL is a self-hosted mirror because the original NatCap GCS cache started
+      returning 403 (observed 2026-06-03).
     urls:
+      - https://z.yuiseki.net/static/planetarble/ETOPO_2022_15s_bed.tif
       - https://storage.googleapis.com/natcap-data-cache/global/etopo-noaa-ngdc/noaa-ngdc-etopo-bedrock-bathymetry.tif
     destination: etopo/ETOPO_2022_15s_bed.tif
     license: "NOAA National Centers for Environmental Information (2022) — CC0 1.0"

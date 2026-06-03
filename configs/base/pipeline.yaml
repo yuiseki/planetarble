@@ -208,7 +208,7 @@ hls:
       end_day: 30
 ocean:
   enabled: true
-  source_id: "etopo_2022_15arcsec_geotiff"
+  source_id: "etopo_2022_15s_bedrock_cog"
   depth_color_ramp: "planetarble:ocean/depth_ramp.json"
   apply_hillshade: true
   hillshade_azimuth: 315.0

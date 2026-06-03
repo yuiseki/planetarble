@@ -40,7 +40,7 @@ The HLS operational value of z11 follows the README: compositing lowers the effe
 | `ocean` | `etopo_2022_15s_bedrock_cog` | NOAA ETOPO 2022 Global Relief Model (15 arc-second bedrock, CC0) | 15 arcsec ≈ 464 m | ~z8 to z9 |
 | (legacy BMNG stage) | `gebco_latest_grid` | GEBCO 2024 Grid (GEBCO Compilation Group, NetCDF) | 15 arcsec ≈ 464 m | ~z8 to z9 |
 
-Note: the config `ocean.source_id` references `etopo_2022_15arcsec_geotiff`, which does not match the `assets.yaml` key `etopo_2022_15s_bedrock_cog` (needs verification).
+Note: NOAA NCEI distributes 15 arc-second data only as 15x15 degree tiles (bed tiles exist solely for the ice-sheet bands); the single global file is a COG assembled by the Stanford NatCap project. The original NatCap GCS cache now returns 403, so the first asset URL is a self-hosted mirror. `ocean.source_id` is wired into `download_etopo` and can point at a custom asset.
 
 ## Auxiliary sources (non-imagery)
 

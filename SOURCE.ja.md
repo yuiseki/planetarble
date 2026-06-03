@@ -40,7 +40,7 @@ HLS の運用 z11 は、合成由来の実効解像度を考慮した README 準
 | `ocean` | `etopo_2022_15s_bedrock_cog` | NOAA ETOPO 2022 Global Relief Model（15 秒角 bedrock、CC0） | 15 秒角 ≈ 464 m | z8〜9 相当 |
 | （レガシー BMNG 工程） | `gebco_latest_grid` | GEBCO 2024 Grid（GEBCO Compilation Group、NetCDF） | 15 秒角 ≈ 464 m | z8〜9 相当 |
 
-注: config の `ocean.source_id` は `etopo_2022_15arcsec_geotiff` を参照しており、`assets.yaml` のキー `etopo_2022_15s_bedrock_cog` と名前が食い違っている（要確認）。
+注: NOAA NCEI の公式配布は 15 秒角だと 15°×15° タイル分割のみ（bed タイルは氷床帯のみ）で、単一全球ファイルは Stanford NatCap が組み立てた COG に由来する。元の NatCap GCS キャッシュは 403 を返すようになったため、第一 URL はセルフホストのミラー。`ocean.source_id` は `download_etopo` に配線済みで、カスタム asset の指定に使える。
 
 ## 補助ソース（画像ではないもの）
 

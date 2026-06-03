@@ -69,8 +69,13 @@ class AcquisitionManager(DataAcquisition):
             extra={"source": credential_source or "none"},
         )
 
-    def download_etopo(self, *, force: bool = False) -> Path:
-        result = self._downloader.download("etopo_2022_15s_bedrock_cog", force=force)
+    def download_etopo(
+        self,
+        *,
+        source_id: str = "etopo_2022_15s_bedrock_cog",
+        force: bool = False,
+    ) -> Path:
+        result = self._downloader.download(source_id, force=force)
         return result.path
 
     def build_hls_plan(

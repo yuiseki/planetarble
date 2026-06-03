@@ -734,7 +734,7 @@ def _handle_acquire(args: argparse.Namespace) -> int:
     etopo_path: Path | None = None
     if cfg.ocean.enabled:
         try:
-            etopo_path = manager.download_etopo(force=args.force)
+            etopo_path = manager.download_etopo(source_id=cfg.ocean.source_id, force=args.force)
             generation_params["etopo_path"] = str(etopo_path)
         except Exception as exc:
             LOGGER.warning("etopo acquisition skipped: %s", exc)

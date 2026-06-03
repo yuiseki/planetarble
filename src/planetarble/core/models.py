@@ -237,7 +237,7 @@ class OceanConfig:
     """Configuration for ocean rendering using auxiliary elevation datasets."""
 
     enabled: bool = True
-    source_id: str = "etopo_2022_15arcsec_geotiff"
+    source_id: str = "etopo_2022_15s_bedrock_cog"
     depth_color_ramp: str = "planetarble:ocean/depth_ramp.json"
     apply_hillshade: bool = True
     hillshade_azimuth: float = 315.0

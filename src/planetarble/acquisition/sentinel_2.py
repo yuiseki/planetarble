@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
+import signal
+import threading
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -137,9 +141,53 @@ class Sentinel2SceneManifestBuilder:
         )
         LOGGER.info(
             "sentinel-2 stac searching...",
-            extra={"bbox": list(bbox), "max_items": max_items, "datetime": datetime_filter},
+            extra={
+                "stac_api": self._config.stac_api,
+                "collection": self._config.collection,
+                "bbox": list(bbox),
+                "max_items": max_items,
+                "datetime": datetime_filter,
+                "query": query,
+                "search_timeout_seconds": self._config.stac_search_timeout_seconds,
+            },
         )
-        items = list(search.items())
+        stop_event = threading.Event()
+        heartbeat = threading.Thread(
+            target=_log_search_heartbeat,
+            args=(stop_event, self._config.stac_api, self._config.collection, list(bbox), max_items),
+            daemon=True,
+        )
+        heartbeat.start()
+        start_time = time.monotonic()
+        try:
+            with _search_timeout(self._config.stac_search_timeout_seconds):
+                items = list(search.items())
+        except TimeoutError as exc:
+            stop_event.set()
+            heartbeat.join(timeout=1.0)
+            elapsed = max(time.monotonic() - start_time, 0.0)
+            LOGGER.error(
+                "sentinel-2 stac search timed out",
+                extra={
+                    "elapsed_seconds": round(elapsed, 2),
+                    "search_timeout_seconds": self._config.stac_search_timeout_seconds,
+                    "bbox": list(bbox),
+                    "max_items": max_items,
+                },
+            )
+            raise MPCError(str(exc)) from exc
+        stop_event.set()
+        heartbeat.join(timeout=1.0)
+        elapsed = max(time.monotonic() - start_time, 0.0)
+        LOGGER.info(
+            "sentinel-2 stac search completed",
+            extra={
+                "items": len(items),
+                "elapsed_seconds": round(elapsed, 2),
+                "bbox": list(bbox),
+                "max_items": max_items,
+            },
+        )
         self._store_cache_items(cache_key, items)
         return items
 
@@ -222,6 +270,51 @@ class Sentinel2SceneManifestBuilder:
             path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
         except OSError as exc:
             LOGGER.debug("sentinel-2 cache store failed", extra={"path": str(path), "error": str(exc)})
+
+
+def _log_search_heartbeat(
+    stop_event: threading.Event,
+    stac_api: str,
+    collection: str,
+    bbox: List[float],
+    max_items: int,
+    *,
+    interval_seconds: int = 60,
+) -> None:
+    start = time.monotonic()
+    while not stop_event.wait(interval_seconds):
+        elapsed = max(time.monotonic() - start, 0.0)
+        LOGGER.warning(
+            "sentinel-2 stac search still running",
+            extra={
+                "stac_api": stac_api,
+                "collection": collection,
+                "bbox": bbox,
+                "max_items": max_items,
+                "elapsed_seconds": round(elapsed, 1),
+            },
+        )
+
+
+@contextlib.contextmanager
+def _search_timeout(seconds: int) -> "contextlib.AbstractContextManager[None]":
+    if seconds <= 0:
+        yield
+        return
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    def _handle_timeout(signum: int, frame: object) -> None:  # pragma: no cover - signal path
+        raise TimeoutError(f"Sentinel-2 STAC search exceeded {seconds}s")
+
+    previous = signal.signal(signal.SIGALRM, _handle_timeout)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
 
 
 def _build_scene(item: Item, *, collection: str, token: str, assets: Iterable[str]) -> Optional[Sentinel2Scene]:

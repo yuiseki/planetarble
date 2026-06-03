@@ -127,6 +127,7 @@ class Sentinel2Config:
     max_items: int = 50
     cache_ttl_days: int = 30
     request_timeout_seconds: int = 60
+    stac_search_timeout_seconds: int = 600
     max_retries: int = 5
     backoff_factor: float = 1.8
 

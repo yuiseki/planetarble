@@ -1,8 +1,15 @@
+import time
 from datetime import datetime, timezone
+from pathlib import Path
 
+import pytest
 from pystac import Asset, Item
 
-from planetarble.acquisition.sentinel_2 import _build_scene
+from planetarble.acquisition.sentinel_2 import (
+    Sentinel2SceneManifestBuilder,
+    _build_scene,
+    _search_timeout,
+)
 
 
 def _make_item(assets: dict[str, str]) -> Item:
@@ -39,3 +46,34 @@ def test_build_scene_requires_assets() -> None:
     item = _make_item({"B02": "https://example.com/B02.tif"})
     scene = _build_scene(item, collection="sentinel-2-l2a", token="sig=abc", assets=("B02", "B03", "B04"))
     assert scene is None
+
+
+def test_store_cache_items_is_a_builder_method() -> None:
+    # Regression: the search-timeout helpers were inserted mid-class, orphaning
+    # _store_cache_items inside _search_timeout and dropping it from the class.
+    assert callable(getattr(Sentinel2SceneManifestBuilder, "_store_cache_items", None))
+
+
+def test_cache_store_load_round_trip(tmp_path: Path) -> None:
+    builder = object.__new__(Sentinel2SceneManifestBuilder)
+    builder._cache_dir = tmp_path
+    builder._cache_ttl_days = 30
+    item = _make_item({"B02": "https://example.com/B02.tif"})
+
+    builder._store_cache_items("key1", [item])
+    loaded = builder._load_cache_items("key1")
+
+    assert loaded is not None
+    assert len(loaded) == 1
+    assert loaded[0].id == "sentinel-item"
+
+
+def test_search_timeout_raises_on_overrun() -> None:
+    with pytest.raises(TimeoutError):
+        with _search_timeout(1):
+            time.sleep(2)
+
+
+def test_search_timeout_noop_when_zero() -> None:
+    with _search_timeout(0):
+        pass  # zero/negative timeout must not arm a signal or raise

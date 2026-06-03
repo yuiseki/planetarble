@@ -1,0 +1,265 @@
+# Recipe: global BMNG 500m basemap, z0-8 (native resolution limit), GEBCO ocean hillshade.
+# Requires: BMNG 500m panels, GEBCO grid, Natural Earth (acquire downloads all).
+# Run from your data workspace directory (data/tmp/output resolve relative to CWD):
+#   planetarble acquire --config ../profiles/bmng-global-z8.yaml --bmng-resolution 500m
+#   planetarble process --config ../profiles/bmng-global-z8.yaml
+#   planetarble tile    --config ../profiles/bmng-global-z8.yaml
+#   planetarble package --config ../profiles/bmng-global-z8.yaml
+data_dir: data
+temp_dir: tmp
+output_dir: output
+processing:
+  bmng_resolution: "500m"
+  gebco_year: 2024
+  natural_earth_scale: "10m"
+  color_enhancement: 1.0
+  hillshade_opacity: 0.12
+  min_zoom: 0
+  max_zoom: 8
+  resampling: "lanczos"
+  tile_format: "JPEG"
+  tile_quality: 95
+  tile_name: "Planetarble HLS Mosaic"
+  tile_attribution: ""
+  gdal_num_threads: "ALL_CPUS"
+  gdal_cachemax: "50%"
+  pmtiles_dedup: true
+  mbtiles_tiler: "auto"
+  zoom_level_strategy: "UPPER"
+  tile_source: bmng
+hls:
+  enabled: true
+  stac_api: "https://planetarycomputer.microsoft.com/api/stac/v1"
+  collections:
+    - "hls2-s30"
+    - "hls2-l30"
+  fallback_collections:
+    - "landsat-c2-l2"
+  land_mask_path: null
+  land_buffer_km: 20.0
+  max_cloud: 80.0
+  fallback_max_cloud: 90.0
+  max_scene_age_days: 3650
+  qa_mask_flags:
+    - "cloud"
+    - "cloud_shadow"
+    - "snow"
+  mosaic_strategy: "best_pixel"
+  robust_median_window: 5
+  target_zoom: 10
+  tile_size: 256
+  concurrency: 6
+  request_timeout_seconds: 90
+  max_retries: 6
+  backoff_factor: 2.0
+  compositing_year: 2024
+  spectral_bands:
+    - "B02"
+    - "B03"
+    - "B04"
+  qa_asset_key: "Fmask"
+  # Optional regional plan filters to make HLS acquisition incremental.
+  plan_regions:
+    - name: "tokyo_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Tokyo'"
+      land_only: true
+    - name: "kanagawa_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Kanagawa'"
+      land_only: true
+    - name: "chiba_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Chiba'"
+      land_only: true
+    - name: "saitama_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Saitama'"
+      land_only: true
+    - name: "ibaraki_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Ibaraki'"
+      land_only: true
+    - name: "tochigi_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Tochigi'"
+      land_only: true
+    - name: "gunma_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Gunma'"
+      land_only: true
+    - name: "niigata_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Niigata'"
+      land_only: true
+    - name: "toyama_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Toyama'"
+      land_only: true
+    - name: "ishikawa_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Ishikawa'"
+      land_only: true
+    - name: "fukui_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Fukui'"
+      land_only: true
+    - name: "yamanashi_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Yamanashi'"
+      land_only: true
+    - name: "nagano_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Nagano'"
+      land_only: true
+    - name: "gifu_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Gifu'"
+      land_only: true
+    - name: "shizuoka_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Shizuoka'"
+      land_only: true
+    - name: "aichi_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Aichi'"
+      land_only: true
+    - name: "mie_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Mie'"
+      land_only: true
+    - name: "shiga_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Shiga'"
+      land_only: true
+    - name: "kyoto_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Kyōto'"
+      land_only: true
+    - name: "osaka_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Ōsaka'"
+      land_only: true
+    - name: "hyogo_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Hyōgo'"
+      land_only: true
+    - name: "nara_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Nara'"
+      land_only: true
+    - name: "wakayama_land"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Wakayama'"
+      land_only: true
+    # Global miniplanet partition (18-way, balanced by land ZL10 tile count).
+    # Mutually exclusive and globally exhaustive; coexists with the prefecture
+    # regions above. See docs/operations/miniplanets-plan-regions.md.
+    # Regenerate the boundaries with tools/gen_miniplanets.py.
+    - { name: "mp_00", miniplanet: "00", land_only: true }
+    - { name: "mp_01", miniplanet: "01", land_only: true }
+    - { name: "mp_02", miniplanet: "02", land_only: true }
+    - { name: "mp_03", miniplanet: "03", land_only: true }
+    - { name: "mp_04", miniplanet: "04", land_only: true }
+    - { name: "mp_05", miniplanet: "05", land_only: true }
+    - { name: "mp_06", miniplanet: "06", land_only: true }
+    - { name: "mp_07", miniplanet: "07", land_only: true }
+    - { name: "mp_08", miniplanet: "08", land_only: true }
+    - { name: "mp_09", miniplanet: "09", land_only: true }
+    - { name: "mp_10", miniplanet: "10", land_only: true }
+    - { name: "mp_11", miniplanet: "11", land_only: true }
+    - { name: "mp_12", miniplanet: "12", land_only: true }
+    - { name: "mp_13", miniplanet: "13", land_only: true }
+    - { name: "mp_14", miniplanet: "14", land_only: true }
+    - { name: "mp_15", miniplanet: "15", land_only: true }
+    - { name: "mp_16", miniplanet: "16", land_only: true }
+    - { name: "mp_17", miniplanet: "17", land_only: true }
+  # plan_region: "tokyo_land"
+  # plan_include_global: false
+  seasonal_windows:
+    - name: "northern_growing_season"
+      hemisphere: "north"
+      start_month: 4
+      start_day: 1
+      end_month: 10
+      end_day: 31
+    - name: "southern_growing_season"
+      hemisphere: "south"
+      start_month: 10
+      start_day: 1
+      end_month: 4
+      end_day: 30
+ocean:
+  enabled: true
+  source_id: "etopo_2022_15arcsec_geotiff"
+  depth_color_ramp: "planetarble:ocean/depth_ramp.json"
+  apply_hillshade: true
+  hillshade_azimuth: 315.0
+  hillshade_altitude: 45.0
+  hillshade_strength: 0.45
+  tone_mapping: "lambertian"
+  viirs_blend_percent: 0.0
+  viirs_max_fraction: 0.05
+modis:
+  enabled: false
+  tiles: []
+viirs:
+  enabled: false
+  tiles: []
+copernicus:
+  enabled: false
+  bbox: [139.760, 35.700, 139.805, 35.735]
+  min_zoom: 12
+  max_zoom: 14
+  layers:
+    - name: "TRUE_COLOR"
+sentinel2:
+  enabled: false
+  bbox: [138.7876, 35.1608, 139.9997, 36.1143]
+  plan_region: "tokyo_pref"
+  plan_regions:
+    - name: "tokyo_pref"
+      natural_earth:
+        dataset: "admin_1"
+        where: "adm0_a3='JPN' AND name='Tokyo'"
+      land_only: true
+    - name: "tokyo_bbox"
+      bbox: [139.55, 35.50, 139.92, 35.82]
+      land_only: true
+  start_date: "2023-01-01"
+  end_date: "2024-12-31"
+  max_cloud: 10.0
+  request_timeout_seconds: 180
+  assets:
+    - "visual"
+  max_items: 50
+gsi_orthophotos:
+  enabled: false
+  product: "seamlessphoto"
+  bbox: [139.55, 35.50, 139.92, 35.82]
+  rate_limit_seconds: 0.1
+  # tile_template: "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"
+  # orthophoto template: "https://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg"

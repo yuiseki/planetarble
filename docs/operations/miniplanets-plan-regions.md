@@ -149,8 +149,25 @@ planetarble acquire --config configs/base/pipeline.yaml --plan-region mp_00
 planetarble process --config configs/base/pipeline.yaml --plan-region mp_00
 ```
 
-## 残課題（Phase 2 / フォローアップ）
+## 実装状況（Phase 2 進行中）
 
-- plan エントリ(`HLSMosaicTask`)への miniplanet ID 付与 → tiling/packaging の ID 単位シャーディング → per-miniplanet PMTiles マージ
+完了:
+
+- `HLSMosaicTask.miniplanet` フィールド追加。`HLSMosaicPlanner.iter_tasks` が `tile_to_miniplanet_id(z,x,y)` で各タイルに ID を付与し、`to_mapping`/`from_mapping` で round-trip（z<BASE_ZOOM の場合は省略）
+- `split_plan_by_miniplanet(plan_path, out_dir)` — 単一グローバルプランを miniplanet 単位の ndjson に分割（osm-miniplanets-util の「ID 単位 extract」に対応）。`task_miniplanet_id` は未タグのエントリをタイルから再解決し、解決不能は `unassigned` に集約
+- CLI: `planetarble split-plan --config ... [--plan ...] [--out ...]`
+- テスト: `tests/unit/acquisition/test_hls_plan_miniplanet.py`（タグ付け・round-trip・分割・unassigned）、`tests/unit/cli/test_split_plan_command.py`
+
+これにより「グローバルプランを1回生成 → miniplanet 単位に分割 → shard ごとに process/tile/package → `tiling merge-mbtiles` で統合」というワークフローが組める。
+
+```bash
+planetarble acquire --config configs/base/pipeline.yaml            # 全球プラン（各エントリに miniplanet タグ）
+planetarble split-plan --config configs/base/pipeline.yaml         # data/plans/shards/ に分割
+# shard ごとに process/tile（--plan-region mp_NN は既存の名前ベース機構で対応）
+```
+
+残課題:
+
+- 全 shard を順次 build → 1 つの `planet.pmtiles` に集約するオーケストレーション（個別の `tiling merge-mbtiles` は既存）
 - `gen_miniplanets.py` を精緻な `ne_10m_land`（z10）land mask 対応にして再均衡化（現状は planetarble と同じ `LAND_APPROX_BBOXES` ヒューリスティックで重み付け）
 - 3.9 環境では既存 `tests/unit/acquisition/test_copernicus_rate_limit.py` が `str | None`(PEP 604) で collection error（本変更とは無関係、プロジェクトは 3.10+ 前提）

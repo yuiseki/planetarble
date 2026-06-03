@@ -25,6 +25,7 @@ from planetarble.acquisition import (
     fetch_gsi_ortho_clip,
     fetch_true_color_tile,
     get_available_layers,
+    split_plan_by_miniplanet,
     verify_copernicus_connection,
 )
 from planetarble.config import PipelineConfig, load_config
@@ -253,6 +254,29 @@ def build_parser() -> argparse.ArgumentParser:
     tiling_merge.add_argument("--overlay", type=Path, required=True, help="Overlay MBTiles archive")
     tiling_merge.add_argument("--out", type=Path, required=True, help="Output MBTiles archive")
 
+    split_plan = subcommands.add_parser(
+        "split-plan",
+        help="Split a global HLS plan into one ndjson shard per miniplanet",
+    )
+    split_plan.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Path to pipeline configuration file (YAML or JSON)",
+    )
+    split_plan.add_argument(
+        "--plan",
+        type=Path,
+        default=None,
+        help="Explicit plan ndjson to split (defaults to the global HLS plan)",
+    )
+    split_plan.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output directory for shards (defaults to data_dir/plans/shards)",
+    )
+
     mpc_fetch = subcommands.add_parser(
         "mpc-fetch",
         help="Download a Sentinel-2 true color clip via Microsoft Planetary Computer",
@@ -449,6 +473,8 @@ def main(argv: Iterable[str] | None = None) -> int:
             return _handle_merge_mbtiles(args)
         parser.error("Unknown tiling subcommand")
         return 1
+    if args.command == "split-plan":
+        return _handle_split_plan(args)
     if args.command == "mpc-fetch":
         return _handle_mpc_fetch(args)
     if args.command == "gsi-fetch":
@@ -496,6 +522,19 @@ def _resolve_copernicus_cog(processing_dir: Path, layers: Iterable[CopernicusLay
 
 def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_") or "layer"
+
+
+def _handle_split_plan(args: argparse.Namespace) -> int:
+    cfg = load_config(_resolve_config_path(args.config))
+    plan_path = (args.plan.resolve() if args.plan else _resolve_hls_plan_path(cfg, None))
+    if not plan_path.exists():
+        raise SystemExit(f"Plan not found: {plan_path}")
+    out_dir = (args.out.resolve() if args.out else (cfg.data_dir / "plans" / "shards"))
+    shards = split_plan_by_miniplanet(plan_path, out_dir)
+    print(f"split {plan_path} into {len(shards)} miniplanet shard(s) under {out_dir}")
+    for key in sorted(shards):
+        print(f"  {key}: {shards[key]}")
+    return 0
 
 
 def _resolve_hls_plan_path(cfg: PipelineConfig, plan_region: Optional[str]) -> Path:

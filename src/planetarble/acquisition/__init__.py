@@ -22,6 +22,13 @@ from planetarble.acquisition.hls import (
     HLSScene,
     HLSSTACClient,
     iter_plan,
+    split_plan_by_miniplanet,
+    task_miniplanet_id,
+)
+from planetarble.acquisition.miniplanets import (
+    miniplanet_geo_bbox,
+    miniplanet_ids,
+    tile_to_miniplanet_id,
 )
 from planetarble.acquisition.sentinel_2 import (
     Sentinel2Scene,
@@ -54,6 +61,11 @@ __all__ = [
     "HLSScene",
     "HLSSTACClient",
     "iter_plan",
+    "split_plan_by_miniplanet",
+    "task_miniplanet_id",
+    "miniplanet_geo_bbox",
+    "miniplanet_ids",
+    "tile_to_miniplanet_id",
     "MPCError",
     "Sentinel2Scene",
     "Sentinel2SceneManifest",

@@ -33,6 +33,7 @@ except Exception as exc:  # pragma: no cover - executed when sqlite is missing
 from planetarble.core.models import HLSConfig, HLSPlanRegion, HLSSeasonWindow, NaturalEarthRegion
 from planetarble.logging import get_logger
 
+from .miniplanets import tile_to_miniplanet_id
 from .mpc import MPCError, STAC_API_ROOT, append_sas_token, fetch_sas_token
 
 LOGGER = get_logger(__name__)
@@ -83,9 +84,10 @@ class HLSMosaicTask:
     fallback_collections: Tuple[str, ...]
     max_cloud: float
     fallback_max_cloud: float
+    miniplanet: Optional[str] = None
 
     def to_mapping(self) -> Dict[str, object]:
-        return {
+        mapping: Dict[str, object] = {
             "z": self.z,
             "x": self.x,
             "y": self.y,
@@ -99,6 +101,9 @@ class HLSMosaicTask:
             "max_cloud": self.max_cloud,
             "fallback_max_cloud": self.fallback_max_cloud,
         }
+        if self.miniplanet is not None:
+            mapping["miniplanet"] = self.miniplanet
+        return mapping
 
     @classmethod
     def from_mapping(cls, mapping: Mapping[str, object]) -> "HLSMosaicTask":
@@ -123,6 +128,8 @@ class HLSMosaicTask:
         fallback = tuple(str(value) for value in mapping.get("fallback_collections", []) or [])
         max_cloud = float(mapping.get("max_cloud", 100.0))
         fallback_max_cloud = float(mapping.get("fallback_max_cloud", max_cloud))
+        miniplanet_value = mapping.get("miniplanet")
+        miniplanet = str(miniplanet_value) if miniplanet_value is not None else None
         return cls(
             z=z,
             x=x,
@@ -136,6 +143,7 @@ class HLSMosaicTask:
             fallback_collections=fallback,
             max_cloud=max_cloud,
             fallback_max_cloud=fallback_max_cloud,
+            miniplanet=miniplanet,
         )
 
 
@@ -184,6 +192,7 @@ class HLSMosaicPlanner:
                     fallback_collections=self._config.fallback_collections,
                     max_cloud=self._config.max_cloud,
                     fallback_max_cloud=self._config.fallback_max_cloud,
+                    miniplanet=tile_to_miniplanet_id(self._zoom, x, y),
                 )
 
     def write_plan(
@@ -712,3 +721,48 @@ def iter_plan(path: Path) -> Iterator[HLSMosaicTask]:
                     "invalid hls plan entry",
                     extra={"path": str(path), "line": line_number, "error": str(exc)},
                 )
+
+
+UNASSIGNED_MINIPLANET = "unassigned"
+
+
+def task_miniplanet_id(task: HLSMosaicTask) -> str:
+    """Resolve a task's miniplanet id, falling back to its tile when untagged."""
+    if task.miniplanet:
+        return task.miniplanet
+    resolved = tile_to_miniplanet_id(task.z, task.x, task.y)
+    return resolved or UNASSIGNED_MINIPLANET
+
+
+def split_plan_by_miniplanet(path: Path, out_dir: Path) -> Dict[str, Path]:
+    """Split a global plan ndjson into one file per miniplanet.
+
+    Mirrors the osm-miniplanets-util "extract per id" workflow: a single global
+    plan can be generated once, then sharded so each miniplanet is processed,
+    tiled, and packaged independently before merging. Returns a mapping of
+    miniplanet id to the written plan path. Entries below BASE_ZOOM (untagged)
+    are grouped under ``UNASSIGNED_MINIPLANET``.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stem = path.stem
+    handles: Dict[str, "object"] = {}
+    paths: Dict[str, Path] = {}
+    try:
+        for task in iter_plan(path):
+            key = task_miniplanet_id(task)
+            handle = handles.get(key)
+            if handle is None:
+                shard_path = out_dir / f"{stem}_{key}.ndjson"
+                handle = shard_path.open("w", encoding="utf-8")
+                handles[key] = handle
+                paths[key] = shard_path
+            handle.write(json.dumps(task.to_mapping(), sort_keys=True))
+            handle.write("\n")
+    finally:
+        for handle in handles.values():
+            handle.close()
+    LOGGER.info(
+        "split hls plan by miniplanet",
+        extra={"path": str(path), "shards": len(paths)},
+    )
+    return paths

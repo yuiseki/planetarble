@@ -5,12 +5,19 @@ AGENTS_MEMO.md
 configs/base/STORAGE_RELOCATION_*.md
 
 # Local data workspaces (not version-controlled)
+# Both forms are needed: trailing-slash patterns do not match symlinks.
 data/
 tmp/
 output/
 configs/base/data/
 configs/base/tmp/
 configs/base/output/
+configs/base/data
+configs/base/tmp
+configs/base/output
+
+# Local scratch configs (official recipes live in configs/profiles/)
+configs/base/pipeline-*.yaml
 
 # Python build artifacts
 __pycache__/

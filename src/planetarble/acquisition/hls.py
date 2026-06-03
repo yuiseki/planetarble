@@ -452,7 +452,11 @@ class HLSSTACClient:
                         collections=[collection],
                         bbox=list(task.bbox),
                         datetime=datetime_filter,
+                        # limit is only the pystac-client page size; max_items is
+                        # the total cap that stops items() from paging through
+                        # every match.
                         limit=max_items,
+                        max_items=max_items,
                         query=query,
                     )
                     items.extend(list(search.items()))

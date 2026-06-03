@@ -1,5 +1,6 @@
 # Agent Guidelines
 
+- If `AGENTS_MEMO.md` exists at the repository root, read it first to restore project memory: it is an untracked, host-specific operator memo recording the current status, known issues, and disk/storage constraints (e.g. on z-t it documents the Sentinel-2 work history and the `/data` relocation).
 - Task 1 (project structure and core interfaces) completed on 2025-09-23.
 - Commands `planetarble acquire`, `planetarble process`, `planetarble tile`, and `planetarble package` are long-running; request a human to execute them instead of running directly, even for small regions. If a run finishes in a few minutes, treat it as a signal that the implementation might be wrong and ask a human to verify.
 - A conda environment named `planetarble` exists at `/home/yuiseki/anaconda3/envs/planetarble`. Prefer running via `/home/yuiseki/anaconda3/condabin/conda run -n planetarble ...` for tests and CLI checks.

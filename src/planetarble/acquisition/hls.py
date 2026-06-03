@@ -222,6 +222,10 @@ def load_region_geometry(
     *,
     data_dir: Path,
 ) -> Optional["ogr.Geometry"]:
+    if region.miniplanet:
+        from .miniplanets import miniplanet_geo_bbox
+
+        return _bbox_to_geometry(miniplanet_geo_bbox(region.miniplanet))
     if region.bbox:
         return _bbox_to_geometry(region.bbox)
     if region.natural_earth:

@@ -159,6 +159,7 @@ class HLSPlanRegion:
     name: str
     bbox: Optional[Tuple[float, float, float, float]] = None
     natural_earth: Optional[NaturalEarthRegion] = None
+    miniplanet: Optional[str] = None
     land_only: bool = False
 
 

@@ -28,6 +28,18 @@ except ImportError:  # pragma: no cover - optional dependency guard
     yaml = None
 
 
+def _normalize_miniplanet(value: Any) -> Optional[str]:
+    """Normalize a plan_region miniplanet id (e.g. 0 or "0") to a "00"-style string."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.isdigit():
+        return text.zfill(2)
+    return text
+
+
 @dataclass
 class PipelineConfig:
     """Top-level configuration object for the Planetarble pipeline."""
@@ -201,6 +213,7 @@ class ConfigLoader:
                     name=str(region_data.get("name", "")),
                     bbox=bbox_tuple,
                     natural_earth=ne_config,
+                    miniplanet=_normalize_miniplanet(region_data.get("miniplanet")),
                     land_only=bool(region_data.get("land_only", False)),
                 )
             )
@@ -264,6 +277,7 @@ class ConfigLoader:
                     name=str(region_data.get("name", "")),
                     bbox=bbox_tuple,
                     natural_earth=ne_config,
+                    miniplanet=_normalize_miniplanet(region_data.get("miniplanet")),
                     land_only=bool(region_data.get("land_only", False)),
                 )
             )

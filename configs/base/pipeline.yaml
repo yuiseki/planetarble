@@ -169,6 +169,28 @@ hls:
         dataset: "admin_1"
         where: "adm0_a3='JPN' AND name='Wakayama'"
       land_only: true
+    # Global miniplanet partition (18-way, balanced by land ZL10 tile count).
+    # Mutually exclusive and globally exhaustive; coexists with the prefecture
+    # regions above. See docs/operations/miniplanets-plan-regions.md.
+    # Regenerate the boundaries with tools/gen_miniplanets.py.
+    - { name: "mp_00", miniplanet: "00", land_only: true }
+    - { name: "mp_01", miniplanet: "01", land_only: true }
+    - { name: "mp_02", miniplanet: "02", land_only: true }
+    - { name: "mp_03", miniplanet: "03", land_only: true }
+    - { name: "mp_04", miniplanet: "04", land_only: true }
+    - { name: "mp_05", miniplanet: "05", land_only: true }
+    - { name: "mp_06", miniplanet: "06", land_only: true }
+    - { name: "mp_07", miniplanet: "07", land_only: true }
+    - { name: "mp_08", miniplanet: "08", land_only: true }
+    - { name: "mp_09", miniplanet: "09", land_only: true }
+    - { name: "mp_10", miniplanet: "10", land_only: true }
+    - { name: "mp_11", miniplanet: "11", land_only: true }
+    - { name: "mp_12", miniplanet: "12", land_only: true }
+    - { name: "mp_13", miniplanet: "13", land_only: true }
+    - { name: "mp_14", miniplanet: "14", land_only: true }
+    - { name: "mp_15", miniplanet: "15", land_only: true }
+    - { name: "mp_16", miniplanet: "16", land_only: true }
+    - { name: "mp_17", miniplanet: "17", land_only: true }
   # plan_region: "tokyo_land"
   # plan_include_global: false
   seasonal_windows:

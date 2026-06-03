@@ -1,5 +1,9 @@
 .env
 
+# Local operator notes (host-specific, not version-controlled)
+AGENTS_MEMO.md
+configs/base/STORAGE_RELOCATION_*.md
+
 # Local data workspaces (not version-controlled)
 data/
 tmp/

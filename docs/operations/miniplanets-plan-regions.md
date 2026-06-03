@@ -2,6 +2,17 @@
 
 `@geolonia/osm-miniplanets` / `duodecim` の分割スキームを planetarble の HLS plan_region に組み込むための設計メモ。
 
+## e2e 検証ログ（2026-06-03, Python 3.9 + GDAL 3.13 バイナリ環境）
+
+機能本体（miniplanet plan + split）と下流 machinery を実 CLI で確認:
+
+1. **miniplanet 機能（GDAL/ネットワーク不要）**: `tile_source: hls` / `plan_regions` 空 / `ocean` 無効の最小 config で `acquire` → z6 グローバルプラン **3544 land タイル**を生成、各エントリに `miniplanet` タグ。`split-plan` → **18 shard**に分割。合計 3544 で欠落・重複ゼロ、全 shard のタグが shard ID と一致、shard サイズ 180〜217（平均 ~197 の ±10%、RCB 均衡が実データで確認）。
+2. **下流 tiling/packaging machinery（実 BMNG データ）**: BMNG 2km 全球 JPG(2.3MB) を取得 → `gdal_translate` で EPSG:4326 GeoTIFF 化 → `tiling pmtiles`（実 `PmtilesTilingManager`: `gdal raster tile` → `mb-util` → `pmtiles convert` → verify）で z0-5 を生成。出力 `*.pmtiles`(3.7MB, spec v3, webp, 全球 Web Mercator, 1365 タイル, clustered) を `pmtiles show`/`pmtiles tile` で検証、抽出タイルは正常な 256x256 WEBP RGB（実画素 mean71/std60）。
+
+補足:
+- レガシー BMNG の `process`（および `acquire` のレガシー経路）は海洋陰影合成のため **GEBCO 2024 NetCDF ~7.5GB + Natural Earth を必須**とする。今回は機能検証に不要なため `process` を迂回し、BMNG ラスターを直接 `tiling pmtiles` に投入した。フル海洋合成まで通すなら GEBCO 取得が前提。
+- ローカル検証用に user-site へ `requests/pyyaml/pystac/pystac-client/mbutil` を導入、`pmtiles` は brew で導入（いずれも実行時の追加依存で本体コードには影響しない）。
+
 ## 背景: 3 リポジトリの読み込み結果
 
 | リポジトリ | 役割 | 核 |

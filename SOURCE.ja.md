@@ -1,6 +1,6 @@
 # Planetarble 対応ソース一覧
 
-planetarble が取り込めるデータソースごとの ID・asset/collection・正式名称・最大解像度・対応する Web メルカトル最大ズームレベルのまとめ。
+planetarble が取り込めるデータソースごとの ID・asset/collection・正式名称・最大解像度・対応する Web メルカトル最大ズームレベルのまとめ。English version: [SOURCE.md](SOURCE.md)
 
 ID はパイプライン側の名前（`processing.tile_source` の値または config ブロック名）、asset / collection は具体的な識別子（STAC collection、`assets.yaml` の asset id、製品 ID）を指す。
 

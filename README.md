@@ -54,6 +54,8 @@ The default configuration keeps plan and manifest artefacts under `data/`, scrat
 
 ## Imagery Options
 
+See [SOURCE.md](SOURCE.md) for the full matrix of supported sources with native resolutions and maximum Web Mercator zoom levels (日本語: [SOURCE.ja.md](SOURCE.ja.md)).
+
 - **HLS v2 (default)** — `processing.tile_source: hls` activates the new global workflow. `planetarble acquire` writes an `hls_z10_plan.ndjson`; `planetarble process` expands it into `output/processing/hls_scene_manifest.json` with MPC-signed URLs for the required `B02/B03/B04` COGs and QA masks. Seasonal windows default to April–October for the northern hemisphere and October–April for the southern hemisphere. Default collections use `hls2-s30` and `hls2-l30`.
 - **Landsat Collection 2 Level-2 SR fallback** — listed in `hls.fallback_collections`. When the primary HLS collections cannot clear clouds, the manifest builder records low-cloud Landsat scenes that align with the same tile footprints and QA masks.
 - **NOAA ETOPO 2022 ocean rendering** — `ocean.enabled: true` combines the CC0 bathymetry grid with a configurable color ramp and lambertian hillshade. `planetarble acquire` downloads the global 15 arc-second bedrock GeoTIFF to `data/etopo/ETOPO_2022_15s_bed.tif`; you can point `ocean.source_id` at a custom path if you maintain your own copy.

@@ -263,6 +263,17 @@ class ProcessingManager(DataProcessor):
         scenes = _load_sentinel2_scene_manifest(scene_manifest_path)
         if not scenes:
             raise ValueError(f"No Sentinel-2 scenes found in {scene_manifest_path}")
+        selected = _select_mosaic_scenes(scenes, self._sentinel2.mosaic_max_scenes)
+        if len(selected) < len(scenes):
+            LOGGER.info(
+                "capped sentinel-2 mosaic scenes",
+                extra={
+                    "total": len(scenes),
+                    "selected": len(selected),
+                    "mosaic_max_scenes": self._sentinel2.mosaic_max_scenes,
+                },
+            )
+        scenes = selected
         scenes = _refresh_sentinel2_scene_urls(scenes, self._sentinel2)
         scenes = _cache_sentinel2_assets(
             scenes,
@@ -1530,6 +1541,28 @@ def _load_sentinel2_scene_manifest(path: Path) -> List[Dict[str, object]]:
     if not isinstance(scenes, list):
         return []
     return [scene for scene in scenes if isinstance(scene, dict)]
+
+
+def _select_mosaic_scenes(
+    scenes: List[Dict[str, object]],
+    max_scenes: int,
+) -> List[Dict[str, object]]:
+    """Keep only the lowest-cloud scenes for mosaicking.
+
+    Every scene kept here has its full asset downloaded, and a small region can
+    be covered by dozens of granules, so the manifest is trimmed to the best
+    candidates. A non-positive max_scenes disables the cap.
+    """
+    if max_scenes <= 0 or len(scenes) <= max_scenes:
+        return scenes
+
+    def sort_key(scene: Dict[str, object]):
+        cloud = scene.get("cloud_cover")
+        if isinstance(cloud, (int, float)):
+            return (0, float(cloud), str(scene.get("item_id", "")))
+        return (1, 0.0, str(scene.get("item_id", "")))
+
+    return sorted(scenes, key=sort_key)[:max_scenes]
 
 
 def _refresh_sentinel2_scene_urls(

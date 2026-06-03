@@ -125,6 +125,7 @@ class Sentinel2Config:
     max_cloud: float = 20.0
     assets: Tuple[str, ...] = ("B02", "B03", "B04")
     max_items: int = 50
+    mosaic_max_scenes: int = 3
     cache_ttl_days: int = 30
     request_timeout_seconds: int = 60
     stac_search_timeout_seconds: int = 600

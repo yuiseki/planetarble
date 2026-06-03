@@ -179,7 +179,7 @@ class ConfigLoader:
             sentinel2_data["bbox"] = tuple(float(value) for value in bbox)
         if "assets" in sentinel2_data and sentinel2_data["assets"] is not None:
             sentinel2_data["assets"] = tuple(sentinel2_data.get("assets") or [])
-        for key in ("max_items", "cache_ttl_days", "request_timeout_seconds", "stac_search_timeout_seconds", "max_retries"):
+        for key in ("max_items", "mosaic_max_scenes", "cache_ttl_days", "request_timeout_seconds", "stac_search_timeout_seconds", "max_retries"):
             if key in sentinel2_data and sentinel2_data[key] is not None:
                 sentinel2_data[key] = int(sentinel2_data[key])
         if "max_cloud" in sentinel2_data and sentinel2_data["max_cloud"] is not None:

@@ -107,6 +107,8 @@ def test_build_local_warp_command_uses_cached_paths_and_clips() -> None:
     # inputs are the LOCAL cached COGs, never /vsicurl
     assert "/vsicurl/" not in joined
     assert str(oam_cache_path(items[0], cache)) in cmd
+    # alpha band so nodata is transparent when tiled
+    assert "-dstalpha" in cmd
     # extent clipped to AOI intersect (union of footprints)
     te = cmd.index("-te")
     assert cmd[te + 1 : te + 5] == ["139.05", "35.1", "139.1", "35.13"]

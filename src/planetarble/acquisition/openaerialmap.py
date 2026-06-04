@@ -170,6 +170,9 @@ def build_local_warp_command(
         "-te_srs", "EPSG:4326",
         "-te", str(minx), str(miny), str(maxx), str(maxy),
         "-r", resampling,
+        # add an alpha band so areas outside the imagery footprint become
+        # transparent nodata when tiled, letting lower layers show through.
+        "-dstalpha",
         "-of", "COG",
         "-co", "COMPRESS=WEBP",
         "-co", "OVERVIEWS=AUTO",

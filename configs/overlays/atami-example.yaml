@@ -1,0 +1,40 @@
+# Example of a tightly-scoped AOI build (ADR 0001).
+# Goal: a global planet that is sharp only where it matters, fetching nothing
+# more than needed. For a clear AOI you do NOT think in miniplanet shards
+# (those are the global-coverage strategy); you name the AOI directly.
+#
+#   base : BMNG, global floor
+#   hls  : context imagery, narrowed to just Kanagawa + Shizuoka (not all Japan)
+#   OAM  : high-resolution RGB orthophoto over the city of Atami only
+#
+# Step 1 status: parsed and validated by planetarble.overlay; the orchestrator
+# that executes it is a later step.
+base:
+  source: bmng
+  resolution: "500m"
+  max_zoom: 8
+
+ocean:
+  enabled: true
+
+overlays:
+  - name: kanagawa_shizuoka_hls
+    source: hls
+    aoi:
+      natural_earth:
+        dataset: admin_1
+        where: "adm0_a3='JPN' AND name IN ('Kanagawa', 'Shizuoka')"
+      land_only: true
+    max_zoom: 11
+
+  - name: atami_oam
+    source: openaerialmap
+    aoi:
+      bbox: [139.02, 35.07, 139.12, 35.13]
+    source_options:
+      asset: rgb
+    min_zoom: 8
+    max_zoom: 18
+
+output:
+  name: planet_atami

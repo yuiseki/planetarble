@@ -78,6 +78,18 @@ output:
 
 AOI is a single reusable type accepting any one of: `bbox`, `natural_earth` (dataset plus WHERE), `miniplanet` (id), or `geojson` (path), optionally with `land_only`. This is the union of what the per source configs accept today, so existing selections map onto it without loss.
 
+### AOI selectors versus miniplanets
+
+Miniplanets are the global-coverage sharding strategy: when the goal is to reproduce the whole planet, the 18 balanced shards split the work evenly and resumably. They are not the right tool when the AOI is already known. For a targeted build you name the AOI directly and fetch nothing more than needed.
+
+Concretely, a "sharpen Atami" planet is not a miniplanet problem. It is:
+
+- `base`: BMNG, global floor
+- an HLS overlay whose AOI is `natural_earth` narrowed to just Kanagawa and Shizuoka (not all of Japan, let alone a whole miniplanet)
+- an OpenAerialMap overlay whose AOI is a `bbox` (or `geojson`) around the city of Atami
+
+So `miniplanet` is one AOI selector among four, appropriate mainly for the global case; `bbox` / `natural_earth` / `geojson` are how targeted builds express intent. See `configs/overlays/atami-example.yaml` (tightly scoped) and `configs/overlays/disaster-example.yaml` (national context plus a city overlay).
+
 ### Source adapter interface
 
 Each source becomes a pluggable adapter behind one protocol, so adding a source (OpenAerialMap being the first new one) does not touch the orchestrator:

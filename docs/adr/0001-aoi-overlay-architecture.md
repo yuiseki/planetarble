@@ -94,6 +94,8 @@ So `miniplanet` is one AOI selector among four, appropriate mainly for the globa
 
 AOI carries an optional `buffer_km`. HLS is the heaviest source to fetch (one STAC search and composite per land ZL10 tile), so a context HLS overlay should derive its footprint from the same target geometry as the high-resolution overlay, expanded by a buffer, rather than from an administrative boundary. Atami is the far-eastern tip of Shizuoka, so selecting `natural_earth` Shizuoka would fetch a whole prefecture of HLS to surround one city. Instead the Atami example gives the HLS overlay the same bbox as the OpenAerialMap overlay plus `buffer_km: 20`. Natural Earth selection stays available, but for heavy sources a buffered target AOI is preferred. The buffer is applied at geometry-resolution time (a later step); step 1 only carries the field.
 
+Administrative boundaries are not just oversized, they can be wildly misleading. Resolving `natural_earth` admin_1 "Tokyo" with land_only against ne_10m_land yields a bbox of roughly (138.9, 24.2, 154.0, 35.9): Tokyo prefecture legally includes the Ogasawara and Izu islands and Minamitorishima, so it spans to latitude 24 and longitude 154, thousands of kilometres of mostly ocean. The buffered Atami target bbox resolves to a tight (138.8, 34.9, 139.3, 35.3) instead. This is the concrete reason heavy sources should avoid admin boundaries as AOIs.
+
 ### Source adapter interface
 
 Each source becomes a pluggable adapter behind one protocol, so adding a source (OpenAerialMap being the first new one) does not touch the orchestrator:

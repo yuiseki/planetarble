@@ -178,21 +178,23 @@ def _xyz_tile(lon: float, lat: float, z: int) -> Tuple[int, int]:
     return max(0, min(x, n - 1)), max(0, min(y, n - 1))
 
 
-def fetch_tile_overzoom(conn, z: int, x: int, y: int, *, tile_size: int = 256):
+def fetch_tile_overzoom(conn, z: int, x: int, y: int, *, tile_size: int = 256, tms: bool = True):
     """Return tile (z,x,y) as an RGBA image, upscaling an ancestor if absent.
 
-    Assumes XYZ tile rows (planetarble tiles with ``--convention xyz``). Returns
-    None when no ancestor has data, so callers can leave a hole for the viewer
-    to overzoom instead of baking a transparent tile.
+    Coordinates are XYZ; MBTiles store TMS rows (row = 2**z - 1 - y) by default,
+    converted at the SQL boundary. Returns None when no ancestor has data, so
+    callers can leave a hole for the viewer to overzoom instead of baking a
+    transparent tile.
     """
     from PIL import Image
 
     for zz in range(z, -1, -1):
         d = z - zz
         ax, ay = x >> d, y >> d
+        srow = ((1 << zz) - 1 - ay) if tms else ay
         row = conn.execute(
             "SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?",
-            (zz, ax, ay),
+            (zz, ax, srow),
         ).fetchone()
         if row is None:
             continue
@@ -219,6 +221,7 @@ def composite_overzoom(
     tile_format: str = "webp",
     quality: int = 85,
     tile_size: int = 256,
+    tms: bool = True,
 ) -> Path:
     """Build a stacked planet over an AOI, filling lower sources by overzoom.
 
@@ -252,7 +255,7 @@ def composite_overzoom(
                 for y in range(y0, y1 + 1):
                     composed = None
                     for conn in conns:
-                        layer = fetch_tile_overzoom(conn, z, x, y, tile_size=tile_size)
+                        layer = fetch_tile_overzoom(conn, z, x, y, tile_size=tile_size, tms=tms)
                         if layer is None:
                             continue
                         composed = layer if composed is None else Image.alpha_composite(composed, layer)
@@ -261,9 +264,10 @@ def composite_overzoom(
                     buf = io.BytesIO()
                     save_img = composed.convert("RGB") if pil_format == "JPEG" else composed
                     save_img.save(buf, format=pil_format, quality=quality)
+                    srow = ((1 << z) - 1 - y) if tms else y
                     out.execute(
                         "INSERT OR REPLACE INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?,?,?,?)",
-                        (z, x, y, buf.getvalue()),
+                        (z, x, srow, buf.getvalue()),
                     )
                     written += 1
         for key, value in (("format", tile_format), ("minzoom", min_zoom), ("maxzoom", max_zoom)):

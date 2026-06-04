@@ -166,3 +166,111 @@ def composite_mbtiles(
         conn.commit()
         conn.execute("DETACH DATABASE overlay")
     return destination
+
+
+def _xyz_tile(lon: float, lat: float, z: int) -> Tuple[int, int]:
+    import math
+
+    n = 1 << z
+    x = int((lon + 180.0) / 360.0 * n)
+    lat = max(min(lat, 85.0511287798066), -85.0511287798066)
+    y = int((1.0 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2.0 * n)
+    return max(0, min(x, n - 1)), max(0, min(y, n - 1))
+
+
+def fetch_tile_overzoom(conn, z: int, x: int, y: int, *, tile_size: int = 256):
+    """Return tile (z,x,y) as an RGBA image, upscaling an ancestor if absent.
+
+    Assumes XYZ tile rows (planetarble tiles with ``--convention xyz``). Returns
+    None when no ancestor has data, so callers can leave a hole for the viewer
+    to overzoom instead of baking a transparent tile.
+    """
+    from PIL import Image
+
+    for zz in range(z, -1, -1):
+        d = z - zz
+        ax, ay = x >> d, y >> d
+        row = conn.execute(
+            "SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?",
+            (zz, ax, ay),
+        ).fetchone()
+        if row is None:
+            continue
+        img = Image.open(io.BytesIO(row[0])).convert("RGBA")
+        if d == 0:
+            return img if img.size == (tile_size, tile_size) else img.resize((tile_size, tile_size), Image.Resampling.LANCZOS)
+        factor = 1 << d
+        w, h = img.size
+        sub_w, sub_h = w // factor, h // factor
+        ox = (x - (ax << d)) * sub_w
+        oy = (y - (ay << d)) * sub_h
+        crop = img.crop((ox, oy, ox + sub_w, oy + sub_h))
+        return crop.resize((tile_size, tile_size), Image.Resampling.LANCZOS)
+    return None
+
+
+def composite_overzoom(
+    sources,
+    destination: Path,
+    *,
+    aoi_bbox: Tuple[float, float, float, float],
+    min_zoom: int,
+    max_zoom: int,
+    tile_format: str = "webp",
+    quality: int = 85,
+    tile_size: int = 256,
+) -> Path:
+    """Build a stacked planet over an AOI, filling lower sources by overzoom.
+
+    ``sources`` are mbtiles paths ordered bottom to top (e.g. BMNG, HLS, OAM).
+    For every output tile in the AOI at each zoom, each source contributes its
+    tile or an upscaled ancestor, composited in order, so the finest source is
+    on top and lower sources fill underneath (no holes). High zooms are bounded
+    to the AOI bbox to keep tile counts feasible.
+    """
+    from PIL import Image
+
+    pil_format = _PIL_SAVE_FORMAT.get(tile_format.lower())
+    if pil_format is None:
+        raise ValueError(f"Unsupported tile_format: {tile_format}")
+    conns = [sqlite3.connect(str(p)) for p in sources]
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.exists():
+            destination.unlink()
+        out = sqlite3.connect(str(destination))
+        out.execute("CREATE TABLE metadata (name text, value text)")
+        out.execute("CREATE TABLE tiles (zoom_level integer, tile_column integer, tile_row integer, tile_data blob)")
+        out.execute("CREATE UNIQUE INDEX tile_index ON tiles (zoom_level, tile_column, tile_row)")
+
+        minx, miny, maxx, maxy = aoi_bbox
+        written = 0
+        for z in range(min_zoom, max_zoom + 1):
+            x0, y0 = _xyz_tile(minx, maxy, z)  # NW
+            x1, y1 = _xyz_tile(maxx, miny, z)  # SE
+            for x in range(x0, x1 + 1):
+                for y in range(y0, y1 + 1):
+                    composed = None
+                    for conn in conns:
+                        layer = fetch_tile_overzoom(conn, z, x, y, tile_size=tile_size)
+                        if layer is None:
+                            continue
+                        composed = layer if composed is None else Image.alpha_composite(composed, layer)
+                    if composed is None or composed.getextrema()[3][1] == 0:
+                        continue  # no data / fully transparent -> leave hole for overzoom
+                    buf = io.BytesIO()
+                    save_img = composed.convert("RGB") if pil_format == "JPEG" else composed
+                    save_img.save(buf, format=pil_format, quality=quality)
+                    out.execute(
+                        "INSERT OR REPLACE INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?,?,?,?)",
+                        (z, x, y, buf.getvalue()),
+                    )
+                    written += 1
+        for key, value in (("format", tile_format), ("minzoom", min_zoom), ("maxzoom", max_zoom)):
+            out.execute("INSERT INTO metadata (name, value) VALUES (?, ?)", (key, str(value)))
+        out.commit()
+        out.close()
+    finally:
+        for conn in conns:
+            conn.close()
+    return destination

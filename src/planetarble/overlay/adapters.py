@@ -111,19 +111,46 @@ class OpenAerialMapAdapter(BaseSourceAdapter):
         self._selected = selected
         return selected
 
-    def build_raster(self, plan: object, workspace: object) -> object:
-        from planetarble.acquisition.openaerialmap import build_oam_warp_command
+    def build_raster(
+        self,
+        plan: object,
+        workspace: object,
+        *,
+        cache_dir: object = None,
+        aoi_bbox: object = None,
+    ) -> object:
+        import subprocess
+        from pathlib import Path
+
+        from planetarble.acquisition.openaerialmap import (
+            build_local_warp_command,
+            oam_cache_path,
+            oam_download_command,
+        )
 
         items = plan if plan is not None else self._selected
-        bbox = getattr(self, "_aoi_bbox", None)
-        if bbox is None:
-            bbox = items[0].bbox
-        output_path = str(workspace)
-        command = build_oam_warp_command(
-            items, aoi_bbox=bbox, output_path=output_path, resampling=self._resampling
-        )
-        import subprocess
+        if not items:
+            raise ValueError("no OAM items to build")
+        cache = Path(cache_dir) if cache_dir is not None else Path("data/cache/oam")
+        cache.mkdir(parents=True, exist_ok=True)
+        bbox = tuple(aoi_bbox) if aoi_bbox is not None else items[0].bbox
 
+        # 1. download each COG whole into the cache (skip if already present)
+        for item in items:
+            dest = oam_cache_path(item, cache)
+            if dest.exists() and dest.stat().st_size > 0:
+                continue
+            subprocess.run(oam_download_command(item, dest), check=True)
+
+        # 2. warp the LOCAL cached COGs into the AOI COG (no network)
+        output_path = str(workspace)
+        command = build_local_warp_command(
+            items,
+            cache_dir=cache,
+            aoi_bbox=bbox,
+            output_path=output_path,
+            resampling=self._resampling,
+        )
         subprocess.run(command, check=True)
         return output_path
 

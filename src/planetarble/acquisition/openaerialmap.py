@@ -10,8 +10,10 @@ tested); the HTTP query needs the network and gdalwarp needs GDAL.
 
 from __future__ import annotations
 
+import hashlib
 import math
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
 OAM_META_ENDPOINT = "https://api.openaerialmap.org/meta"
@@ -103,15 +105,49 @@ def query_oam(
     return parse_oam_results(response.json())
 
 
-def build_oam_warp_command(
+def oam_cache_path(item: OAMItem, cache_dir: Path) -> Path:
+    """Deterministic local path for a cached OAM COG.
+
+    Planetarble caches the whole COG so the same imagery is never re-fetched.
+    The name is a hash of the source URL plus the original basename, so it is
+    stable across runs and unique per item.
+    """
+    digest = hashlib.sha1(item.cog_url.encode("utf-8")).hexdigest()[:12]
+    stem = Path(item.cog_url.split("?", 1)[0]).stem or "cog"
+    return cache_dir / f"{digest}_{stem}.tif"
+
+
+def oam_download_command(item: OAMItem, dest: Path, *, aria2c: str = "aria2c") -> List[str]:
+    """aria2 command to download a whole COG sequentially (resumable, cached).
+
+    A plain sequential download is far cheaper than warping over /vsicurl, which
+    issues many random Range reads; once the file is cached, re-tiling never
+    touches the network again.
+    """
+    dest = Path(dest)
+    return [
+        aria2c,
+        "-c",  # continue/resume a partial file
+        "-x", "4",
+        "-s", "4",
+        "--auto-file-renaming=false",
+        "--allow-overwrite=false",
+        "-d", str(dest.parent),
+        "-o", dest.name,
+        item.cog_url,
+    ]
+
+
+def build_local_warp_command(
     items: Sequence[OAMItem],
     *,
+    cache_dir: Path,
     aoi_bbox: Tuple[float, float, float, float],
     output_path: str,
     gdalwarp: str = "gdalwarp",
     resampling: str = "cubic",
 ) -> List[str]:
-    """gdalwarp the selected COGs (streamed via /vsicurl/) into an AOI COG."""
+    """gdalwarp the locally cached COGs into an AOI COG (no network reads)."""
     if not items:
         raise ValueError("no OAM items to warp")
     # OAM footprints are usually far smaller than the AOI; clip the warp extent
@@ -139,6 +175,6 @@ def build_oam_warp_command(
         "-co", "OVERVIEWS=AUTO",
     ]
     for item in items:
-        command.append(f"/vsicurl/{item.cog_url}")
+        command.append(str(oam_cache_path(item, cache_dir)))
     command.append(output_path)
     return command

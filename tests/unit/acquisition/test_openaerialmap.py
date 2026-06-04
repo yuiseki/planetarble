@@ -6,10 +6,14 @@ import json
 
 import pytest
 
+from pathlib import Path
+
 from planetarble.acquisition.openaerialmap import (
     OAMItem,
-    build_oam_warp_command,
+    build_local_warp_command,
     gsd_to_zoom,
+    oam_cache_path,
+    oam_download_command,
     parse_oam_results,
     select_items,
 )
@@ -65,26 +69,50 @@ def test_select_items_filters_by_max_gsd() -> None:
     assert [i.gsd for i in selected] == [0.05]  # 0.12 dropped
 
 
-def test_build_oam_warp_command_clips_to_aoi_and_footprint_intersection() -> None:
+def test_oam_cache_path_is_deterministic_and_unique() -> None:
+    cache = Path("data/cache/oam")
     items = parse_oam_results(ATAMI_RESPONSE)
-    cmd = build_oam_warp_command(
+    p0a = oam_cache_path(items[0], cache)
+    p0b = oam_cache_path(items[0], cache)
+    p1 = oam_cache_path(items[1], cache)
+    assert p0a == p0b  # deterministic -> cache hit on re-run
+    assert p0a != p1  # distinct items -> distinct files
+    assert p0a.parent == cache and p0a.suffix == ".tif"
+
+
+def test_oam_download_command_is_sequential_resumable() -> None:
+    item = parse_oam_results(ATAMI_RESPONSE)[0]
+    dest = Path("data/cache/oam/abc.tif")
+    cmd = oam_download_command(item, dest, aria2c="aria2c")
+    assert cmd[0] == "aria2c"
+    joined = " ".join(cmd)
+    # whole-file download (no /vsicurl), resumable, deterministic output name
+    assert "/vsicurl/" not in joined
+    assert item.cog_url in cmd
+    assert "abc.tif" in joined
+    assert "-c" in cmd  # continue/resume
+
+
+def test_build_local_warp_command_uses_cached_paths_and_clips() -> None:
+    cache = Path("data/cache/oam")
+    items = parse_oam_results(ATAMI_RESPONSE)
+    cmd = build_local_warp_command(
         items,
+        cache_dir=cache,
         aoi_bbox=(139.02, 35.07, 139.12, 35.13),
         output_path="out/atami_oam.tif",
-        gdalwarp="gdalwarp",
     )
     assert cmd[0] == "gdalwarp"
     joined = " ".join(cmd)
-    assert "/vsicurl/https://oin-hotosm-temp.s3.amazonaws.com/abc/0/def.tif" in joined
-    # Imagery footprints (~1km) are far smaller than the AOI (~9km), so the
-    # warp extent must be AOI intersect (union of footprints), not the whole
-    # AOI, to avoid an enormous mostly-nodata raster at 5cm.
+    # inputs are the LOCAL cached COGs, never /vsicurl
+    assert "/vsicurl/" not in joined
+    assert str(oam_cache_path(items[0], cache)) in cmd
+    # extent clipped to AOI intersect (union of footprints)
     te = cmd.index("-te")
     assert cmd[te + 1 : te + 5] == ["139.05", "35.1", "139.1", "35.13"]
-    assert "out/atami_oam.tif" in cmd
 
 
-def test_build_oam_warp_command_errors_when_aoi_disjoint() -> None:
+def test_build_local_warp_command_errors_when_aoi_disjoint() -> None:
     items = parse_oam_results(ATAMI_RESPONSE)
     with pytest.raises(ValueError):
-        build_oam_warp_command(items, aoi_bbox=(0.0, 0.0, 1.0, 1.0), output_path="o.tif")
+        build_local_warp_command(items, cache_dir=Path("c"), aoi_bbox=(0.0, 0.0, 1.0, 1.0), output_path="o.tif")

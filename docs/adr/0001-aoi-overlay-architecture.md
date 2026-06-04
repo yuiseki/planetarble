@@ -1,8 +1,15 @@
 # ADR 0001: Global floor plus AOI overlay architecture
 
-- Status: Proposed
+- Status: Accepted (implementation in progress)
 - Date: 2026-06-04
 - Deciders: yuiseki
+
+## Implementation status
+
+- Step 1 (done): the declarative front end. `planetarble.overlay` provides the unified `AOI` type, the `Overlay` / `BaseSpec` / `PipelineSpec` parser (`parse_pipeline_spec`), the `SourceAdapter` protocol plus `SOURCE_REGISTRY` (zoom ceilings mirroring SOURCE.md), and `validate_pipeline_spec` (rejects oversampling). Pure Python, no GDAL or network. Example: `configs/overlays/disaster-example.yaml`. The existing acquire/process/tile/package CLI is untouched.
+- Step 2 (pending): refactor existing per-source code behind concrete `SourceAdapter`s, source by source, behind tests.
+- Step 3 (pending): the orchestrator (build base, build overlays, merge, package) and the new build command.
+- Step 4 (pending): the OpenAerialMap adapter.
 
 ## Context
 

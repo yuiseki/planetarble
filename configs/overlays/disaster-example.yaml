@@ -1,0 +1,36 @@
+# Example of the ADR 0001 AOI-overlay schema (docs/adr/0001-aoi-overlay-architecture.md).
+# A global BMNG floor, a national HLS overlay for context, and a city-scale
+# OpenAerialMap overlay over a disaster area, merged into one custom planet.
+#
+# Step 1 status: this schema is parsed and validated by planetarble.overlay
+# (parse_pipeline_spec / validate_pipeline_spec). The orchestrator that executes
+# it (build base -> build overlays -> merge -> package) is a later step; the
+# current acquire/process/tile/package CLI is unchanged.
+base:
+  source: bmng
+  resolution: "500m"
+  max_zoom: 8
+
+ocean:
+  enabled: true
+
+overlays:
+  - name: japan_hls
+    source: hls
+    aoi:
+      natural_earth: { dataset: admin_0, where: "adm0_a3='JPN'" }
+      land_only: true
+    max_zoom: 11
+
+  - name: noto_oam
+    source: openaerialmap
+    aoi:
+      bbox: [136.6, 37.0, 137.4, 37.6]
+    source_options:
+      start_date: "2024-01-01"
+      end_date: "2024-03-31"
+    min_zoom: 8
+    max_zoom: 18
+
+output:
+  name: planet_disaster_2024

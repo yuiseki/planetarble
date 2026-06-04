@@ -6,10 +6,11 @@
 
 ## Implementation status
 
-- Step 1 (done): the declarative front end. `planetarble.overlay` provides the unified `AOI` type, the `Overlay` / `BaseSpec` / `PipelineSpec` parser (`parse_pipeline_spec`), the `SourceAdapter` protocol plus `SOURCE_REGISTRY` (zoom ceilings mirroring SOURCE.md), and `validate_pipeline_spec` (rejects oversampling). Pure Python, no GDAL or network. Example: `configs/overlays/disaster-example.yaml`. The existing acquire/process/tile/package CLI is untouched.
-- Step 2 (pending): refactor existing per-source code behind concrete `SourceAdapter`s, source by source, behind tests.
-- Step 3 (pending): the orchestrator (build base, build overlays, merge, package) and the new build command.
-- Step 4 (pending): the OpenAerialMap adapter.
+- Step 1 (done): the declarative front end. `planetarble.overlay` provides the unified `AOI` type (with `buffer_km`), the `Overlay` / `BaseSpec` / `PipelineSpec` parser (`parse_pipeline_spec`), the `SourceAdapter` protocol plus `SOURCE_REGISTRY` (zoom ceilings mirroring SOURCE.md), and `validate_pipeline_spec` (rejects oversampling). Pure Python, no GDAL or network. Examples: `configs/overlays/atami-example.yaml` (tightly scoped) and `configs/overlays/disaster-example.yaml`. The existing acquire/process/tile/package CLI is untouched.
+- Step 2a (done): `resolve_aoi` turns an AOI into a search bbox plus an optional OGR geometry (pure for bbox/miniplanet/buffer, GDAL for natural_earth/geojson/land_only), verified on a GDAL host.
+- Step 2b (done): concrete adapters and a factory (`get_adapter`). Each adapter implements the resolution contract (`name`, `native_max_zoom`): BMNG varies by resolution (z8 for 500m, z6 for 2km), OpenAerialMap is per-item with the registry value as an upper guard, the rest report their SOURCE.md ceiling. `plan` / `build_raster` declare the contract and are wired in step 3.
+- Step 3 (pending): the orchestrator (build base, build overlays, merge, package), wiring each adapter's `plan` / `build_raster` to the existing planners and managers, plus the new build command.
+- Step 4 (pending): the OpenAerialMap adapter's data path (OAM API query, COG warp).
 
 ## Context
 

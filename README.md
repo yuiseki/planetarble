@@ -170,6 +170,8 @@ Serving z12 is typically done via client-side overscaling of z11 tiles rather th
 
 ## Roadmap
 
+The next major direction is a global floor plus AOI overlay model: a global BMNG base everyone can afford, plus per-area high-resolution overlays from any source declared in a single config (including OpenAerialMap for disaster response), merged into one custom planet. The full max-resolution global build stays supported as a special case. See [docs/adr/0001-aoi-overlay-architecture.md](docs/adr/0001-aoi-overlay-architecture.md).
+
 - Support higher-resolution outputs across the entire basemap without compromising reproducibility.
 - Integrate Sentinel-2 acquisitions via Copernicus services to unlock higher zoom levels where source data allows.
 - Offer selective high-zoom coverage so priority regions can receive detailed tiles while keeping the global bundle lean.

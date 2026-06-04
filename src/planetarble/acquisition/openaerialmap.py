@@ -114,7 +114,19 @@ def build_oam_warp_command(
     """gdalwarp the selected COGs (streamed via /vsicurl/) into an AOI COG."""
     if not items:
         raise ValueError("no OAM items to warp")
-    minx, miny, maxx, maxy = aoi_bbox
+    # OAM footprints are usually far smaller than the AOI; clip the warp extent
+    # to AOI intersect (union of footprints) so we do not allocate an enormous
+    # mostly-nodata raster at the source's fine resolution.
+    u_minx = min(i.bbox[0] for i in items)
+    u_miny = min(i.bbox[1] for i in items)
+    u_maxx = max(i.bbox[2] for i in items)
+    u_maxy = max(i.bbox[3] for i in items)
+    minx = max(aoi_bbox[0], u_minx)
+    miny = max(aoi_bbox[1], u_miny)
+    maxx = min(aoi_bbox[2], u_maxx)
+    maxy = min(aoi_bbox[3], u_maxy)
+    if minx >= maxx or miny >= maxy:
+        raise ValueError("AOI does not intersect any OAM item footprint")
     command: List[str] = [
         gdalwarp,
         "-overwrite",

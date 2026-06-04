@@ -65,7 +65,7 @@ def test_select_items_filters_by_max_gsd() -> None:
     assert [i.gsd for i in selected] == [0.05]  # 0.12 dropped
 
 
-def test_build_oam_warp_command_uses_vsicurl_and_bbox() -> None:
+def test_build_oam_warp_command_clips_to_aoi_and_footprint_intersection() -> None:
     items = parse_oam_results(ATAMI_RESPONSE)
     cmd = build_oam_warp_command(
         items,
@@ -76,8 +76,15 @@ def test_build_oam_warp_command_uses_vsicurl_and_bbox() -> None:
     assert cmd[0] == "gdalwarp"
     joined = " ".join(cmd)
     assert "/vsicurl/https://oin-hotosm-temp.s3.amazonaws.com/abc/0/def.tif" in joined
-    assert "-te" in cmd
-    # target extent in AOI order
+    # Imagery footprints (~1km) are far smaller than the AOI (~9km), so the
+    # warp extent must be AOI intersect (union of footprints), not the whole
+    # AOI, to avoid an enormous mostly-nodata raster at 5cm.
     te = cmd.index("-te")
-    assert cmd[te + 1 : te + 5] == ["139.02", "35.07", "139.12", "35.13"]
+    assert cmd[te + 1 : te + 5] == ["139.05", "35.1", "139.1", "35.13"]
     assert "out/atami_oam.tif" in cmd
+
+
+def test_build_oam_warp_command_errors_when_aoi_disjoint() -> None:
+    items = parse_oam_results(ATAMI_RESPONSE)
+    with pytest.raises(ValueError):
+        build_oam_warp_command(items, aoi_bbox=(0.0, 0.0, 1.0, 1.0), output_path="o.tif")

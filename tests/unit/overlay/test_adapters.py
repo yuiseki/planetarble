@@ -55,3 +55,33 @@ def test_plan_and_build_raster_declared_but_pending() -> None:
         adapter.plan(None, (0, 11))
     with pytest.raises(NotImplementedError):
         adapter.build_raster(None, None)
+
+
+def test_oam_plan_selects_items_and_sets_zoom_from_gsd() -> None:
+    from planetarble.acquisition.openaerialmap import OAMItem
+    from planetarble.overlay import AOI
+
+    items = [
+        OAMItem(cog_url="https://x/coarse.tif", gsd=0.5, bbox=(139.0, 35.0, 139.2, 35.2)),
+        OAMItem(cog_url="https://x/fine.tif", gsd=0.05, bbox=(139.0, 35.0, 139.2, 35.2)),
+    ]
+    adapter = OpenAerialMapAdapter(max_items=1, fetch=lambda bbox: items)
+
+    # before planning, only the registry upper guard is known
+    assert adapter.native_max_zoom(None) == 22
+
+    aoi = AOI.from_mapping({"bbox": [139.0, 35.0, 139.2, 35.2]})
+    selected = adapter.plan(aoi, (8, 18))
+
+    assert len(selected) == 1
+    assert selected[0].gsd == 0.05  # finest chosen
+    # after planning, the ceiling reflects the selected item's GSD (~5cm -> z21)
+    assert adapter.native_max_zoom(None) == 21
+
+
+def test_oam_plan_raises_when_no_imagery() -> None:
+    from planetarble.overlay import AOI
+
+    adapter = OpenAerialMapAdapter(fetch=lambda bbox: [])
+    with pytest.raises(ValueError):
+        adapter.plan(AOI.from_mapping({"bbox": [0, 0, 1, 1]}), (8, 18))

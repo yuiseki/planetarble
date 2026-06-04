@@ -72,16 +72,60 @@ class ViirsAdapter(BaseSourceAdapter):
 class OpenAerialMapAdapter(BaseSourceAdapter):
     name = "openaerialmap"
 
-    def __init__(self, item_max_zoom: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        item_max_zoom: Optional[int] = None,
+        *,
+        max_gsd: Optional[float] = None,
+        max_items: int = 1,
+        resampling: str = "cubic",
+        fetch: Optional[object] = None,
+    ) -> None:
         # OAM resolution varies per item, so the real ceiling comes from the
         # selected item's ground sample distance once known; until then the
         # registry value is only an upper guard.
         self.item_max_zoom = item_max_zoom
+        self._max_gsd = max_gsd
+        self._max_items = max_items
+        self._resampling = resampling
+        self._fetch = fetch  # injectable callable(bbox) -> List[OAMItem] for tests
+        self._selected: list = []
 
     def native_max_zoom(self, aoi: object) -> int:
         if self.item_max_zoom is not None:
             return self.item_max_zoom
+        if self._selected:
+            from planetarble.acquisition.openaerialmap import gsd_to_zoom
+
+            return gsd_to_zoom(min(item.gsd for item in self._selected))
         return SOURCE_REGISTRY[self.name].native_max_zoom
+
+    def plan(self, aoi: object, zoom_range: Tuple[int, int]) -> object:
+        from planetarble.acquisition.openaerialmap import query_oam, select_items
+
+        bbox = getattr(aoi, "bbox", None) or aoi
+        items = self._fetch(bbox) if self._fetch is not None else query_oam(bbox)
+        selected = select_items(items, max_items=self._max_items, max_gsd=self._max_gsd)
+        if not selected:
+            raise ValueError(f"no OpenAerialMap imagery found for bbox {bbox}")
+        self._selected = selected
+        return selected
+
+    def build_raster(self, plan: object, workspace: object) -> object:
+        from planetarble.acquisition.openaerialmap import build_oam_warp_command
+
+        items = plan if plan is not None else self._selected
+        bbox = getattr(self, "_aoi_bbox", None)
+        if bbox is None:
+            bbox = items[0].bbox
+        output_path = str(workspace)
+        command = build_oam_warp_command(
+            items, aoi_bbox=bbox, output_path=output_path, resampling=self._resampling
+        )
+        import subprocess
+
+        subprocess.run(command, check=True)
+        return output_path
 
 
 _ADAPTERS: Dict[str, Type[BaseSourceAdapter]] = {

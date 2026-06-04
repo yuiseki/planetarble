@@ -118,23 +118,32 @@ def composite_mbtiles(
             )
         }
 
+        canonical_size: Optional[Tuple[int, int]] = None
         updates = []
         for z, x, y, bdata in conn.execute(
             "SELECT zoom_level, tile_column, tile_row, tile_data FROM tiles"
         ):
             base_img = Image.open(io.BytesIO(bdata)).convert("RGBA")
+            if canonical_size is None:
+                canonical_size = base_img.size
             key = (z, x, y)
             odata = overlay_tiles.pop(key, None)
             if odata is not None:
                 ov_img = Image.open(io.BytesIO(odata)).convert("RGBA")
+                # tile sizes can differ (e.g. 512 base vs 256 overlay); match the base
+                if ov_img.size != base_img.size:
+                    ov_img = ov_img.resize(base_img.size, Image.Resampling.LANCZOS)
                 out_img = Image.alpha_composite(base_img, ov_img)
             else:
                 out_img = base_img
             updates.append((z, x, y, _encode(out_img)))
 
-        # overlay-only tiles (deeper zooms with no base) inserted re-encoded
+        # overlay-only tiles (deeper zooms with no base) inserted re-encoded,
+        # normalized to the planet's canonical tile size
         for (z, x, y), odata in overlay_tiles.items():
             ov_img = Image.open(io.BytesIO(odata)).convert("RGBA")
+            if canonical_size is not None and ov_img.size != canonical_size:
+                ov_img = ov_img.resize(canonical_size, Image.Resampling.LANCZOS)
             updates.append((z, x, y, _encode(ov_img)))
 
         # ``updates`` is the complete final tile set (every base tile re-encoded

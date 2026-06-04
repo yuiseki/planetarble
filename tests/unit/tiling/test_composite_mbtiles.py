@@ -87,6 +87,21 @@ def test_composite_inserts_overlay_only_tiles(tmp_path: Path) -> None:
     _assert_near(_read_tile(dest, 0, 0, 0).getpixel((0, 0)), (10, 10, 10))
 
 
+def test_composite_resizes_mismatched_overlay_to_base(tmp_path: Path) -> None:
+    # Base 8x8, overlay 4x4 (e.g. 512 base vs 256 overlay): overlay is resized.
+    base = tmp_path / "base.mbtiles"
+    overlay = tmp_path / "overlay.mbtiles"
+    dest = tmp_path / "out.mbtiles"
+    _write_mbtiles(base, {(2, 1, 1): Image.new("RGBA", (8, 8), (255, 0, 0, 255))})
+    _write_mbtiles(overlay, {(2, 1, 1): Image.new("RGBA", (4, 4), (0, 0, 255, 255))})
+
+    composite_mbtiles(base, overlay, dest, tile_format="webp")
+
+    out = _read_tile(dest, 2, 1, 1)
+    assert out.size == (8, 8)  # canonical = base size
+    _assert_near(out.getpixel((4, 4)), (0, 0, 255))  # opaque overlay, upscaled
+
+
 def test_composite_output_is_uniform_webp(tmp_path: Path) -> None:
     base = tmp_path / "base.mbtiles"
     overlay = tmp_path / "overlay.mbtiles"

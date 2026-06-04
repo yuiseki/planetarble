@@ -26,6 +26,7 @@ class AOI:
     miniplanet: Optional[str] = None
     geojson: Optional[str] = None
     land_only: bool = False
+    buffer_km: float = 0.0
 
     _SELECTORS = ("bbox", "natural_earth", "miniplanet", "geojson")
 
@@ -58,6 +59,7 @@ class AOI:
             miniplanet=miniplanet,
             geojson=geojson,
             land_only=bool(data.get("land_only", False)),
+            buffer_km=float(data.get("buffer_km", 0.0)),
         )
 
 

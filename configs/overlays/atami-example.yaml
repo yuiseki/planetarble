@@ -4,8 +4,14 @@
 # (those are the global-coverage strategy); you name the AOI directly.
 #
 #   base : BMNG, global floor
-#   hls  : context imagery, narrowed to just Kanagawa + Shizuoka (not all Japan)
-#   OAM  : high-resolution RGB orthophoto over the city of Atami only
+#   hls  : context imagery, derived from the SAME target bbox + a buffer.
+#          HLS is the heaviest source to fetch, so do NOT pull a whole
+#          prefecture (Atami is the far-eastern tip of Shizuoka; selecting
+#          Shizuoka would waste most of it). A buffered target bbox fetches
+#          only the tiles that actually surround the area of interest.
+#   OAM  : high-resolution RGB orthophoto over the city of Atami only.
+#          OAM max zoom is per-item (e.g. HOTOSM item 60e5afbe5bc2dc00058bbe06
+#          reaches ~z20); the adapter reads the real ceiling from the item.
 #
 # Step 1 status: parsed and validated by planetarble.overlay; the orchestrator
 # that executes it is a later step.
@@ -18,12 +24,11 @@ ocean:
   enabled: true
 
 overlays:
-  - name: kanagawa_shizuoka_hls
+  - name: atami_context_hls
     source: hls
     aoi:
-      natural_earth:
-        dataset: admin_1
-        where: "adm0_a3='JPN' AND name IN ('Kanagawa', 'Shizuoka')"
+      bbox: [139.02, 35.07, 139.12, 35.13]   # same target as OAM
+      buffer_km: 20                            # auto-expanded footprint, no admin boundary
       land_only: true
     max_zoom: 11
 

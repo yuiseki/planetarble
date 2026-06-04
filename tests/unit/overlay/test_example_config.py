@@ -28,7 +28,12 @@ def test_atami_example_uses_direct_aoi_selectors() -> None:
 
     # A targeted build names its AOIs directly; no miniplanet shards involved.
     assert all(o.aoi.miniplanet is None for o in spec.overlays)
+    # The heavy HLS overlay derives its footprint from the target bbox + buffer,
+    # not from an admin boundary.
     hls = spec.overlays[0]
-    assert "Kanagawa" in hls.aoi.natural_earth["where"]
+    assert hls.source == "hls"
+    assert hls.aoi.natural_earth is None
+    assert hls.aoi.bbox == (139.02, 35.07, 139.12, 35.13)
+    assert hls.aoi.buffer_km == 20.0
     assert spec.overlays[1].aoi.bbox == (139.02, 35.07, 139.12, 35.13)
     assert validate_pipeline_spec(spec) == []

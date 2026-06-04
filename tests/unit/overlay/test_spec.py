@@ -71,6 +71,19 @@ def test_aoi_miniplanet_and_geojson() -> None:
     assert AOI.from_mapping({"geojson": "aoi.json"}).geojson == "aoi.json"
 
 
+def test_aoi_buffer_km_defaults_zero_and_parses() -> None:
+    # Heavy sources (HLS) derive their footprint from a buffered target AOI
+    # instead of an oversized admin boundary, so buffer_km is a first-class knob.
+    assert AOI.from_mapping({"bbox": [0, 0, 1, 1]}).buffer_km == 0.0
+    assert AOI.from_mapping({"bbox": [0, 0, 1, 1], "buffer_km": 20}).buffer_km == 20.0
+
+
+def test_aoi_buffer_km_is_not_a_selector() -> None:
+    # buffer_km alone is not an AOI; exactly one geometry selector is still required.
+    with pytest.raises(ValueError):
+        AOI.from_mapping({"buffer_km": 20})
+
+
 def test_unknown_base_source_rejected() -> None:
     bad = {**DISASTER, "base": {"source": "nope", "max_zoom": 8}}
     with pytest.raises(ValueError):

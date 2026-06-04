@@ -90,6 +90,10 @@ Concretely, a "sharpen Atami" planet is not a miniplanet problem. It is:
 
 So `miniplanet` is one AOI selector among four, appropriate mainly for the global case; `bbox` / `natural_earth` / `geojson` are how targeted builds express intent. See `configs/overlays/atami-example.yaml` (tightly scoped) and `configs/overlays/disaster-example.yaml` (national context plus a city overlay).
 
+### Buffered footprints for heavy sources
+
+AOI carries an optional `buffer_km`. HLS is the heaviest source to fetch (one STAC search and composite per land ZL10 tile), so a context HLS overlay should derive its footprint from the same target geometry as the high-resolution overlay, expanded by a buffer, rather than from an administrative boundary. Atami is the far-eastern tip of Shizuoka, so selecting `natural_earth` Shizuoka would fetch a whole prefecture of HLS to surround one city. Instead the Atami example gives the HLS overlay the same bbox as the OpenAerialMap overlay plus `buffer_km: 20`. Natural Earth selection stays available, but for heavy sources a buffered target AOI is preferred. The buffer is applied at geometry-resolution time (a later step); step 1 only carries the field.
+
 ### Source adapter interface
 
 Each source becomes a pluggable adapter behind one protocol, so adding a source (OpenAerialMap being the first new one) does not touch the orchestrator:
@@ -119,7 +123,9 @@ The orchestrator refuses or warns when an overlay requests a zoom above its sour
 
 ## OpenAerialMap adapter (the motivating new source)
 
-OpenAerialMap (OAM) publishes open, often very recent, high resolution aerial and drone orthophotos, which makes it the natural source for disaster response planets. The adapter queries the OAM API by bbox and date to enumerate imagery footprints, selects the relevant COGs, and warps them into an AOI COG that the tiler takes to high zoom (commonly z18 or higher). It is implemented as just another `SourceAdapter`, so a disaster planet is the `pipeline-disaster.yaml` above: a global BMNG floor, a national HLS overlay for context, and a city scale OAM overlay over the affected area.
+OpenAerialMap (OAM) publishes open, often very recent, high resolution aerial and drone orthophotos, which makes it the natural source for disaster response planets. The adapter queries the OAM API by bbox and date to enumerate imagery footprints, selects the relevant COGs, and warps them into an AOI COG that the tiler takes to high zoom. It is implemented as just another `SourceAdapter`, so a disaster planet is the `pipeline-disaster.yaml` above: a global BMNG floor, a national HLS overlay for context, and a city scale OAM overlay over the affected area.
+
+OAM resolution varies per item, so the maximum usable zoom is per item rather than a fixed source constant. For example HOTOSM OAM item `60e5afbe5bc2dc00058bbe06` (Atami) reaches roughly z20. The adapter derives the real ceiling from the item's ground sample distance; the `openaerialmap` entry in `SOURCE_REGISTRY` (z22) is only an upper guard so validation does not reject legitimate high zoom requests.
 
 ## Migration and compatibility
 

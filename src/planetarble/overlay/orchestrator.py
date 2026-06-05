@@ -1,10 +1,11 @@
 """Build orchestrator (ADR 0001, step 3).
 
-Sequences a PipelineSpec into a planet: build the global base, build each AOI
-overlay, merge the overlays onto the base in declared order (later wins), and
-package the result. The heavy, GDAL- and network-bound work lives behind a
-``PlanetExecutor`` so the control flow can be tested without GDAL; the real
-executor wiring to the existing planners/managers is verified on a GDAL host.
+Sequences a PipelineSpec into a planet using the stacking model proven on the
+Atami build: a global base, then for each overlay a stack composited over that
+overlay's footprint from all lower sources (base + earlier overlays + this one)
+with overzoom fill, merged onto the running planet in declared order. The heavy
+GDAL/tiling work lives behind a ``PlanetExecutor`` so the control flow is tested
+without GDAL.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Protocol
 
-from .resolve import ResolvedAOI, resolve_aoi
+from .resolve import resolve_aoi
 from .spec import BaseSpec, Overlay, PipelineSpec
 from .validate import validate_pipeline_spec
 
@@ -22,10 +23,13 @@ class PlanetExecutor(Protocol):
     """The heavy steps the orchestrator coordinates."""
 
     def build_base(self, base: BaseSpec) -> Path:
-        """Build the global floor and return its MBTiles path."""
+        """Build (or reuse) the global floor MBTiles."""
 
-    def build_overlay(self, overlay: Overlay, resolved: ResolvedAOI) -> Path:
-        """Build one AOI overlay and return its MBTiles path."""
+    def build_overlay_source(self, overlay: Overlay, resolved) -> Path:
+        """Build one overlay's own tiled MBTiles (a composite source)."""
+
+    def stack(self, sources: List[Path], aoi_bbox, min_zoom: int, max_zoom: int) -> Path:
+        """Overzoom-composite the ordered sources (bottom..top) over the AOI."""
 
     def merge(self, base_mbtiles: Path, overlay_mbtiles: Path) -> Path:
         """Overlay one MBTiles onto another and return the merged path."""
@@ -38,7 +42,7 @@ class PlanetExecutor(Protocol):
 class BuildResult:
     planet: Path
     base_mbtiles: Path
-    overlay_mbtiles: List[Path] = field(default_factory=list)
+    stacks: List[Path] = field(default_factory=list)
 
 
 def build_planet(
@@ -54,14 +58,19 @@ def build_planet(
         raise ValueError("invalid pipeline spec: " + "; ".join(issues))
 
     base_mbtiles = executor.build_base(spec.base)
-    current = base_mbtiles
-    overlay_paths: List[Path] = []
+    planet = base_mbtiles
+    sources: List[Path] = [base_mbtiles]
+    stacks: List[Path] = []
+    overlay_min_zoom = spec.base.max_zoom + 1
 
     for overlay in spec.overlays:
         resolved = resolve_aoi(overlay.aoi, data_dir=data_dir, land_mask_path=land_mask_path)
-        overlay_mbtiles = executor.build_overlay(overlay, resolved)
-        overlay_paths.append(overlay_mbtiles)
-        current = executor.merge(current, overlay_mbtiles)
+        source = executor.build_overlay_source(overlay, resolved)
+        sources.append(source)
+        min_zoom = overlay.min_zoom or overlay_min_zoom
+        stack = executor.stack(list(sources), resolved.bbox, min_zoom, overlay.max_zoom)
+        stacks.append(stack)
+        planet = executor.merge(planet, stack)
 
-    planet = executor.package(current, spec.output_name)
-    return BuildResult(planet=planet, base_mbtiles=base_mbtiles, overlay_mbtiles=overlay_paths)
+    planet = executor.package(planet, spec.output_name)
+    return BuildResult(planet=planet, base_mbtiles=base_mbtiles, stacks=stacks)

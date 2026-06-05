@@ -20,8 +20,6 @@ SPEC = {
 
 
 class _RecordingExecutor:
-    """Records the orchestration calls without doing any real work."""
-
     def __init__(self) -> None:
         self.calls: list = []
 
@@ -29,20 +27,24 @@ class _RecordingExecutor:
         self.calls.append(("base", base.source, base.max_zoom))
         return Path("base.mbtiles")
 
-    def build_overlay(self, overlay, resolved):  # noqa: ANN001
-        self.calls.append(("overlay", overlay.name, overlay.source, resolved.bbox))
+    def build_overlay_source(self, overlay, resolved):  # noqa: ANN001
+        self.calls.append(("source", overlay.name, resolved.bbox))
         return Path(f"{overlay.name}.mbtiles")
 
-    def merge(self, base_mbtiles, overlay_mbtiles):  # noqa: ANN001
-        self.calls.append(("merge", str(base_mbtiles), str(overlay_mbtiles)))
-        return Path(f"merged_with_{Path(overlay_mbtiles).stem}.mbtiles")
+    def stack(self, sources, aoi_bbox, min_zoom, max_zoom):  # noqa: ANN001
+        self.calls.append(("stack", [Path(s).stem for s in sources], aoi_bbox, min_zoom, max_zoom))
+        return Path("stack_" + "_".join(Path(s).stem for s in sources) + ".mbtiles")
 
-    def package(self, mbtiles, output_name):  # noqa: ANN001
-        self.calls.append(("package", str(mbtiles), output_name))
-        return Path(f"{output_name}.pmtiles")
+    def merge(self, base, overlay):  # noqa: ANN001
+        self.calls.append(("merge", Path(base).stem, Path(overlay).stem))
+        return Path(f"{Path(base).stem}+{Path(overlay).stem}.mbtiles")
+
+    def package(self, mbtiles, name):  # noqa: ANN001
+        self.calls.append(("package", Path(mbtiles).stem, name))
+        return Path(f"{name}.pmtiles")
 
 
-def test_build_planet_sequences_base_overlays_merge_package() -> None:
+def test_build_planet_stacks_each_overlay_over_lower_sources() -> None:
     spec = parse_pipeline_spec(SPEC)
     ex = _RecordingExecutor()
 
@@ -50,26 +52,18 @@ def test_build_planet_sequences_base_overlays_merge_package() -> None:
 
     assert isinstance(result, BuildResult)
     assert result.planet == Path("planet_test.pmtiles")
-
     kinds = [c[0] for c in ex.calls]
-    # base first, then per overlay (build then merge), package last
-    assert kinds == ["base", "overlay", "merge", "overlay", "merge", "package"]
-    # overlays built in declared order
-    assert ex.calls[1][1] == "ctx" and ex.calls[3][1] == "city"
-    # merges chain: ctx merged onto base, then city merged onto that result
-    assert ex.calls[2] == ("merge", "base.mbtiles", "ctx.mbtiles")
-    assert ex.calls[4] == ("merge", "merged_with_ctx.mbtiles", "city.mbtiles")
-    # package receives the final merged mbtiles and the output name
-    assert ex.calls[5] == ("package", "merged_with_city.mbtiles", "planet_test")
+    assert kinds == ["base", "source", "stack", "merge", "source", "stack", "merge", "package"]
 
-
-def test_build_planet_resolves_each_overlay_aoi() -> None:
-    spec = parse_pipeline_spec(SPEC)
-    ex = _RecordingExecutor()
-    build_planet(spec, ex, data_dir=Path("data"))
-    # resolved bbox is passed to build_overlay (pure bbox AOIs need no GDAL)
-    assert ex.calls[1][3] == (139.0, 35.0, 139.2, 35.2)
-    assert ex.calls[3][3] == (139.06, 35.10, 139.08, 35.12)
+    # ctx stack uses [base, ctx] over the ctx bbox, zooms base.max+1 .. ctx.max
+    ctx_stack = ex.calls[2]
+    assert ctx_stack[1] == ["base", "ctx"]
+    assert ctx_stack[2] == (139.0, 35.0, 139.2, 35.2)
+    assert ctx_stack[3] == 9 and ctx_stack[4] == 11
+    # city stack stacks all lower sources [base, ctx, city] over the city bbox
+    city_stack = ex.calls[5]
+    assert city_stack[1] == ["base", "ctx", "city"]
+    assert city_stack[3] == 9 and city_stack[4] == 18
 
 
 def test_build_planet_strict_rejects_oversampling() -> None:
@@ -80,10 +74,9 @@ def test_build_planet_strict_rejects_oversampling() -> None:
         build_planet(bad, _RecordingExecutor(), data_dir=Path("data"))
 
 
-def test_build_planet_base_only_no_overlays() -> None:
+def test_build_planet_base_only() -> None:
     spec = parse_pipeline_spec({"base": {"source": "bmng", "max_zoom": 8}, "overlays": [], "output": {"name": "p"}})
     ex = _RecordingExecutor()
     result = build_planet(spec, ex, data_dir=Path("data"))
-    # with no overlays, package the base directly
     assert [c[0] for c in ex.calls] == ["base", "package"]
     assert result.planet == Path("p.pmtiles")

@@ -123,16 +123,21 @@ class PmtilesTilingManager:
         try:
             self._runner.run(command, description="build XYZ tiles via gdal raster tile")
         except TileCommandError:
-            if resampling != "bilinear":
-                LOGGER.warning("retrying gdal raster tile with bilinear resampling")
-                fallback = command[:]
-                _replace_resampling(fallback, "bilinear")
-                self._runner.run(
-                    fallback,
-                    description="build XYZ tiles via gdal raster tile (bilinear retry)",
-                )
-            else:
-                raise
+            # gdal raster tile defaults to -j ALL_CPUS; at high zoom the WEBP
+            # overview generation can hit a read/write race ("file exists but
+            # cannot be opened with WEBP driver"). Retry once serially
+            # (--num-threads 1), which removes the race; also fall back to
+            # bilinear resampling, which is the most robust kernel.
+            LOGGER.warning(
+                "gdal raster tile failed; retrying serially with --num-threads 1"
+            )
+            fallback = command[:]
+            _replace_resampling(fallback, "bilinear")
+            fallback.extend(["--num-threads", "1"])
+            self._runner.run(
+                fallback,
+                description="build XYZ tiles via gdal raster tile (serial retry)",
+            )
         duration = time.perf_counter() - start
         LOGGER.debug("gdal raster tile finished", extra={"duration_s": f"{duration:.2f}"})
         return zxy_dir

@@ -100,8 +100,10 @@ class ProcessingManager(DataProcessor):
         *,
         destination: Optional[Path] = None,
         max_tiles: Optional[int] = None,
-        max_scenes_per_tile: int = 3,
+        max_scenes_per_tile: Optional[int] = None,
     ) -> Optional[Path]:
+        if max_scenes_per_tile is None:
+            max_scenes_per_tile = self._hls.scenes_per_tile
         if not self._hls.enabled:
             LOGGER.info("HLS processing disabled; skipping scene manifest generation")
             return None
@@ -121,6 +123,7 @@ class ProcessingManager(DataProcessor):
             plan_path,
             max_tiles=max_tiles,
             max_scenes_per_tile=max_scenes_per_tile,
+            search_limit=self._hls.scene_search_limit,
             progress_interval=100,
         )
         manifest.write(dest)

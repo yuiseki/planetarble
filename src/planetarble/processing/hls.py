@@ -9,7 +9,13 @@ from pathlib import Path
 import time
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from planetarble.acquisition.hls import HLSMosaicTask, HLSScene, HLSSTACClient, iter_plan
+from planetarble.acquisition.hls import (
+    HLSMosaicTask,
+    HLSScene,
+    HLSSTACClient,
+    iter_plan,
+    select_scene_stack,
+)
 from planetarble.core.models import HLSConfig
 from planetarble.logging import get_logger, log_progress
 
@@ -68,9 +74,15 @@ class HLSSceneManifestBuilder:
         plan_path: Path,
         *,
         max_tiles: Optional[int] = None,
-        max_scenes_per_tile: int = 3,
+        max_scenes_per_tile: int = 12,
+        search_limit: Optional[int] = None,
         progress_interval: int = 200,
     ) -> HLSSceneManifest:
+        # the STAC search is decoupled from the keep count: search wide, then
+        # select a deep sun-angle-diverse subset so the median has the votes to
+        # remove transient clouds and shifting shadows.
+        if search_limit is None:
+            search_limit = max(max_scenes_per_tile, 100)
         client = self._client or HLSSTACClient(
             self._config,
             cache_dir=self._cache_dir,
@@ -110,11 +122,15 @@ class HLSSceneManifestBuilder:
                     },
                 )
             tiles = next_index
-            fetched = client.fetch_scenes(task, max_items=max_scenes_per_tile)
-            candidates: Sequence[HLSScene] = fetched.get("primary", [])[:max_scenes_per_tile]
+            fetched = client.fetch_scenes(task, max_items=search_limit)
+            candidates: Sequence[HLSScene] = select_scene_stack(
+                fetched.get("primary", []), max_scenes_per_tile
+            )
             if not candidates:
                 fallback_tiles += 1
-                candidates = fetched.get("fallback", [])[:max_scenes_per_tile]
+                candidates = select_scene_stack(
+                    fetched.get("fallback", []), max_scenes_per_tile
+                )
             for scene in candidates:
                 key = (scene.collection_id, scene.item_id)
                 if key not in seen:

@@ -265,6 +265,20 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--tile-size", type=int, default=512)
     build.add_argument("--no-strict", action="store_true", help="Warn instead of failing on zoom-ceiling violations")
 
+    prefetch = subcommands.add_parser(
+        "prefetch",
+        help="Download-only: warm the Sentinel-2 asset cache for a spec's AOIs (no tiling)",
+    )
+    prefetch.add_argument("--spec", type=Path, required=True, help="AOI overlay pipeline spec (YAML)")
+    prefetch.add_argument("--config", type=Path, default=None, help="Base pipeline config (defaults to configs/base/pipeline.yaml)")
+    prefetch.add_argument("--work-dir", type=Path, default=None, help="Scratch dir (default: output/build)")
+    prefetch.add_argument("--pace-min", type=float, default=60.0, help="Min inter-tile wait (s) when throughput was healthy")
+    prefetch.add_argument("--pace-max", type=float, default=300.0, help="Max inter-tile wait (s) when throughput was healthy")
+    prefetch.add_argument("--throttle-floor", type=float, default=150.0, help="KiB/s below which the last tile counts as throttled")
+    prefetch.add_argument("--cooldown-min", type=float, default=600.0, help="Min cooldown (s) after a throttled tile")
+    prefetch.add_argument("--cooldown-max", type=float, default=900.0, help="Max cooldown (s) after a throttled tile")
+    prefetch.add_argument("--dry-run", action="store_true", help="List the Sentinel-2 overlays that would be prefetched and exit")
+
     split_plan = subcommands.add_parser(
         "split-plan",
         help="Split a global HLS plan into one ndjson shard per miniplanet",
@@ -486,6 +500,8 @@ def main(argv: Iterable[str] | None = None) -> int:
         return 1
     if args.command == "build":
         return _handle_build(args)
+    if args.command == "prefetch":
+        return _handle_prefetch(args)
     if args.command == "split-plan":
         return _handle_split_plan(args)
     if args.command == "mpc-fetch":
@@ -560,6 +576,57 @@ def _handle_build(args: argparse.Namespace) -> int:
     print(f"  base: {result.base_mbtiles}")
     for s in result.stacks:
         print(f"  stack: {s}")
+    return 0
+
+
+def _handle_prefetch(args: argparse.Namespace) -> int:
+    import random
+    import time
+
+    import yaml
+
+    from planetarble.overlay import parse_pipeline_spec
+    from planetarble.overlay.executor import DefaultPlanetExecutor
+    from planetarble.prefetch import PrefetchPacing, prefetch_planet, prefetch_wait_seconds
+
+    cfg = load_config(_resolve_config_path(args.config))
+    spec = parse_pipeline_spec(yaml.safe_load(args.spec.read_text(encoding="utf-8")))
+    s2_overlays = [o for o in spec.overlays if o.source == "sentinel2"]
+
+    if args.dry_run:
+        print(f"prefetch (dry-run): {len(s2_overlays)} sentinel2 overlay(s) would be fetched")
+        for o in s2_overlays:
+            scenes = (o.source_options or {}).get("mosaic_max_scenes", "config-default")
+            print(f"  {o.name}: bbox={tuple(o.aoi.bbox) if o.aoi.bbox else o.aoi} scenes<={scenes}")
+        return 0
+
+    pacing = PrefetchPacing(
+        throttle_floor_kibps=args.throttle_floor,
+        jitter_min_s=args.pace_min, jitter_max_s=args.pace_max,
+        cooldown_min_s=args.cooldown_min, cooldown_max_s=args.cooldown_max,
+    )
+    work_dir = (args.work_dir or (cfg.output_dir / "build")).resolve()
+    # base_mbtiles is unused for prefetch (no compositing); pass the spec path as a placeholder
+    executor = DefaultPlanetExecutor(
+        spec, cfg, data_dir=cfg.data_dir, work_dir=work_dir, base_mbtiles=args.spec.resolve(),
+    )
+
+    def pacer(stats) -> None:
+        wait = prefetch_wait_seconds(stats.downloaded_bytes, stats.elapsed_seconds, pacing, random.uniform)
+        print(
+            f"  {stats.overlay}: downloaded={stats.downloaded_count} "
+            f"({stats.downloaded_bytes/1e6:.0f}MB) hits={stats.hit_count} "
+            f"in {stats.elapsed_seconds:.0f}s -> wait {wait:.0f}s"
+        )
+        if wait > 0:
+            time.sleep(wait)
+
+    results = prefetch_planet(
+        spec, executor, pacer=pacer,
+        on_skip=lambda ov: print(f"  skip {ov.name} (source={ov.source})"),
+    )
+    total_mb = sum(r.downloaded_bytes for r in results) / 1e6
+    print(f"prefetch done: {len(results)} sentinel2 overlay(s), {total_mb:.0f}MB downloaded")
     return 0
 
 

@@ -60,7 +60,10 @@ def test_japan_sentinel2_multi_aoi_build_parses_and_validates() -> None:
 
     assert spec.base.source == "bmng"
     names = [o.name for o in spec.overlays]
-    assert names == ["tokyo_s2", "chiba_s2", "izu_s2", "sendai_s2", "hiroshima_s2", "morioka_s2"]
+    assert names == [
+        "tokyo_s2", "chiba_s2", "izu_s2", "numazu_s2", "shizuoka_s2",
+        "sendai_s2", "hiroshima_s2", "morioka_s2",
+    ]
     # Tokyo is expanded to ~the cached T54SUE tile (still within its footprint)
     tokyo = spec.overlays[0]
     assert tokyo.aoi.bbox == (138.80, 35.16, 140.00, 36.13)
@@ -71,6 +74,8 @@ def test_japan_sentinel2_multi_aoi_build_parses_and_validates() -> None:
     # Hiroshima/Morioka expanded to their cached tiles (no new downloads);
     # Morioka uses 2-scene mosaic because only 2 T54SWJ scenes are cached
     assert by_name["izu_s2"].aoi.bbox == (138.83, 34.25, 140.00, 35.22)
+    assert by_name["numazu_s2"].aoi.bbox == (137.73, 34.23, 138.92, 35.21)
+    assert by_name["shizuoka_s2"].aoi.bbox == (137.20, 34.23, 138.34, 35.21)
     assert by_name["sendai_s2"].aoi.bbox == (139.86, 37.87, 141.10, 38.84)
     assert by_name["hiroshima_s2"].aoi.bbox == (131.72, 34.22, 132.92, 35.22)
     assert by_name["morioka_s2"].aoi.bbox == (141.02, 38.77, 142.26, 39.74)

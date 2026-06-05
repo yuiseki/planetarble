@@ -62,6 +62,27 @@ overlays:
     source_options: *s2_opts
     min_zoom: 8
     max_zoom: 14
+  - name: numazu_s2
+    source: sentinel2
+    aoi:
+      # T54STD tile, one block west of Izu (T54SUD); inset inside the granule
+      # footprint [137.705, 34.210, 138.935, 35.225]. Fills the cut-off west Izu
+      # coast (Matsuzaki/Toi) and adds Numazu/Mishima, Fuji, eastern Shizuoka.
+      bbox: [137.73, 34.23, 138.92, 35.21]
+      land_only: true
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: shizuoka_s2
+    source: sentinel2
+    aoi:
+      # T53SQU tile, second block west; inset inside the granule footprint
+      # [137.171, 34.214, 138.361, 35.223]. Shizuoka city west / Yaizu / Shimada.
+      bbox: [137.20, 34.23, 138.34, 35.21]
+      land_only: true
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
   - name: sendai_s2
     source: sentinel2
     aoi:

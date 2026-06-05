@@ -1406,19 +1406,27 @@ def _is_valid_sentinel2_asset(path: Path) -> bool:
     return True if result is None else result
 
 
+# Bump when the mosaic algorithm changes (e.g. scene ordering / nodata) so the
+# bbox-keyed cache invalidates and existing mosaics regenerate. v2: cleanest-on-
+# top ordering + transparent nodata to fix cloudy results.
+_SENTINEL2_MOSAIC_VERSION = "v2"
+
+
 def _sentinel2_mosaic_filename(region_name: Optional[str], bbox) -> str:
-    """Mosaic COG filename keyed by region AND bbox.
+    """Mosaic COG filename keyed by region, bbox AND mosaic-algorithm version.
 
     The mosaic is cached and skipped when a valid output already exists. Keying
     only on the region name meant that widening an overlay's AOI silently reused
     the old, smaller-footprint COG (the expansion never took effect). Folding a
     short hash of the bbox into the name gives a changed AOI a fresh filename, so
-    it regenerates; an unchanged AOI keeps the same name and still skips.
+    it regenerates; an unchanged AOI keeps the same name and still skips. The
+    algorithm version is part of the hash so a mosaic-logic change also forces
+    regeneration instead of reusing a stale (e.g. cloudy) COG.
     """
     base = f"sentinel2_mosaic_{region_name}" if region_name else "sentinel2_mosaic"
     if bbox:
         key = hashlib.sha1(
-            repr(tuple(round(float(v), 5) for v in bbox)).encode("utf-8")
+            repr((_SENTINEL2_MOSAIC_VERSION, tuple(round(float(v), 5) for v in bbox))).encode("utf-8")
         ).hexdigest()[:8]
         return f"{base}_{key}_cog.tif"
     return f"{base}_cog.tif"
@@ -1894,7 +1902,12 @@ def _write_sentinel2_visual_list(
     asset_name: str,
 ) -> Path:
     urls: List[str] = []
-    for scene in scenes:
+    # gdalbuildvrt paints the last source on top, so order cloudiest-first /
+    # cleanest-last: the lowest-cloud scene wins and (with nodata transparent)
+    # its gaps fall through to the next-cleanest below. Without this the
+    # cloudiest scene painted over everything.
+    ordered = sorted(scenes, key=_scene_cloud_cover, reverse=True)
+    for scene in ordered:
         assets = scene.get("assets")
         if not isinstance(assets, dict):
             continue
@@ -1920,6 +1933,12 @@ def _build_sentinel2_visual_vrt(
         "-allow_projection_difference",
         "-resolution",
         "highest",
+        # treat 0 as nodata so each scene's fill / swath-edge is transparent and
+        # the cleaner scene below shows through instead of black covering it
+        "-srcnodata",
+        "0",
+        "-vrtnodata",
+        "0",
         "-input_file_list",
         str(list_path),
         str(vrt_path),

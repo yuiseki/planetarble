@@ -60,5 +60,25 @@ normal throughput. No 429s, no broken connections — pure speed shaping.
   makes re-tiling free. Worth it for many small disjoint AOIs; not for repeated
   builds over the same area.
 
+## Aggregate cost of a 4-AOI build (2026-06-05, `japan-sentinel2-build.yaml`)
+
+BMNG floor + four land-only Sentinel-2 z14 city overlays (Tokyo 23 wards,
+Sendai, Hiroshima, Morioka), Tokyo's assets already cached:
+
+| metric | value |
+|--------|-------|
+| wall-clock | **~88 min** (dominated by throttled TCI downloads) |
+| throttle snapshots (2-digit KiB/s) | 771 progress prints |
+| mosaic scenes per AOI | 3 (`mosaic_max_scenes`), chosen lowest-cloud from 22–34 candidates the STAC search returned |
+| fresh TCI assets pulled | ~9 (3 new cities × 3 scenes, some MGRS tiles shared) |
+| `data/cache/sentinel2` growth | 18 GB → 20 GB (**+2 GB**) |
+| `/data` total growth | 948 GB → 951 GB (**+3 GB**) |
+| output PMTiles | ~199 MB (z0–14) |
+
+**Takeaway: disk is not the constraint, wall-clock is.** Four city AOIs at z14
+cost only ~3 GB on disk but ~88 minutes, almost all of it waiting out MPC
+throttle windows on ~330 MB TCI downloads. Budget time, not space, and grow
+coverage a few AOIs per run.
+
 See also: `docs/operations/hls-japan-plan.md` for HLS-specific incremental
 planning, and the Sentinel-2 recipe `configs/profiles/sentinel2-tokyo-z14.yaml`.

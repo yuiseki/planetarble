@@ -2060,30 +2060,21 @@ def _translate_sentinel2_rgb(
         "-of",
         "COG",
         "-co",
-        "COMPRESS=JPEG",
-        "-co",
-        "QUALITY=90",
+        # lossless so exact nodata=0 survives for transparent overlay
+        # compositing; JPEG drops the nodata mask and adds block artefacts
+        "COMPRESS=DEFLATE",
         "-co",
         "BLOCKSIZE=512",
         "-co",
         "NUM_THREADS=ALL_CPUS",
         "-co",
         "PHOTOMETRIC=RGB",
+        # 0 is Sentinel-2 fill / outside the land cutline -> transparent
+        "-a_nodata",
+        "0",
     ]
     if scale_to_byte:
-        command.extend(
-            [
-                "-ot",
-                "Byte",
-                "-scale",
-                "0",
-                "10000",
-                "0",
-                "255",
-                "-a_nodata",
-                "0",
-            ]
-        )
+        command.extend(["-ot", "Byte", "-scale", "0", "10000", "0", "255"])
     command.extend([str(translate_input), str(output_path)])
     runner.run(command, description="convert Sentinel-2 mosaic to COG")
     return output_path

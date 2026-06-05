@@ -175,6 +175,8 @@ class ProcessingManager(DataProcessor):
             rgb_vrt,
             output_base,
             region_geometry=region_geometry,
+            scale_max=self._hls.display_scale_max,
+            gamma=self._hls.display_gamma,
         )
         return self.create_cog(cropped)
 
@@ -1482,6 +1484,8 @@ def _translate_hls_rgb(
     output_path: Path,
     *,
     region_geometry: Optional["ogr.Geometry"] = None,
+    scale_max: int = 3000,
+    gamma: float = 0.8,
 ) -> Path:
     translate_input = rgb_vrt
     if region_geometry is not None:
@@ -1523,14 +1527,18 @@ def _translate_hls_rgb(
         "Byte",
         "-scale",
         "0",
-        "10000",
+        str(scale_max),
         "0",
         "255",
+    ]
+    if gamma and gamma != 1.0:
+        command.extend(["-exponent", str(gamma)])
+    command.extend([
         "-a_nodata",
         "0",
         str(translate_input),
         str(output_path),
-    ]
+    ])
     runner.run(command, description="convert HLS RGB mosaic to GeoTIFF")
     return output_path
 

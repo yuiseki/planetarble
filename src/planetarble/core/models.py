@@ -208,6 +208,11 @@ class HLSConfig:
     compositing_year: Optional[int] = None
     spectral_bands: Tuple[str, ...] = ("B02", "B03", "B04")
     qa_asset_key: str = "Fmask"
+    # Display stretch for surface-reflectance bands (0-10000). Land reflectance
+    # in visible bands sits around 200-3000, so stretch 0..display_scale_max to
+    # 0..255 with a brightening gamma instead of the full 0..10000 range.
+    display_scale_max: int = 3000
+    display_gamma: float = 0.8
     cache_ttl_days: int = 30
     plan_region: Optional[str] = None
     plan_regions: Tuple[HLSPlanRegion, ...] = field(default_factory=tuple)

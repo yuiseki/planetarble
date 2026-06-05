@@ -1516,9 +1516,21 @@ def _mask_hls_scene_bands(
     return out
 
 
+def _scene_cloud_cover(scene: Dict[str, object]) -> float:
+    """Cloud cover for ordering; unknown is treated as worst (most cloud)."""
+    cloud = scene.get("cloud_cover")
+    if isinstance(cloud, (int, float)):
+        return float(cloud)
+    return float("inf")
+
+
 def _write_hls_band_lists(temp_dir: Path, scenes: Sequence[Dict[str, object]]) -> Dict[str, Path]:
     band_keys = {"B02": "blue", "B03": "green", "B04": "red"}
     lists: Dict[str, List[str]] = {label: [] for label in band_keys.values()}
+    # gdalbuildvrt paints the last source on top (nodata lets lower ones show
+    # through), so order cloudiest-first / cleanest-last: the lowest-cloud scene
+    # wins over hazier scenes whose thin cloud/haze Fmask missed.
+    scenes = sorted(scenes, key=_scene_cloud_cover, reverse=True)
     for scene in scenes:
         bands = scene.get("bands")
         if not isinstance(bands, dict):

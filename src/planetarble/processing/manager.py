@@ -170,7 +170,8 @@ class ProcessingManager(DataProcessor):
                 extra={"mask_value": mask_value, "scenes_with_qa": masked_count, "total": len(scenes)},
             )
             scenes = _mask_hls_scene_bands(
-                self._runner, scenes, temp_dir=self._temp_dir, mask_value=mask_value
+                self._runner, scenes, temp_dir=self._temp_dir, mask_value=mask_value,
+                dilation=self._hls.cloud_mask_dilation,
             )
         output_name = f"hls_mosaic_{region.name}" if region else "hls_mosaic"
         output_base = destination or (self._processing_dir / f"{output_name}.tif")
@@ -1490,12 +1491,48 @@ def _mask_band_command(
     ]
 
 
+def _dilate_fmask(
+    qa_path: Path,
+    out_path: Path,
+    *,
+    mask_value: int,
+    iterations: int,
+) -> Path:
+    """Write a 0/1 cloud mask grown by ``iterations`` pixels from the Fmask.
+
+    Buffers the cloud footprint so the semi-transparent cloud fringe Fmask
+    labels "clear" is also dropped; the deep median stack fills the holes.
+    """
+    import numpy as np
+    from osgeo import gdal
+
+    from planetarble.processing.composite import dilate_boolean
+
+    gdal.UseExceptions()
+    src = gdal.Open(str(qa_path))
+    qa = src.GetRasterBand(1).ReadAsArray()
+    cloudy = np.bitwise_and(qa.astype(np.uint16), mask_value) != 0
+    dilated = dilate_boolean(cloudy, iterations).astype(np.uint8)
+    dst = gdal.GetDriverByName("GTiff").Create(
+        str(out_path), src.RasterXSize, src.RasterYSize, 1, gdal.GDT_Byte,
+        options=["TILED=YES", "COMPRESS=DEFLATE"],
+    )
+    dst.SetGeoTransform(src.GetGeoTransform())
+    dst.SetProjection(src.GetProjection())
+    dst.GetRasterBand(1).WriteArray(dilated)
+    dst.FlushCache()
+    dst = None
+    src = None
+    return out_path
+
+
 def _mask_hls_scene_bands(
     runner: CommandRunner,
     scenes: Sequence[Dict[str, object]],
     *,
     temp_dir: Path,
     mask_value: int,
+    dilation: int = 0,
 ) -> List[Dict[str, object]]:
     """Replace each scene's local bands with Fmask-masked copies (clouds -> nodata)."""
     if mask_value <= 0:
@@ -1510,13 +1547,21 @@ def _mask_hls_scene_bands(
             out.append(scene)  # no QA available -> leave bands unmasked
             continue
         item_id = str(scene.get("item_id", "scene"))
+        # buffer the cloud mask once per scene; mask bands against the 0/1 mask
+        qa_for_mask = Path(qa_local)
+        band_mask_value = mask_value
+        if dilation > 0:
+            dilated_path = mask_dir / f"{item_id}_clouddilate.tif"
+            _dilate_fmask(Path(qa_local), dilated_path, mask_value=mask_value, iterations=dilation)
+            qa_for_mask = dilated_path
+            band_mask_value = 1
         masked: Dict[str, str] = {}
         for band, path in bands.items():
             if not isinstance(path, str) or not path:
                 continue
             masked_path = mask_dir / f"{item_id}_{band}_masked.tif"
             runner.run(
-                _mask_band_command(Path(path), Path(qa_local), masked_path, mask_value=mask_value),
+                _mask_band_command(Path(path), qa_for_mask, masked_path, mask_value=band_mask_value),
                 description="mask HLS band with Fmask",
             )
             masked[band] = str(masked_path)

@@ -87,3 +87,16 @@ def test_japan_sentinel2_multi_aoi_build_parses_and_validates() -> None:
         assert o.source_options["assets"] == ["visual"]
     assert spec.output_name == "planet_japan_sentinel-2"
     assert validate_pipeline_spec(spec) == []
+
+
+def test_japan_prefetch_spec_parses_and_validates() -> None:
+    data = yaml.safe_load((OVERLAY_DIR / "japan-prefetch.yaml").read_text(encoding="utf-8"))
+    spec = parse_pipeline_spec(data)
+
+    names = [o.name for o in spec.overlays]
+    assert len(names) == 10  # one overlay per priority city
+    for o in spec.overlays:
+        assert o.source == "sentinel2"
+        assert o.aoi.land_only is True
+        assert o.source_options["mosaic_max_scenes"] == 3
+    assert validate_pipeline_spec(spec) == []

@@ -1,0 +1,89 @@
+# Prefetch spec for priority population centres (download-only warm-up).
+#
+#   planetarble prefetch --spec configs/overlays/japan-prefetch.yaml \
+#     --pace-min 60 --pace-max 300 --throttle-floor 150 --cooldown-min 600 --cooldown-max 900
+#
+# One overlay per city, each a ~0.36deg city-core box centred on the station and
+# kept INSIDE a single MGRS granule footprint (so a granule fully covers it).
+# Small boxes mean many low-cloud granules qualify, so mosaic_max_scenes=3 gets
+# genuinely clean (0-1% cloud) scenes for urban cloud/shadow handling. Osaka/
+# Kyoto/Kobe share tile T53SNU (their TCIs are cached once). Probed coverage:
+# all 10 have >=3 covering scenes at <=10% cloud.
+#
+# All tiles are currently uncached -> ~24-30 fresh TCIs (~8-10 GB). Run when the
+# line is idle; resumable (aria2 --continue) and throttle-paced. Once warm,
+# building these AOIs is download-free.
+base:
+  source: bmng
+  resolution: "500m"
+  max_zoom: 7
+ocean:
+  enabled: false
+overlays:
+  - name: osaka_s2          # T53SNU
+    source: sentinel2
+    aoi: { bbox: [135.316, 34.523, 135.676, 34.883], land_only: true }
+    source_options: &s2_opts
+      assets: ["visual"]
+      max_cloud: 10
+      start_date: "2023-04-01"
+      end_date: "2024-10-31"
+      mosaic_max_scenes: 3
+    min_zoom: 8
+    max_zoom: 14
+  - name: kyoto_s2          # T53SNU
+    source: sentinel2
+    aoi: { bbox: [135.580, 34.805, 135.940, 35.165], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: kobe_s2           # T53SNU
+    source: sentinel2
+    aoi: { bbox: [135.015, 34.514, 135.375, 34.874], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: nagoya_s2         # T53SPV
+    source: sentinel2
+    aoi: { bbox: [136.720, 35.160, 137.060, 35.450], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: kanazawa_s2       # T53SPA
+    source: sentinel2
+    aoi: { bbox: [136.469, 36.398, 136.829, 36.758], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: niigata_s2        # T54SUG
+    source: sentinel2
+    aoi: { bbox: [138.880, 37.860, 139.240, 38.200], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: okayama_s2        # T53SLU
+    source: sentinel2
+    aoi: { bbox: [133.750, 34.500, 134.000, 34.850], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: fukuoka_s2        # T52SFC
+    source: sentinel2
+    aoi: { bbox: [130.240, 33.410, 130.600, 33.770], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: kumamoto_s2       # T52SFB
+    source: sentinel2
+    aoi: { bbox: [130.675, 32.656, 131.035, 33.016], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: nagasaki_s2       # T52SEB
+    source: sentinel2
+    aoi: { bbox: [129.689, 32.572, 130.049, 32.932], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+output:
+  name: planet_japan_prefetch

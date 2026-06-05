@@ -18,6 +18,23 @@ import warnings
 import numpy as np
 
 
+def dilate_boolean(mask: np.ndarray, iterations: int) -> np.ndarray:
+    """Grow a boolean mask by ``iterations`` pixels (4-connected dilation).
+
+    Used to buffer the Fmask cloud mask so the semi-transparent cloud fringe
+    Fmask labels "clear" is also dropped. Pure numpy (no scipy dependency).
+    """
+    out = np.asarray(mask, dtype=bool)
+    for _ in range(max(0, int(iterations))):
+        grown = out.copy()
+        grown[:-1, :] |= out[1:, :]
+        grown[1:, :] |= out[:-1, :]
+        grown[:, :-1] |= out[:, 1:]
+        grown[:, 1:] |= out[:, :-1]
+        out = grown
+    return out
+
+
 def median_composite(stack: np.ndarray, nodata: int = 0) -> np.ndarray:
     """Per-pixel median over a (N, H, W) stack, ignoring ``nodata``.
 

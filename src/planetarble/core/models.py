@@ -193,7 +193,12 @@ class HLSConfig:
     land_mask_path: Optional[str] = None
     land_buffer_km: float = 20.0
     max_cloud: float = 40.0
-    qa_mask_flags: Tuple[str, ...] = ("cloud", "cloud_shadow", "snow")
+    # With a deep median stack (scenes_per_tile) aggressive masking is safe, so
+    # mask thin cirrus and the adjacent-cloud (cloud-edge/haze halo) class too.
+    qa_mask_flags: Tuple[str, ...] = ("cirrus", "cloud", "adjacent_cloud", "cloud_shadow", "snow")
+    # Grow the cloud mask by this many pixels to catch the semi-transparent
+    # fringe Fmask labels "clear"; the median fills the holes from other scenes.
+    cloud_mask_dilation: int = 1
     max_scene_age_days: int = 365
     mosaic_strategy: str = "best_pixel"
     robust_median_window: int = 5

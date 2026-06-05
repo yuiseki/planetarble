@@ -83,6 +83,19 @@ overlays:
     source_options: *s2_opts
     min_zoom: 8
     max_zoom: 14
+  - name: fuji_s2
+    source: sentinel2
+    aoi:
+      # T54STE tile (north of numazu's T54STD): the WHOLE Mt Fuji - summit
+      # (35.36N, above T54STD's 35.22 edge), north base / Fuji Five Lakes
+      # (Kawaguchiko) and south/west flanks. East flank (Gotemba) is covered by
+      # tokyo_s2's T54SUE. Inset inside the granule footprint
+      # [137.685, 35.110, 138.912, 36.126]. T54STE uncached -> ~3 fresh TCIs.
+      bbox: [138.50, 35.18, 138.90, 35.55]
+      land_only: true
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
   - name: sendai_s2
     source: sentinel2
     aoi:

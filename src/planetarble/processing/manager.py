@@ -465,18 +465,10 @@ class ProcessingManager(DataProcessor):
 
     def create_cog(self, raster_path: Path) -> Path:
         output = self._processing_dir / f"{raster_path.stem}_cog.tif"
-        command = [
-            "gdal_translate",
-            "-of",
-            "COG",
-            "-co",
-            "COMPRESS=JPEG",
-            "-co",
-            "QUALITY=95",
-            str(raster_path),
-            str(output),
-        ]
-        self._runner.run(command, description="create Cloud Optimized GeoTIFF")
+        self._runner.run(
+            _cog_command(raster_path, output),
+            description="create Cloud Optimized GeoTIFF",
+        )
         return output
 
     def blend_layers(self, base: Path, overlay: Path, opacity: float) -> Path:
@@ -1653,6 +1645,33 @@ def _translate_hls_rgb(
     ])
     runner.run(command, description="convert HLS RGB mosaic to GeoTIFF")
     return output_path
+
+
+def _cog_command(
+    raster_path: Path,
+    output: Path,
+    *,
+    compress: str = "DEFLATE",
+    gdal_translate: str = "gdal_translate",
+) -> List[str]:
+    """gdal_translate command to produce a Cloud Optimized GeoTIFF.
+
+    Uses a lossless compressor so the source nodata=0 (Fmask-masked cloud holes
+    over the HLS mosaic) survives exactly and the tiler can turn those holes
+    transparent. A lossy JPEG COG both drops the nodata mask (opaque black holes
+    over the BMNG floor) and adds 8x8 block artefacts over high-contrast urban
+    scenes, which is the bulk of the "dirty" look. The COG here is an
+    intermediate; final tiles are re-encoded to WebP at tiling time.
+    """
+    return [
+        gdal_translate,
+        "-of",
+        "COG",
+        "-co",
+        f"COMPRESS={compress}",
+        str(raster_path),
+        str(output),
+    ]
 
 
 def _load_sentinel2_scene_manifest(path: Path) -> List[Dict[str, object]]:

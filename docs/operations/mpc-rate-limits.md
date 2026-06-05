@@ -43,6 +43,28 @@ normal throughput. No 429s, no broken connections — pure speed shaping.
   throttle is only paid once per unique asset. `aria2c` makes the downloads
   resumable, so a throttle window is never lost work.
 
+## Throttle-interrupted downloads leave truncated cache files
+
+A download that is killed (or the process exits) mid-throttle leaves a
+**partial asset** in the cache next to an `aria2c` control file
+(`<asset>.aria2`). The next run sees the file *exists* and reuses it, then dies
+at read time with `TIFFReadEncodedTile() failed` / `IReadBlock failed`. Seen
+2026-06-05: `T54SUE_20240705..._TCI_10m.tif` was 26 MB (vs a ~370 MB median) and
+had a `.aria2` marker; the expanded-Tokyo mosaic selected that scene and crashed.
+
+Detect and clean before reuse:
+
+```bash
+A=<data>/cache/sentinel2/assets/sentinel-2-l2a
+# incomplete downloads (definitive): remove the partial file + its marker
+find "$A" -name '*.aria2' | while read m; do rm -f "$m" "${m%.aria2}"; done
+```
+
+Size outliers alone are *not* a reliable signal: a TCI of a mostly-ocean / edge
+MGRS granule (e.g. Sendai's `T54SVH`) is legitimately small (~40 MB) with no
+`.aria2` marker. Trust the `.aria2` marker, not the size. (A future improvement
+would verify asset integrity on cache reuse instead of trusting existence.)
+
 ## Operational guidance
 
 - **Plan for slow windows, not failures.** Don't kill a run that has dropped to

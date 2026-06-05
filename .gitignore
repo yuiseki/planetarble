@@ -19,6 +19,12 @@ configs/base/output
 # Local scratch configs (official recipes live in configs/profiles/)
 configs/base/pipeline-*.yaml
 
+# Stray rasters that land directly in configs/base/ (e.g. interrupted OAM/COG
+# fragments); never commit imagery here.
+configs/base/*.tif
+configs/base/*.tif_*
+configs/base/*.tiff
+
 # Python build artifacts
 __pycache__/
 *.py[cod]

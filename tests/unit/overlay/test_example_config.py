@@ -52,3 +52,19 @@ def test_tokyo23_sentinel2_build_parses_and_validates() -> None:
     assert spec.output_name == "planet_tokyo23_sentinel-2"
     # z14 is within the Sentinel-2 ceiling, so validation is clean
     assert validate_pipeline_spec(spec) == []
+
+
+def test_japan_sentinel2_multi_aoi_build_parses_and_validates() -> None:
+    data = yaml.safe_load((OVERLAY_DIR / "japan-sentinel2-build.yaml").read_text(encoding="utf-8"))
+    spec = parse_pipeline_spec(data)
+
+    assert spec.base.source == "bmng"
+    names = [o.name for o in spec.overlays]
+    assert names == ["tokyo23_s2", "sendai_s2", "hiroshima_s2", "morioka_s2"]
+    for o in spec.overlays:
+        assert o.source == "sentinel2"
+        assert o.aoi.land_only is True
+        assert o.max_zoom == 14
+        assert o.source_options["assets"] == ["visual"]
+    assert spec.output_name == "planet_japan_sentinel-2"
+    assert validate_pipeline_spec(spec) == []

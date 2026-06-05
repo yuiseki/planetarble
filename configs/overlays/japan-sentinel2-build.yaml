@@ -1,0 +1,60 @@
+# Japan, Sentinel-2 L2A (10m) "visual" (TCI) city overlays up to z14, on a
+# global BMNG floor. Land only (ocean disabled). Each AOI is a city core
+# centred on a station / venue, geocoded via nominatim.yuiseki.net:
+#   - Tokyo 23 wards
+#   - Sendai (Sendai Station 38.2599, 140.8820)
+#   - Hiroshima (Intl Conference Center / Peace Park 34.3921, 132.4510 + Hiroshima Station)
+#   - Morioka (Morioka Station 39.7020, 141.1357)
+#
+# Used to grow coverage gradually and to measure Sentinel-2 rate-limit / disk
+# trends per added AOI.
+#
+#   planetarble build \
+#     --spec configs/overlays/japan-sentinel2-build.yaml \
+#     --base-mbtiles <global BMNG floor mbtiles>
+base:
+  source: bmng
+  resolution: "500m"
+  max_zoom: 7
+ocean:
+  enabled: false
+overlays:
+  - name: tokyo23_s2
+    source: sentinel2
+    aoi:
+      bbox: [139.56, 35.53, 139.92, 35.82]
+      land_only: true
+    source_options: &s2_opts
+      assets: ["visual"]
+      max_cloud: 10
+      start_date: "2023-04-01"
+      end_date: "2024-10-31"
+      mosaic_max_scenes: 3
+    min_zoom: 8
+    max_zoom: 14
+  - name: sendai_s2
+    source: sentinel2
+    aoi:
+      bbox: [140.82, 38.21, 140.94, 38.31]
+      land_only: true
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: hiroshima_s2
+    source: sentinel2
+    aoi:
+      bbox: [132.41, 34.36, 132.49, 34.43]
+      land_only: true
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: morioka_s2
+    source: sentinel2
+    aoi:
+      bbox: [141.10, 39.66, 141.18, 39.74]
+      land_only: true
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+output:
+  name: planet_japan_sentinel-2

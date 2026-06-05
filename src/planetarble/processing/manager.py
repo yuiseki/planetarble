@@ -159,6 +159,16 @@ class ProcessingManager(DataProcessor):
         if not scenes:
             LOGGER.warning("no HLS scenes available for mosaic", extra={"path": str(scene_manifest_path)})
             return None
+        mask_value = _qa_mask_value(self._hls.qa_mask_flags)
+        if mask_value > 0:
+            masked_count = sum(1 for s in scenes if s.get("qa_local"))
+            LOGGER.info(
+                "masking HLS clouds via Fmask",
+                extra={"mask_value": mask_value, "scenes_with_qa": masked_count, "total": len(scenes)},
+            )
+            scenes = _mask_hls_scene_bands(
+                self._runner, scenes, temp_dir=self._temp_dir, mask_value=mask_value
+            )
         output_name = f"hls_mosaic_{region.name}" if region else "hls_mosaic"
         output_base = destination or (self._processing_dir / f"{output_name}.tif")
         if self._dry_run:
@@ -972,6 +982,17 @@ def _cache_hls_assets(
                     extra={"progress_bar": _format_progress_bar(completed, total_assets)},
                 )
         scene["bands"] = local_bands
+        qa_href = scene.get("qa_asset")
+        if isinstance(qa_href, str) and qa_href:
+            try:
+                qa_path, _ = _cache_hls_asset(
+                    qa_href,
+                    cache_dir=cache_dir / collection / item_id,
+                    timeout=timeout,
+                )
+                scene["qa_local"] = str(qa_path)
+            except Exception as exc:  # pragma: no cover - network/IO failure
+                LOGGER.warning("hls Fmask cache failed", extra={"item": item_id, "error": str(exc)})
         updated.append(scene)
     if total_assets:
         hit_rate = cache_hits / total_assets
@@ -1418,6 +1439,91 @@ def _is_valid_raster(path: Path) -> bool:
     return True
 
 
+_QA_BIT = {
+    "cirrus": 1,
+    "cloud": 2,
+    "adjacent_cloud": 4,
+    "cloud_shadow": 8,
+    "snow": 16,
+    "snow_ice": 16,
+    "water": 32,
+}
+
+
+def _qa_mask_value(flags: Sequence[str]) -> int:
+    """OR together the HLS Fmask bits for the given flag names (unknown ignored)."""
+    value = 0
+    for flag in flags or ():
+        value |= _QA_BIT.get(str(flag).strip().lower(), 0)
+    return value
+
+
+def _mask_band_command(
+    band_path: Path,
+    fmask_path: Path,
+    out_path: Path,
+    *,
+    mask_value: int,
+    gdal_calc: str = "gdal_calc.py",
+) -> List[str]:
+    """gdal_calc command keeping band values only where Fmask is clear.
+
+    Pixels where ``(Fmask & mask_value) != 0`` (cloud / shadow / snow ...) become
+    nodata (0), so a cleaner scene shows through when the masked bands are
+    mosaicked.
+    """
+    calc = f"A*(numpy.bitwise_and(B.astype(numpy.uint16),{mask_value})==0)"
+    return [
+        gdal_calc,
+        "-A", str(band_path), "--A_band=1",
+        "-B", str(fmask_path), "--B_band=1",
+        "--outfile", str(out_path),
+        "--calc", calc,
+        "--NoDataValue=0",
+        "--type=UInt16",
+        "--co=TILED=YES",
+        "--co=COMPRESS=DEFLATE",
+        "--quiet",
+        "--overwrite",
+    ]
+
+
+def _mask_hls_scene_bands(
+    runner: CommandRunner,
+    scenes: Sequence[Dict[str, object]],
+    *,
+    temp_dir: Path,
+    mask_value: int,
+) -> List[Dict[str, object]]:
+    """Replace each scene's local bands with Fmask-masked copies (clouds -> nodata)."""
+    if mask_value <= 0:
+        return list(scenes)
+    mask_dir = temp_dir / "hls_masked"
+    mask_dir.mkdir(parents=True, exist_ok=True)
+    out: List[Dict[str, object]] = []
+    for scene in scenes:
+        bands = scene.get("bands")
+        qa_local = scene.get("qa_local")
+        if not isinstance(bands, dict) or not isinstance(qa_local, str) or not qa_local:
+            out.append(scene)  # no QA available -> leave bands unmasked
+            continue
+        item_id = str(scene.get("item_id", "scene"))
+        masked: Dict[str, str] = {}
+        for band, path in bands.items():
+            if not isinstance(path, str) or not path:
+                continue
+            masked_path = mask_dir / f"{item_id}_{band}_masked.tif"
+            runner.run(
+                _mask_band_command(Path(path), Path(qa_local), masked_path, mask_value=mask_value),
+                description="mask HLS band with Fmask",
+            )
+            masked[band] = str(masked_path)
+        updated = dict(scene)
+        updated["bands"] = masked
+        out.append(updated)
+    return out
+
+
 def _write_hls_band_lists(temp_dir: Path, scenes: Sequence[Dict[str, object]]) -> Dict[str, Path]:
     band_keys = {"B02": "blue", "B03": "green", "B04": "red"}
     lists: Dict[str, List[str]] = {label: [] for label in band_keys.values()}
@@ -1451,6 +1557,12 @@ def _build_hls_band_vrts(
         command = [
             "gdalbuildvrt",
             "-allow_projection_difference",
+            # treat 0 as nodata so Fmask-masked (cloud) pixels are skipped and a
+            # cleaner scene shows through instead of covering it
+            "-srcnodata",
+            "0",
+            "-vrtnodata",
+            "0",
             "-input_file_list",
             str(list_path),
             str(vrt_path),

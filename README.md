@@ -30,7 +30,21 @@ This writes `workspace/bmng_0-5.pmtiles` (about 4 MB, zoom 0-5, the full globe).
 Where to go next:
 
 - `configs/profiles/` contains ready-made recipes for the real pipelines (global BMNG at z8, regional HLS at z11, Sentinel-2 at z14); each file's header documents the exact commands.
+- `configs/overlays/` contains AOI overlay specs for `planetarble build` (see [Custom AOI planets](#custom-aoi-planets)).
 - If you just want a planet file without building anything, see [Prebuilt artifacts](#prebuilt-artifacts).
+
+## Custom AOI planets
+
+A global floor everyone can afford, plus high-resolution overlays only where you care, declared in one file and merged into a single planet. This is the [AOI overlay architecture](docs/adr/0001-aoi-overlay-architecture.md): a `base` source for global coverage, plus an ordered list of `overlays`, each pairing an area of interest with a source and zoom range. At every zoom the finest source is composited on top and lower sources fill underneath, so there are no holes.
+
+```bash
+# build the planet described by an overlay spec onto a prebuilt global floor
+planetarble build \
+  --spec configs/overlays/atami-example.yaml \
+  --base-mbtiles output/tiling/planet_2024_8z.mbtiles
+```
+
+`configs/overlays/atami-example.yaml` stacks a global BMNG floor, an HLS context overlay (derived from the target bbox plus a buffer, cloud-masked with Fmask), and an OpenAerialMap orthophoto over the city, producing one PMTiles where zooming in goes BMNG to HLS to OAM. `disaster-example.yaml` shows the disaster-response shape (national HLS context plus a city-scale OAM overlay). Source choice per AOI is open: add a source adapter and any AOI can use it.
 
 ## Prebuilt artifacts
 
@@ -170,7 +184,7 @@ Serving z12 is typically done via client-side overscaling of z11 tiles rather th
 
 ## Roadmap
 
-The next major direction is a global floor plus AOI overlay model: a global BMNG base everyone can afford, plus per-area high-resolution overlays from any source declared in a single config (including OpenAerialMap for disaster response), merged into one custom planet. The full max-resolution global build stays supported as a special case. See [docs/adr/0001-aoi-overlay-architecture.md](docs/adr/0001-aoi-overlay-architecture.md).
+The global floor plus AOI overlay model is implemented (see [Custom AOI planets](#custom-aoi-planets) and [docs/adr/0001-aoi-overlay-architecture.md](docs/adr/0001-aoi-overlay-architecture.md)): a global BMNG base everyone can afford, plus per-area high-resolution overlays from any source declared in a single config (including OpenAerialMap for disaster response), merged into one custom planet via `planetarble build`. The full max-resolution global build stays supported as a special case.
 
 - Support higher-resolution outputs across the entire basemap without compromising reproducibility.
 - Integrate Sentinel-2 acquisitions via Copernicus services to unlock higher zoom levels where source data allows.

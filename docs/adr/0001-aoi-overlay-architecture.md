@@ -1,6 +1,6 @@
 # ADR 0001: Global floor plus AOI overlay architecture
 
-- Status: Accepted (implementation in progress)
+- Status: Accepted (implemented; steps 1-4 done)
 - Date: 2026-06-04
 - Deciders: yuiseki
 
@@ -9,9 +9,19 @@
 - Step 1 (done): the declarative front end. `planetarble.overlay` provides the unified `AOI` type (with `buffer_km`), the `Overlay` / `BaseSpec` / `PipelineSpec` parser (`parse_pipeline_spec`), the `SourceAdapter` protocol plus `SOURCE_REGISTRY` (zoom ceilings mirroring SOURCE.md), and `validate_pipeline_spec` (rejects oversampling). Pure Python, no GDAL or network. Examples: `configs/overlays/atami-example.yaml` (tightly scoped) and `configs/overlays/disaster-example.yaml`. The existing acquire/process/tile/package CLI is untouched.
 - Step 2a (done): `resolve_aoi` turns an AOI into a search bbox plus an optional OGR geometry (pure for bbox/miniplanet/buffer, GDAL for natural_earth/geojson/land_only), verified on a GDAL host.
 - Step 2b (done): concrete adapters and a factory (`get_adapter`). Each adapter implements the resolution contract (`name`, `native_max_zoom`): BMNG varies by resolution (z8 for 500m, z6 for 2km), OpenAerialMap is per-item with the registry value as an upper guard, the rest report their SOURCE.md ceiling. `plan` / `build_raster` declare the contract and are wired in step 3.
-- Step 3a (done): the orchestrator control flow. `build_planet(spec, executor, ...)` validates the spec, builds the base, resolves each overlay AOI, builds and merges overlays in declared order (later wins), and packages the result. The heavy work lives behind a `PlanetExecutor` protocol so the flow is unit tested without GDAL.
-- Step 3b (pending): the concrete `PlanetExecutor` wiring base/HLS/OAM builds to the existing managers and tiling, plus the `build` CLI command, verified on a GDAL host.
+- Step 3a (done): the orchestrator control flow. `build_planet(spec, executor, ...)` validates the spec, builds the base, then for each overlay composites a stack over that overlay's footprint from all lower sources (base + earlier overlays + this one) with overzoom fill, merging onto the running planet in declared order. The heavy work lives behind a `PlanetExecutor` protocol so the flow is unit tested without GDAL.
+- Step 3b (done): the concrete `DefaultPlanetExecutor` and the `planetarble build` CLI. It re-encodes the cached global base to webp, builds each overlay COG (OpenAerialMap via its adapter, HLS via HLSMosaicPlanner + ProcessingManager with Fmask cloud masking and the brightened display stretch), tiles to MBTiles, overzoom-composites the stack, merges, and packages. Verified on Atami: `planetarble build --spec configs/overlays/atami-example.yaml --base-mbtiles <floor>` reproduces the planet end to end (z0-18, every layer opaque, no holes) in ~5 minutes with the base reused.
 - Step 4 (done): the OpenAerialMap data path. `planetarble.acquisition.openaerialmap` queries OAM, selects finest-GSD items, downloads whole COGs into a cache, and warps the local files into an AOI COG; verified on Atami (56.8MB COG in 24s, local warp in 77s, vs an unfinished /vsicurl warp). The whole-COG cache means re-tiling never re-fetches.
+
+### Overzoom-fill compositing (resolved an open question)
+
+The "raster level vs tile level" composition question is settled in favour of tile level with overzoom fill. `composite_overzoom` (in `planetarble.tiling.mbtiles`) builds each output tile over the AOI by stacking, per source bottom-to-top, that source's tile or an upscaled ancestor, so the finest source is always on top and lower sources fill underneath with no holes (BMNG > z8 is upscaled to fill under HLS/OAM). Overlays are tiled with transparent nodata (`-dstalpha`) so their footprints composite cleanly. MBTiles store TMS rows, so the helpers take XYZ coordinates and convert at the SQL boundary. High zooms are bounded to the AOI footprint to keep tile counts feasible; the global floor stays low zoom.
+
+### Known limitations / follow-ups
+
+- `build_base` reuses a prebuilt global base MBTiles passed via `--base-mbtiles`; it does not yet build the floor from scratch.
+- `composite_overzoom` can emit fully-transparent tiles at the AOI edge; skipping them would shrink output and let the viewer overzoom.
+- Overlay tiles are 256px and upscaled to the base's 512px during compositing; tiling overlays at 512px would avoid the upscale.
 
 ## Context
 

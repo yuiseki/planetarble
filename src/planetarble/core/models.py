@@ -197,6 +197,13 @@ class HLSConfig:
     max_scene_age_days: int = 365
     mosaic_strategy: str = "best_pixel"
     robust_median_window: int = 5
+    # Depth of the per-tile temporal stack fed to the median composite. The old
+    # hard cap of 3 left the median unable to outvote persistent building
+    # shadows; a deeper, sun-angle-diverse stack is what actually cleans the
+    # image. scene_search_limit is the (wider) STAC search cap, decoupled from
+    # how many scenes are kept, so selection can pick a diverse subset.
+    scenes_per_tile: int = 12
+    scene_search_limit: int = 100
     target_zoom: int = 10
     tile_size: int = 256
     concurrency: int = 4

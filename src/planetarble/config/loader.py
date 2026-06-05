@@ -234,7 +234,7 @@ class ConfigLoader:
         for key in ("land_buffer_km", "max_cloud", "fallback_max_cloud"):
             if key in hls_data and hls_data[key] is not None:
                 hls_data[key] = float(hls_data[key])
-        for key in ("target_zoom", "tile_size", "concurrency", "request_timeout_seconds", "max_retries", "max_scene_age_days", "robust_median_window", "compositing_year"):
+        for key in ("target_zoom", "tile_size", "concurrency", "request_timeout_seconds", "max_retries", "max_scene_age_days", "robust_median_window", "scenes_per_tile", "scene_search_limit", "compositing_year"):
             if key in hls_data and hls_data[key] is not None:
                 hls_data[key] = int(hls_data[key])
         for key in ("backoff_factor",):

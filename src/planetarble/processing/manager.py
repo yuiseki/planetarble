@@ -1340,89 +1340,70 @@ def _quarantine_hls_asset(path: Path, *, reason: str) -> Path:
     return quarantined
 
 
-def _is_valid_hls_asset(path: Path) -> bool:
-    if not path.exists() or path.stat().st_size == 0:
-        return False
+def _sample_raster_tiles_readable(path: Path) -> Optional[bool]:
+    """Whether the raster opens and its sample tiles read without error.
+
+    Returns None when GDAL is unavailable (caller should skip validation).
+    Crucially, ANY GDAL failure returns False rather than propagating: with
+    exceptions enabled (the build calls ``gdal.UseExceptions()``), ``Open`` or
+    ``ReadRaster`` on a truncated/corrupt asset *raises* (e.g.
+    ``TIFFReadEncodedTile() failed``) instead of returning None. Catching it and
+    reporting "invalid" lets the caller resume the download (aria2c --continue
+    from the kept ``.aria2`` control file) or re-fetch, instead of crashing the
+    whole build.
+    """
     try:
         from osgeo import gdal
     except Exception:
-        # If GDAL isn't available, skip validation instead of blocking.
-        return True
-    gdal.ErrorReset()
-    dataset = gdal.Open(str(path), gdal.GA_ReadOnly)
-    if dataset is None:
-        return False
-    band = dataset.GetRasterBand(1)
-    if band is None:
-        return False
-    block_x, block_y = band.GetBlockSize()
-    xsize = band.XSize
-    ysize = band.YSize
-    if block_x <= 0 or block_y <= 0 or xsize <= 0 or ysize <= 0:
-        return False
-    tiles_x = math.ceil(xsize / block_x)
-    tiles_y = math.ceil(ysize / block_y)
-    sample_tiles = {
-        (0, 0),
-        (tiles_x // 2, 0),
-        (0, tiles_y // 2),
-        (tiles_x // 2, tiles_y // 2),
-        (tiles_x - 1, tiles_y - 1),
-    }
-    for tx, ty in sample_tiles:
-        xoff = min(max(tx * block_x, 0), xsize - 1)
-        yoff = min(max(ty * block_y, 0), ysize - 1)
-        width = min(block_x, xsize - xoff)
-        height = min(block_y, ysize - yoff)
+        return None
+    try:
         gdal.ErrorReset()
-        sample = band.ReadRaster(xoff, yoff, width, height)
-        if sample is None:
+        dataset = gdal.Open(str(path), gdal.GA_ReadOnly)
+        if dataset is None:
             return False
-        if gdal.GetLastErrorType() != 0:
+        band = dataset.GetRasterBand(1)
+        if band is None:
             return False
+        block_x, block_y = band.GetBlockSize()
+        xsize = band.XSize
+        ysize = band.YSize
+        if block_x <= 0 or block_y <= 0 or xsize <= 0 or ysize <= 0:
+            return False
+        tiles_x = math.ceil(xsize / block_x)
+        tiles_y = math.ceil(ysize / block_y)
+        sample_tiles = {
+            (0, 0),
+            (tiles_x // 2, 0),
+            (0, tiles_y // 2),
+            (tiles_x // 2, tiles_y // 2),
+            (tiles_x - 1, tiles_y - 1),
+        }
+        for tx, ty in sample_tiles:
+            xoff = min(max(tx * block_x, 0), xsize - 1)
+            yoff = min(max(ty * block_y, 0), ysize - 1)
+            width = min(block_x, xsize - xoff)
+            height = min(block_y, ysize - yoff)
+            gdal.ErrorReset()
+            sample = band.ReadRaster(xoff, yoff, width, height)
+            if sample is None or gdal.GetLastErrorType() != 0:
+                return False
+    except Exception:
+        return False
     return True
+
+
+def _is_valid_hls_asset(path: Path) -> bool:
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    result = _sample_raster_tiles_readable(path)
+    return True if result is None else result
 
 
 def _is_valid_sentinel2_asset(path: Path) -> bool:
     if not path.exists() or path.stat().st_size == 0:
         return False
-    try:
-        from osgeo import gdal
-    except Exception:
-        return True
-    gdal.ErrorReset()
-    dataset = gdal.Open(str(path), gdal.GA_ReadOnly)
-    if dataset is None:
-        return False
-    band = dataset.GetRasterBand(1)
-    if band is None:
-        return False
-    block_x, block_y = band.GetBlockSize()
-    xsize = band.XSize
-    ysize = band.YSize
-    if block_x <= 0 or block_y <= 0 or xsize <= 0 or ysize <= 0:
-        return False
-    tiles_x = math.ceil(xsize / block_x)
-    tiles_y = math.ceil(ysize / block_y)
-    sample_tiles = {
-        (0, 0),
-        (tiles_x // 2, 0),
-        (0, tiles_y // 2),
-        (tiles_x // 2, tiles_y // 2),
-        (tiles_x - 1, tiles_y - 1),
-    }
-    for tx, ty in sample_tiles:
-        xoff = min(max(tx * block_x, 0), xsize - 1)
-        yoff = min(max(ty * block_y, 0), ysize - 1)
-        width = min(block_x, xsize - xoff)
-        height = min(block_y, ysize - yoff)
-        gdal.ErrorReset()
-        sample = band.ReadRaster(xoff, yoff, width, height)
-        if sample is None:
-            return False
-        if gdal.GetLastErrorType() != 0:
-            return False
-    return True
+    result = _sample_raster_tiles_readable(path)
+    return True if result is None else result
 
 
 def _is_valid_raster(path: Path) -> bool:
@@ -1432,14 +1413,14 @@ def _is_valid_raster(path: Path) -> bool:
         from osgeo import gdal  # type: ignore
     except Exception:
         return True
-    gdal.ErrorReset()
-    dataset = gdal.Open(str(path), gdal.GA_ReadOnly)
-    if dataset is None:
+    try:
+        gdal.ErrorReset()
+        dataset = gdal.Open(str(path), gdal.GA_ReadOnly)
+        if dataset is None:
+            return False
+        return dataset.GetRasterBand(1) is not None
+    except Exception:
         return False
-    band = dataset.GetRasterBand(1)
-    if band is None:
-        return False
-    return True
 
 
 _QA_BIT = {

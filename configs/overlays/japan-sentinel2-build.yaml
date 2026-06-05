@@ -1,7 +1,10 @@
 # Japan, Sentinel-2 L2A (10m) "visual" (TCI) city overlays up to z14, on a
 # global BMNG floor. Land only (ocean disabled). Each AOI is a city core
 # centred on a station / venue, geocoded via nominatim.yuiseki.net:
-#   - Tokyo 23 wards
+#   - Tokyo: expanded to nearly the full T54SUE MGRS tile footprint
+#     ([138.7776, 35.1350, 140.0097, 36.1407]) so it reuses the 25 already-cached
+#     T54SUE TCIs with no new downloads (east is capped at ~140.01E; Chiba/T54SVE
+#     is not cached). Covers Tokyo metro + Tama, Yokohama/Kawasaki, S. Saitama.
 #   - Sendai (Sendai Station 38.2599, 140.8820)
 #   - Hiroshima (Intl Conference Center / Peace Park 34.3921, 132.4510 + Hiroshima Station)
 #   - Morioka (Morioka Station 39.7020, 141.1357)
@@ -19,10 +22,12 @@ base:
 ocean:
   enabled: false
 overlays:
-  - name: tokyo23_s2
+  - name: tokyo_s2
     source: sentinel2
     aoi:
-      bbox: [139.56, 35.53, 139.92, 35.82]
+      # expanded to ~the full cached T54SUE tile (inset from the footprint edges
+      # to avoid the UTM-rotated nodata corners); no new downloads
+      bbox: [138.80, 35.16, 140.00, 36.13]
       land_only: true
     source_options: &s2_opts
       assets: ["visual"]

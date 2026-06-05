@@ -60,7 +60,10 @@ def test_japan_sentinel2_multi_aoi_build_parses_and_validates() -> None:
 
     assert spec.base.source == "bmng"
     names = [o.name for o in spec.overlays]
-    assert names == ["tokyo23_s2", "sendai_s2", "hiroshima_s2", "morioka_s2"]
+    assert names == ["tokyo_s2", "sendai_s2", "hiroshima_s2", "morioka_s2"]
+    # Tokyo is expanded to ~the cached T54SUE tile (still within its footprint)
+    tokyo = spec.overlays[0]
+    assert tokyo.aoi.bbox == (138.80, 35.16, 140.00, 36.13)
     for o in spec.overlays:
         assert o.source == "sentinel2"
         assert o.aoi.land_only is True

@@ -142,8 +142,14 @@ class DefaultPlanetExecutor:
         )
         min_zoom = overlay.min_zoom or 0
         fmt = self._tile_format.upper()
-        manager.build_zxy(alpha, min_zoom=min_zoom, max_zoom=overlay.max_zoom, tile_format=fmt)
-        return manager.pack_mbtiles(alpha, tile_format=fmt, min_zoom=min_zoom, max_zoom=overlay.max_zoom)
+        zxy = manager.build_zxy(
+            alpha, min_zoom=min_zoom, max_zoom=overlay.max_zoom,
+            tile_format=fmt, quality=self._quality, resampling="cubic",
+        )
+        return manager.pack_mbtiles(
+            zxy, source_path=alpha, tile_format=fmt, min_zoom=min_zoom, max_zoom=overlay.max_zoom,
+            name=overlay.name, attribution="",
+        )
 
     # --- compose ----------------------------------------------------------
     def stack(self, sources: List[Path], aoi_bbox, min_zoom: int, max_zoom: int) -> Path:

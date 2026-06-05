@@ -307,7 +307,7 @@ class ProcessingManager(DataProcessor):
         if destination:
             output_path = destination
         else:
-            output_name = f"sentinel2_mosaic_{region.name}_cog.tif" if region else "sentinel2_mosaic_cog.tif"
+            output_name = _sentinel2_mosaic_filename(region.name if region else None, region_bbox)
             output_path = self._processing_dir / output_name
         if _is_valid_raster(output_path) and not self._dry_run and not force:
             log_skip(LOGGER, phase="process", reason="valid Sentinel-2 mosaic", path=str(output_path))
@@ -1404,6 +1404,24 @@ def _is_valid_sentinel2_asset(path: Path) -> bool:
         return False
     result = _sample_raster_tiles_readable(path)
     return True if result is None else result
+
+
+def _sentinel2_mosaic_filename(region_name: Optional[str], bbox) -> str:
+    """Mosaic COG filename keyed by region AND bbox.
+
+    The mosaic is cached and skipped when a valid output already exists. Keying
+    only on the region name meant that widening an overlay's AOI silently reused
+    the old, smaller-footprint COG (the expansion never took effect). Folding a
+    short hash of the bbox into the name gives a changed AOI a fresh filename, so
+    it regenerates; an unchanged AOI keeps the same name and still skips.
+    """
+    base = f"sentinel2_mosaic_{region_name}" if region_name else "sentinel2_mosaic"
+    if bbox:
+        key = hashlib.sha1(
+            repr(tuple(round(float(v), 5) for v in bbox)).encode("utf-8")
+        ).hexdigest()[:8]
+        return f"{base}_{key}_cog.tif"
+    return f"{base}_cog.tif"
 
 
 def _is_valid_raster(path: Path) -> bool:

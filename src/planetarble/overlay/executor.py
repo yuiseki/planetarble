@@ -70,6 +70,8 @@ class DefaultPlanetExecutor:
             return self._build_oam_cog(overlay, resolved)
         if overlay.source == "hls":
             return self._build_hls_cog(overlay, resolved)
+        if overlay.source == "sentinel2":
+            return self._build_sentinel2_cog(overlay, resolved)
         raise NotImplementedError(f"overlay source not wired in executor: {overlay.source}")
 
     def _build_oam_cog(self, overlay: Overlay, resolved) -> Path:
@@ -123,6 +125,54 @@ class DefaultPlanetExecutor:
         cog = pmgr.build_hls_mosaic(manifest, plan_region=overlay.name)
         if cog is None:
             raise RuntimeError(f"HLS mosaic produced no output for {overlay.name}")
+        return Path(cog)
+
+    def _build_sentinel2_cog(self, overlay: Overlay, resolved) -> Path:
+        import dataclasses
+
+        from planetarble.core.models import Sentinel2Config
+        from planetarble.processing.manager import ProcessingManager
+
+        region = HLSPlanRegion(
+            name=overlay.name,
+            bbox=tuple(resolved.bbox),
+            land_only=bool(getattr(overlay.aoi, "land_only", False)),
+        )
+        # start from the configured Sentinel-2 block (or defaults) and let the
+        # overlay's source_options override known fields (e.g. assets: [visual],
+        # max_cloud, date window, mosaic_max_scenes) so the spec is self-contained.
+        base_cfg = getattr(self._cfg, "sentinel2", None) or Sentinel2Config()
+        fields = {f.name for f in dataclasses.fields(Sentinel2Config)}
+        overrides = {}
+        for key, value in (overlay.source_options or {}).items():
+            if key not in fields:
+                continue
+            overrides[key] = tuple(value) if key == "assets" and value is not None else value
+        s2_cfg = dataclasses.replace(
+            base_cfg,
+            enabled=True,
+            bbox=tuple(resolved.bbox),
+            plan_region=overlay.name,
+            plan_regions=(region,),
+            **overrides,
+        )
+
+        pmgr = ProcessingManager(
+            self._cfg.processing,
+            temp_dir=self._work / "tmp",
+            output_dir=self._cfg.output_dir,
+            data_dir=self._data_dir,
+            hls=self._cfg.hls,
+            sentinel2=s2_cfg,
+            ocean=replace(self._cfg.ocean, enabled=False),
+        )
+        manifest_path = (
+            self._cfg.output_dir / "processing" / f"sentinel2_scene_manifest_{overlay.name}.json"
+        ).resolve()
+        pmgr.prepare_sentinel2_scene_manifest(destination=manifest_path, plan_region=overlay.name)
+        cog = pmgr.build_sentinel2_mosaic(manifest_path, plan_region=overlay.name)
+        if cog is None:
+            raise RuntimeError(f"Sentinel-2 mosaic produced no output for {overlay.name}")
         return Path(cog)
 
     def _tile_to_mbtiles(self, cog: Path, overlay: Overlay) -> Path:

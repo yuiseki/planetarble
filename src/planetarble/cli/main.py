@@ -254,6 +254,17 @@ def build_parser() -> argparse.ArgumentParser:
     tiling_merge.add_argument("--overlay", type=Path, required=True, help="Overlay MBTiles archive")
     tiling_merge.add_argument("--out", type=Path, required=True, help="Output MBTiles archive")
 
+    build = subcommands.add_parser(
+        "build",
+        help="Build a custom planet from an AOI overlay spec (ADR 0001)",
+    )
+    build.add_argument("--spec", type=Path, required=True, help="AOI overlay pipeline spec (YAML)")
+    build.add_argument("--config", type=Path, default=None, help="Base pipeline config (defaults to configs/base/pipeline.yaml)")
+    build.add_argument("--base-mbtiles", type=Path, required=True, help="Prebuilt global base MBTiles (the floor)")
+    build.add_argument("--work-dir", type=Path, default=None, help="Scratch dir for intermediates (default: output/build)")
+    build.add_argument("--tile-size", type=int, default=512)
+    build.add_argument("--no-strict", action="store_true", help="Warn instead of failing on zoom-ceiling violations")
+
     split_plan = subcommands.add_parser(
         "split-plan",
         help="Split a global HLS plan into one ndjson shard per miniplanet",
@@ -473,6 +484,8 @@ def main(argv: Iterable[str] | None = None) -> int:
             return _handle_merge_mbtiles(args)
         parser.error("Unknown tiling subcommand")
         return 1
+    if args.command == "build":
+        return _handle_build(args)
     if args.command == "split-plan":
         return _handle_split_plan(args)
     if args.command == "mpc-fetch":
@@ -522,6 +535,32 @@ def _resolve_copernicus_cog(processing_dir: Path, layers: Iterable[CopernicusLay
 
 def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_") or "layer"
+
+
+def _handle_build(args: argparse.Namespace) -> int:
+    import yaml
+
+    from planetarble.overlay import parse_pipeline_spec
+    from planetarble.overlay.executor import DefaultPlanetExecutor
+    from planetarble.overlay.orchestrator import build_planet
+
+    cfg = load_config(_resolve_config_path(args.config))
+    spec = parse_pipeline_spec(yaml.safe_load(args.spec.read_text(encoding="utf-8")))
+    work_dir = (args.work_dir or (cfg.output_dir / "build")).resolve()
+    executor = DefaultPlanetExecutor(
+        spec,
+        cfg,
+        data_dir=cfg.data_dir,
+        work_dir=work_dir,
+        base_mbtiles=args.base_mbtiles.resolve(),
+        tile_size=args.tile_size,
+    )
+    result = build_planet(spec, executor, data_dir=cfg.data_dir, strict=not args.no_strict)
+    print(f"built planet: {result.planet}")
+    print(f"  base: {result.base_mbtiles}")
+    for s in result.stacks:
+        print(f"  stack: {s}")
+    return 0
 
 
 def _handle_split_plan(args: argparse.Namespace) -> int:

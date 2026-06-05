@@ -178,11 +178,18 @@ class ProcessingManager(DataProcessor):
             )
             return output_base
         band_lists = _write_hls_band_lists(self._temp_dir, scenes)
-        band_vrts = _build_hls_band_vrts(self._runner, band_lists, self._temp_dir)
-        rgb_vrt = _build_hls_rgb_vrt(self._runner, band_vrts, self._temp_dir)
+        if _use_median_strategy(self._hls.mosaic_strategy):
+            LOGGER.info(
+                "compositing HLS via temporal median",
+                extra={"strategy": self._hls.mosaic_strategy, "scenes": len(scenes)},
+            )
+            rgb_source = _build_hls_median_rgb(band_lists, self._temp_dir)
+        else:
+            band_vrts = _build_hls_band_vrts(self._runner, band_lists, self._temp_dir)
+            rgb_source = _build_hls_rgb_vrt(self._runner, band_vrts, self._temp_dir)
         cropped = _translate_hls_rgb(
             self._runner,
-            rgb_vrt,
+            rgb_source,
             output_base,
             region_geometry=region_geometry,
             scale_max=self._hls.display_scale_max,
@@ -1592,6 +1599,86 @@ def _build_hls_rgb_vrt(
     ]
     runner.run(command, description="combine HLS bands into RGB VRT")
     return rgb_vrt
+
+
+def _use_median_strategy(strategy: object) -> bool:
+    """Whether the configured HLS mosaic strategy means temporal compositing."""
+    return str(strategy).strip().lower() in {"best_pixel", "median"}
+
+
+def _read_source_list(list_path: Path) -> List[str]:
+    return [line for line in list_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _build_hls_median_rgb(
+    band_lists: Dict[str, Path],
+    temp_dir: Path,
+    *,
+    nodata: int = 0,
+    block_rows: int = 512,
+) -> Path:
+    """Composite per-scene band rasters into one RGB GeoTIFF by temporal median.
+
+    For each band the scenes are warped onto a single reference grid (each warp
+    is independent, so scenes from different UTM zones co-register fine) and
+    streamed through ``median_composite`` in row blocks to bound memory. The
+    median rejects residual cloud/haze/shadow that Fmask missed and fills gaps
+    where at least one scene saw the ground. Output band order is R, G, B to
+    match the legacy RGB VRT.
+    """
+    import numpy as np
+    from osgeo import gdal
+
+    from planetarble.processing.composite import median_composite
+
+    gdal.UseExceptions()
+    order = ("red", "green", "blue")
+    sources = {label: _read_source_list(band_lists[label]) for label in order}
+
+    # reference grid from the red band (all bands share the scene footprints)
+    ref = gdal.BuildVRT(
+        "",
+        sources["red"],
+        options=gdal.BuildVRTOptions(
+            srcNodata=nodata, VRTNodata=nodata, allowProjectionDifference=True
+        ),
+    )
+    gt = ref.GetGeoTransform()
+    proj = ref.GetProjection()
+    xs, ys = ref.RasterXSize, ref.RasterYSize
+    minx, maxy = gt[0], gt[3]
+    maxx, miny = minx + gt[1] * xs, maxy + gt[5] * ys
+    bounds = [minx, miny, maxx, maxy]
+    ref = None
+
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    out_path = temp_dir / "hls_median_rgb.tif"
+    drv = gdal.GetDriverByName("GTiff")
+    out = drv.Create(
+        str(out_path), xs, ys, 3, gdal.GDT_UInt16,
+        options=["TILED=YES", "COMPRESS=DEFLATE"],
+    )
+    out.SetGeoTransform(gt)
+    out.SetProjection(proj)
+
+    warp_opts = gdal.WarpOptions(
+        format="VRT", outputBounds=bounds, width=xs, height=ys,
+        dstSRS=proj, srcNodata=nodata, dstNodata=nodata, resampleAlg="near",
+    )
+    for band_index, label in enumerate(order, start=1):
+        aligned = [gdal.Warp("", src, options=warp_opts) for src in sources[label]]
+        out_band = out.GetRasterBand(band_index)
+        out_band.SetNoDataValue(nodata)
+        for y in range(0, ys, block_rows):
+            rows = min(block_rows, ys - y)
+            stack = np.stack(
+                [ds.GetRasterBand(1).ReadAsArray(0, y, xs, rows) for ds in aligned]
+            )
+            out_band.WriteArray(median_composite(stack, nodata=nodata), 0, y)
+        aligned = None
+    out.FlushCache()
+    out = None
+    return out_path
 
 
 def _translate_hls_rgb(

@@ -70,6 +70,7 @@ def test_japan_sentinel2_multi_aoi_build_parses_and_validates() -> None:
     by_name = {o.name: o for o in spec.overlays}
     # Hiroshima/Morioka expanded to their cached tiles (no new downloads);
     # Morioka uses 2-scene mosaic because only 2 T54SWJ scenes are cached
+    assert by_name["sendai_s2"].aoi.bbox == (139.86, 37.87, 141.10, 38.84)
     assert by_name["hiroshima_s2"].aoi.bbox == (131.72, 34.22, 132.92, 35.22)
     assert by_name["morioka_s2"].aoi.bbox == (141.02, 38.77, 142.26, 39.74)
     assert by_name["morioka_s2"].source_options["mosaic_max_scenes"] == 2

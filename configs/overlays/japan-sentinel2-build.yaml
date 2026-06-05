@@ -52,7 +52,9 @@ overlays:
   - name: sendai_s2
     source: sentinel2
     aoi:
-      bbox: [140.82, 38.21, 140.94, 38.31]
+      # ~full cached T54SVH tile (3 cached scenes) -> reuses cache.
+      # Sendai + Natori / Shiogama / Matsushima coast, inland to the hills.
+      bbox: [139.86, 37.87, 141.10, 38.84]
       land_only: true
     source_options: *s2_opts
     min_zoom: 8

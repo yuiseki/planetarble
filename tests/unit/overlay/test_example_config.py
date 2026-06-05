@@ -37,3 +37,18 @@ def test_atami_example_uses_direct_aoi_selectors() -> None:
     assert hls.aoi.buffer_km == 20.0
     assert spec.overlays[1].aoi.bbox == (139.02, 35.07, 139.12, 35.13)
     assert validate_pipeline_spec(spec) == []
+
+
+def test_tokyo23_sentinel2_build_parses_and_validates() -> None:
+    data = yaml.safe_load((OVERLAY_DIR / "tokyo23-sentinel2-build.yaml").read_text(encoding="utf-8"))
+    spec = parse_pipeline_spec(data)
+
+    assert spec.base.source == "bmng"
+    s2 = spec.overlays[0]
+    assert s2.source == "sentinel2"
+    assert s2.aoi.bbox == (139.56, 35.53, 139.92, 35.82)
+    assert s2.max_zoom == 14  # Sentinel-2 10m earns z14
+    assert s2.source_options["assets"] == ["visual"]
+    assert spec.output_name == "planet_tokyo23_sentinel-2"
+    # z14 is within the Sentinel-2 ceiling, so validation is clean
+    assert validate_pipeline_spec(spec) == []

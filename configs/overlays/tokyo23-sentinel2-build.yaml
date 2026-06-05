@@ -1,0 +1,30 @@
+# Tokyo 23 wards, Sentinel-2 L2A (10m) "visual" (TCI) mosaic up to z14, on a
+# global BMNG floor. Same bbox as tokyo23-build.yaml (the HLS version) so the
+# two can be compared directly. Sentinel-2 L2A is 10 m, so it earns z14 where
+# HLS (30 m) honestly tops out around z11-12.
+#
+#   planetarble build \
+#     --spec configs/overlays/tokyo23-sentinel2-build.yaml \
+#     --base-mbtiles <global BMNG floor mbtiles>
+base:
+  source: bmng
+  resolution: "500m"
+  max_zoom: 7
+ocean:
+  enabled: false
+overlays:
+  - name: tokyo23_s2
+    source: sentinel2
+    aoi:
+      bbox: [139.56, 35.53, 139.92, 35.82]
+      land_only: true
+    source_options:
+      assets: ["visual"]      # pre-rendered 8-bit RGB (TCI); no band scaling
+      max_cloud: 10
+      start_date: "2023-04-01"
+      end_date: "2024-10-31"
+      mosaic_max_scenes: 3    # mosaic the 3 lowest-cloud scenes
+    min_zoom: 8
+    max_zoom: 14
+output:
+  name: planet_tokyo23_sentinel-2

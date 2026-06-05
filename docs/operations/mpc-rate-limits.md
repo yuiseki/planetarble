@@ -43,27 +43,29 @@ normal throughput. No 429s, no broken connections — pure speed shaping.
   throttle is only paid once per unique asset. `aria2c` makes the downloads
   resumable, so a throttle window is never lost work.
 
-## Throttle-interrupted downloads leave truncated cache files
+## Throttle-interrupted downloads: the pipeline now resumes them
 
-A download that is killed (or the process exits) mid-throttle leaves a
-**partial asset** in the cache next to an `aria2c` control file
-(`<asset>.aria2`). The next run sees the file *exists* and reuses it, then dies
-at read time with `TIFFReadEncodedTile() failed` / `IReadBlock failed`. Seen
-2026-06-05: `T54SUE_20240705..._TCI_10m.tif` was 26 MB (vs a ~370 MB median) and
-had a `.aria2` marker; the expanded-Tokyo mosaic selected that scene and crashed.
+A download killed (or interrupted) mid-throttle leaves a **partial asset** in
+the cache next to an `aria2c` control file (`<asset>.aria2`). The cache-reuse
+logic validates assets (`_is_valid_*` read sample tiles), and `aria2c` is
+invoked with `--continue=true --remove-control-file=false`, so the intended
+behaviour is: invalid partial + `.aria2` present → **resume** the download from
+where it stopped (fetch only the missing tail), not re-fetch from scratch.
 
-Detect and clean before reuse:
+This works as of the resilience fix (2026-06-05). Before it, the validity check
+called `band.ReadRaster` on the partial and — with `gdal.UseExceptions()` active
+— that *raised* (`TIFFReadEncodedTile() failed`) instead of returning invalid,
+so the build crashed before reaching the resume branch. (Seen on
+`T54SUE_20240705..._TCI_10m.tif`, 26 MB vs ~370 MB median.) The check now catches
+the GDAL error and reports invalid, so the resume path runs.
 
-```bash
-A=<data>/cache/sentinel2/assets/sentinel-2-l2a
-# incomplete downloads (definitive): remove the partial file + its marker
-find "$A" -name '*.aria2' | while read m; do rm -f "$m" "${m%.aria2}"; done
-```
+**Do not manually delete `.aria2` files** — that throws away the resume point
+and forces a full re-download. Just re-run the build; it resumes. (If you must
+clean, delete the partial *and* its `.aria2` together to force a clean restart.)
 
-Size outliers alone are *not* a reliable signal: a TCI of a mostly-ocean / edge
-MGRS granule (e.g. Sendai's `T54SVH`) is legitimately small (~40 MB) with no
-`.aria2` marker. Trust the `.aria2` marker, not the size. (A future improvement
-would verify asset integrity on cache reuse instead of trusting existence.)
+Note: size outliers alone are *not* a corruption signal — a TCI of a
+mostly-ocean / edge MGRS granule (e.g. Sendai's `T54SVH`) is legitimately small
+(~40 MB) with no `.aria2` marker.
 
 ## Operational guidance
 

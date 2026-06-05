@@ -1,0 +1,18 @@
+# Kanto + eastern Tokai HLS region (Tokyo, Yokohama, Atami, Chiba, Saitama).
+# Compact bbox keeps the single HLS mosaic raster modest while including the
+# showcase cities; used to measure per-area HLS cost for scaling decisions.
+base:
+  source: bmng
+  resolution: "500m"
+  max_zoom: 7
+ocean:
+  enabled: false
+overlays:
+  - name: kanto_tokai_hls
+    source: hls
+    aoi:
+      bbox: [138.0, 34.5, 141.0, 37.0]
+      land_only: true
+    max_zoom: 11
+output:
+  name: planet_kanto_hls

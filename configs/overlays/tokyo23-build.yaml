@@ -1,0 +1,18 @@
+# Tokyo 23 wards HLS region. Small bbox keeps the single HLS mosaic tiny and
+# fast; used to measure per-area HLS cost for scaling decisions, and includes
+# central Tokyo for the showcase.
+base:
+  source: bmng
+  resolution: "500m"
+  max_zoom: 7
+ocean:
+  enabled: false
+overlays:
+  - name: tokyo23_hls
+    source: hls
+    aoi:
+      bbox: [139.56, 35.53, 139.92, 35.82]
+      land_only: true
+    max_zoom: 12
+output:
+  name: planet_tokyo23_hls

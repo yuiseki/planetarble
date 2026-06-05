@@ -49,6 +49,19 @@ overlays:
     source_options: *s2_opts
     min_zoom: 8
     max_zoom: 14
+  - name: izu_s2
+    source: sentinel2
+    aoi:
+      # T54SUD tile (south of Tokyo's T54SUE; overlaps it ~35.1-35.2N), inset
+      # INSIDE the granule footprint [138.802, 34.234, 140.02, 35.239] so a
+      # single granule fully covers it (S2 requires single-granule coverage; the
+      # far-west Izu coast past ~138.8E falls outside this tile). Izu Peninsula
+      # incl. Shimoda + Atami/Hakone/Odawara. T54SUD NOT cached -> ~3 fresh TCIs.
+      bbox: [138.83, 34.25, 140.00, 35.22]
+      land_only: true
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
   - name: sendai_s2
     source: sentinel2
     aoi:

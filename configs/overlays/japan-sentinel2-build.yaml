@@ -37,6 +37,18 @@ overlays:
       mosaic_max_scenes: 3
     min_zoom: 8
     max_zoom: 14
+  - name: chiba_s2
+    source: sentinel2
+    aoi:
+      # ~the full T54SVE tile (east of Tokyo's T54SUE; the two overlap around
+      # Tokyo Bay ~140.0E and composite, chiba last). T54SVE is NOT cached, so
+      # this overlay triggers fresh MPC downloads (~3 TCIs). West Chiba (Chiba
+      # city / Funabashi / Ichikawa) through Narita to the northern Boso.
+      bbox: [139.95, 35.16, 141.05, 36.13]
+      land_only: true
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
   - name: sendai_s2
     source: sentinel2
     aoi:

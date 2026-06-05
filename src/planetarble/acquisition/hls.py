@@ -68,6 +68,41 @@ class HLSScene:
     qa_asset: Optional[str]
 
 
+def _scene_cloud(scene: "HLSScene") -> float:
+    cloud = scene.cloud_cover
+    return float(cloud) if isinstance(cloud, (int, float)) else float("inf")
+
+
+def select_scene_stack(scenes: Sequence["HLSScene"], keep: int) -> List["HLSScene"]:
+    """Pick ``keep`` scenes spread across acquisition date, lowest-cloud per bin.
+
+    Building shadows shift with the sun's azimuth/elevation, so a stack that is
+    diverse in acquisition date lets the temporal median average shadows out;
+    a stack clustered in a few weeks keeps the same shadows in every frame. We
+    sort by date, split into ``keep`` contiguous temporal bins, and keep the
+    lowest-cloud scene from each bin (a little cloud is fine: Fmask masks it and
+    the median ignores the resulting nodata).
+    """
+    scenes = list(scenes)
+    if keep <= 0 or len(scenes) <= keep:
+        return scenes
+    ordered = sorted(scenes, key=lambda s: (s.acquisition_date, _scene_cloud(s)))
+    n = len(ordered)
+    chosen: List["HLSScene"] = []
+    seen: set = set()
+    for i in range(keep):
+        lo = (i * n) // keep
+        hi = ((i + 1) * n) // keep
+        if hi <= lo:
+            hi = lo + 1
+        pick = min(ordered[lo:hi], key=_scene_cloud)
+        key = (pick.collection_id, pick.item_id)
+        if key not in seen:
+            seen.add(key)
+            chosen.append(pick)
+    return chosen
+
+
 @dataclass
 class HLSMosaicTask:
     """Plan entry describing how to build a single Z/X/Y composite tile."""

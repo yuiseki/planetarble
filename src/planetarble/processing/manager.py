@@ -252,6 +252,76 @@ class ProcessingManager(DataProcessor):
         manifest.write(dest)
         return dest
 
+    def prefetch_sentinel2_assets(self, scene_manifest_path: Path, *, plan_region: Optional[str] = None):
+        """Download (cache) the mosaic scenes' assets for an AOI without tiling.
+
+        Warms ``data/cache/sentinel2/assets`` so a later build is download-free.
+        Selects the same ``mosaic_max_scenes`` lowest-cloud scenes the mosaic
+        would use, so the cache matches. Returns a PrefetchStats with the bytes
+        actually downloaded (cache hits contribute 0) for throttle-aware pacing.
+        """
+        from planetarble.prefetch import PrefetchStats
+
+        label = plan_region or "sentinel2"
+        if not self._sentinel2.enabled:
+            return PrefetchStats(overlay=label)
+        scenes = _load_sentinel2_scene_manifest(scene_manifest_path)
+        if not scenes:
+            return PrefetchStats(overlay=label)
+        selected = _select_mosaic_scenes(scenes, self._sentinel2.mosaic_max_scenes)
+        selected = _refresh_sentinel2_scene_urls(selected, self._sentinel2)
+        cache_dir = self._data_dir / "cache" / "sentinel2" / "assets"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        timeout = self._sentinel2.request_timeout_seconds
+        tokens: Dict[str, str] = {}
+        dl_count = dl_bytes = hit_count = 0
+        start = time.monotonic()
+        for scene in selected:
+            collection = scene.get("collection_id") or self._sentinel2.collection
+            item_id = scene.get("item_id")
+            assets = scene.get("assets")
+            if not isinstance(collection, str) or not isinstance(item_id, str) or not isinstance(assets, dict):
+                continue
+            token = tokens.get(collection)
+            if token is None:
+                token = fetch_sas_token(collection, timeout=timeout)
+                tokens[collection] = token
+            for asset_name, href in assets.items():
+                if not isinstance(href, str) or not href:
+                    continue
+                unsigned = _strip_query(href)
+                local, status = _cache_sentinel2_asset(
+                    append_sas_token(unsigned, token),
+                    cache_dir=cache_dir / collection / item_id,
+                    timeout=timeout, asset_name=str(asset_name),
+                )
+                if status == "failed":
+                    token = fetch_sas_token(collection, timeout=timeout)
+                    tokens[collection] = token
+                    local, status = _cache_sentinel2_asset(
+                        append_sas_token(unsigned, token),
+                        cache_dir=cache_dir / collection / item_id,
+                        timeout=timeout, asset_name=str(asset_name),
+                    )
+                if status in ("download", "redownload") and local is not None:
+                    dl_count += 1
+                    try:
+                        dl_bytes += local.stat().st_size
+                    except OSError:
+                        pass
+                elif status == "hit":
+                    hit_count += 1
+        elapsed = time.monotonic() - start
+        LOGGER.info(
+            "prefetched sentinel-2 assets",
+            extra={"region": label, "downloaded": dl_count, "bytes": dl_bytes,
+                   "hits": hit_count, "elapsed_s": round(elapsed, 1)},
+        )
+        return PrefetchStats(
+            overlay=label, downloaded_count=dl_count, downloaded_bytes=dl_bytes,
+            hit_count=hit_count, elapsed_seconds=elapsed,
+        )
+
     def build_sentinel2_mosaic(
         self,
         scene_manifest_path: Path,

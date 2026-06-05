@@ -127,7 +127,10 @@ class DefaultPlanetExecutor:
             raise RuntimeError(f"HLS mosaic produced no output for {overlay.name}")
         return Path(cog)
 
-    def _build_sentinel2_cog(self, overlay: Overlay, resolved) -> Path:
+    def _sentinel2_manager_and_manifest(self, overlay: Overlay, resolved):
+        """Build the overlay's Sentinel-2 config + manager and write its scene
+        manifest (the shared front half of build and prefetch). Returns
+        ``(ProcessingManager, manifest_path)``."""
         import dataclasses
 
         from planetarble.core.models import Sentinel2Config
@@ -170,10 +173,30 @@ class DefaultPlanetExecutor:
             self._cfg.output_dir / "processing" / f"sentinel2_scene_manifest_{overlay.name}.json"
         ).resolve()
         pmgr.prepare_sentinel2_scene_manifest(destination=manifest_path, plan_region=overlay.name)
+        return pmgr, manifest_path
+
+    def _build_sentinel2_cog(self, overlay: Overlay, resolved) -> Path:
+        pmgr, manifest_path = self._sentinel2_manager_and_manifest(overlay, resolved)
         cog = pmgr.build_sentinel2_mosaic(manifest_path, plan_region=overlay.name)
         if cog is None:
             raise RuntimeError(f"Sentinel-2 mosaic produced no output for {overlay.name}")
         return Path(cog)
+
+    def prefetch_overlay(self, overlay: Overlay):
+        """Download-only: warm the cache for this overlay's Sentinel-2 assets
+        (no mosaic/tiling). Returns a PrefetchStats."""
+        from planetarble.overlay.resolve import resolve_aoi
+        from planetarble.prefetch import PrefetchStats
+
+        if overlay.source != "sentinel2":
+            return PrefetchStats(overlay=overlay.name)
+        resolved = resolve_aoi(
+            overlay.aoi,
+            data_dir=self._data_dir,
+            land_mask_path=getattr(self._cfg.hls, "land_mask_path", None),
+        )
+        pmgr, manifest_path = self._sentinel2_manager_and_manifest(overlay, resolved)
+        return pmgr.prefetch_sentinel2_assets(manifest_path, plan_region=overlay.name)
 
     def _tile_to_mbtiles(self, cog: Path, overlay: Overlay) -> Path:
         import subprocess

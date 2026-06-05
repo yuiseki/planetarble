@@ -60,7 +60,9 @@ overlays:
   - name: hiroshima_s2
     source: sentinel2
     aoi:
-      bbox: [132.41, 34.36, 132.49, 34.43]
+      # ~full cached T53SKU tile (3 cached scenes) -> no new downloads.
+      # Hiroshima city / Kure / Higashi-Hiroshima / Hatsukaichi.
+      bbox: [131.72, 34.22, 132.92, 35.22]
       land_only: true
     source_options: *s2_opts
     min_zoom: 8
@@ -68,9 +70,18 @@ overlays:
   - name: morioka_s2
     source: sentinel2
     aoi:
-      bbox: [141.10, 39.66, 141.18, 39.74]
+      # ~full cached T54SWJ tile. Only 2 T54SWJ scenes are cached and the
+      # Morioka/T54TWK boundary splits coverage, so use mosaic_max_scenes=2 to
+      # stay download-free. Morioka sits at the north edge; expansion is mostly
+      # south (Hanamaki/Kitakami) and east (Tono).
+      bbox: [141.02, 38.77, 142.26, 39.74]
       land_only: true
-    source_options: *s2_opts
+    source_options:
+      assets: ["visual"]
+      max_cloud: 10
+      start_date: "2023-04-01"
+      end_date: "2024-10-31"
+      mosaic_max_scenes: 2
     min_zoom: 8
     max_zoom: 14
 output:

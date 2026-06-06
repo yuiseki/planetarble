@@ -162,26 +162,41 @@ class Sentinel2SceneManifestBuilder:
         )
         heartbeat.start()
         start_time = time.monotonic()
-        try:
-            with _search_timeout(self._config.stac_search_timeout_seconds):
-                items = list(search.items())
-        except TimeoutError as exc:
-            stop_event.set()
-            heartbeat.join(timeout=1.0)
-            elapsed = max(time.monotonic() - start_time, 0.0)
-            LOGGER.error(
-                "sentinel-2 stac search timed out",
-                extra={
-                    "elapsed_seconds": round(elapsed, 2),
-                    "search_timeout_seconds": self._config.stac_search_timeout_seconds,
-                    "bbox": list(bbox),
-                    "max_items": max_items,
-                },
-            )
-            raise MPCError(str(exc)) from exc
+        # MPC STAC sometimes returns a server-side "request exceeded the maximum
+        # allowed time" APIError (or our client-side TimeoutError) for an
+        # otherwise-valid query, transiently. Retry with backoff instead of
+        # failing the whole AOI on the first slow response.
+        attempts = max(1, int(self._config.max_retries))
+        items = None
+        last_exc: Optional[Exception] = None
+        for attempt in range(1, attempts + 1):
+            try:
+                with _search_timeout(self._config.stac_search_timeout_seconds):
+                    items = list(search.items())
+                break
+            except Exception as exc:  # APIError (server timeout) / TimeoutError / network
+                last_exc = exc
+                LOGGER.warning(
+                    "sentinel-2 stac search attempt failed",
+                    extra={
+                        "attempt": attempt, "attempts": attempts,
+                        "bbox": list(bbox), "error": str(exc)[:160],
+                    },
+                )
+                if attempt < attempts:
+                    time.sleep(min(self._config.backoff_factor ** attempt, 60.0))
         stop_event.set()
         heartbeat.join(timeout=1.0)
         elapsed = max(time.monotonic() - start_time, 0.0)
+        if items is None:
+            LOGGER.error(
+                "sentinel-2 stac search failed after retries",
+                extra={
+                    "attempts": attempts, "elapsed_seconds": round(elapsed, 2),
+                    "bbox": list(bbox), "error": str(last_exc)[:160],
+                },
+            )
+            raise MPCError(f"sentinel-2 stac search failed after {attempts} attempts: {last_exc}") from last_exc
         LOGGER.info(
             "sentinel-2 stac search completed",
             extra={

@@ -110,3 +110,60 @@ def test_search_items_passes_total_cap_to_stac_search() -> None:
     assert items == []
     assert captured.get("limit") == 1
     assert captured.get("max_items") == 1
+
+
+def test_search_items_retries_on_transient_error() -> None:
+    # MPC STAC can return a transient server-side timeout (APIError) for a valid
+    # query; the search must retry with backoff rather than fail the AOI.
+    from planetarble.core.models import Sentinel2Config
+
+    item = _make_item({"B02": "https://example.com/B02.tif"})
+
+    class _FlakySearch:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def items(self):
+            self.calls += 1
+            if self.calls < 3:  # fail twice, succeed on the 3rd
+                raise RuntimeError("The request exceeded the maximum allowed time")
+            return iter([item])
+
+    search = _FlakySearch()
+
+    class _StubClient:
+        def search(self, **kwargs):
+            return search
+
+    builder = object.__new__(Sentinel2SceneManifestBuilder)
+    builder._config = Sentinel2Config(max_retries=5, backoff_factor=0.0)  # no real sleeps
+    builder._cache_dir = None
+    builder._cache_ttl_days = 30
+    builder._client = _StubClient()
+
+    items = builder._search_items(bbox=(139.0, 35.0, 140.0, 36.0), max_items=10, force_refresh=True)
+
+    assert search.calls == 3  # retried past the two failures
+    assert [i.id for i in items] == ["sentinel-item"]
+
+
+def test_search_items_raises_after_exhausting_retries() -> None:
+    from planetarble.acquisition.mpc import MPCError
+    from planetarble.core.models import Sentinel2Config
+
+    class _AlwaysFails:
+        def items(self):
+            raise RuntimeError("The request exceeded the maximum allowed time")
+
+    class _StubClient:
+        def search(self, **kwargs):
+            return _AlwaysFails()
+
+    builder = object.__new__(Sentinel2SceneManifestBuilder)
+    builder._config = Sentinel2Config(max_retries=3, backoff_factor=0.0)
+    builder._cache_dir = None
+    builder._cache_ttl_days = 30
+    builder._client = _StubClient()
+
+    with pytest.raises(MPCError):
+        builder._search_items(bbox=(139.0, 35.0, 140.0, 36.0), max_items=10, force_refresh=True)

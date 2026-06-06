@@ -63,6 +63,9 @@ def test_japan_sentinel2_multi_aoi_build_parses_and_validates() -> None:
     assert names == [
         "tokyo_s2", "chiba_s2", "izu_s2", "numazu_s2", "shizuoka_s2", "fuji_s2",
         "sendai_s2", "hiroshima_s2", "morioka_s2",
+        # priority population centres (also in japan-prefetch.yaml)
+        "osaka_s2", "kyoto_s2", "kobe_s2", "nagoya_s2", "kanazawa_s2",
+        "niigata_s2", "okayama_s2", "fukuoka_s2", "kumamoto_s2", "nagasaki_s2",
     ]
     # Tokyo is expanded to ~the cached T54SUE tile (still within its footprint)
     tokyo = spec.overlays[0]

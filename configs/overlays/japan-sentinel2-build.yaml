@@ -133,5 +133,67 @@ overlays:
       mosaic_max_scenes: 2
     min_zoom: 8
     max_zoom: 14
+  # --- priority population centres (prefetched; same city-core bboxes so the
+  # --- cached scenes are reused and the build stays download-free) ---
+  - name: osaka_s2          # T53SNU
+    source: sentinel2
+    aoi: { bbox: [135.316, 34.523, 135.676, 34.883], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: kyoto_s2          # T53SNU
+    source: sentinel2
+    aoi: { bbox: [135.580, 34.805, 135.940, 35.165], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: kobe_s2           # T53SNU
+    source: sentinel2
+    aoi: { bbox: [135.015, 34.514, 135.375, 34.874], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: nagoya_s2         # T53SPV
+    source: sentinel2
+    aoi: { bbox: [136.720, 35.160, 137.060, 35.450], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: kanazawa_s2       # T53SPA
+    source: sentinel2
+    aoi: { bbox: [136.469, 36.398, 136.829, 36.758], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: niigata_s2        # T54SUG
+    source: sentinel2
+    aoi: { bbox: [138.880, 37.860, 139.240, 38.200], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: okayama_s2        # T53SLU
+    source: sentinel2
+    aoi: { bbox: [133.750, 34.500, 134.000, 34.850], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: fukuoka_s2        # T52SFC
+    source: sentinel2
+    aoi: { bbox: [130.240, 33.410, 130.600, 33.770], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: kumamoto_s2       # T52SFB
+    source: sentinel2
+    aoi: { bbox: [130.675, 32.656, 131.035, 33.016], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
+  - name: nagasaki_s2       # T52SEB
+    source: sentinel2
+    aoi: { bbox: [129.689, 32.572, 130.049, 32.932], land_only: true }
+    source_options: *s2_opts
+    min_zoom: 8
+    max_zoom: 14
 output:
   name: planet_japan_sentinel-2

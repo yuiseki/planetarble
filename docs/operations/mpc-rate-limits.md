@@ -104,5 +104,26 @@ cost only ~3 GB on disk but ~88 minutes, almost all of it waiting out MPC
 throttle windows on ~330 MB TCI downloads. Budget time, not space, and grow
 coverage a few AOIs per run.
 
-See also: `docs/operations/hls-japan-plan.md` for HLS-specific incremental
-planning, and the Sentinel-2 recipe `configs/profiles/sentinel2-tokyo-z14.yaml`.
+## Broad MPC STAC outage (distinct from per-request throttle)
+
+Separate from download throttling, the **STAC search API** itself sometimes goes
+broadly slow: every query returns `APIError: request exceeded the maximum
+allowed time` at the MPC server-side gateway timeout (~30 s). Observed
+2026-06-06: for ~30 minutes *every* `search.items()` failed at ~30 s — including
+AOIs that had worked an hour earlier — then it recovered on its own.
+
+Tell it apart from an expensive query: re-run the same search with a narrower
+date range / no cloud filter and a known-good AOI. If they **all** still fail at
+~30 s, it is an MPC outage, not query cost; narrowing won't help — wait it out.
+
+Handling, built into the tool:
+- The STAC client retries each search `sentinel2.max_retries` times with backoff
+  (handles transient single-request failures).
+- `planetarble prefetch` adds **recovery rounds** (`--max-recovery-rounds`):
+  overlays still failing after retries are re-attempted in later rounds, waiting
+  `--recovery-wait` between them for MPC to recover. Cached overlays skip, so
+  only the failures retry. See `docs/operations/prefetch.md`.
+
+See also: `docs/operations/prefetch.md` (warming the cache + outage recovery),
+`docs/operations/hls-japan-plan.md` for HLS-specific incremental planning, and
+the Sentinel-2 recipe `configs/profiles/sentinel2-tokyo-z14.yaml`.

@@ -35,6 +35,37 @@ class _FakeExecutor:
         return PrefetchStats(overlay=overlay.name, downloaded_count=3, downloaded_bytes=10**9, elapsed_seconds=100.0)
 
 
+class _FlakyExecutor:
+    """Raises on the first sentinel2 overlay, succeeds on the rest."""
+
+    def __init__(self):
+        self.fetched = []
+
+    def prefetch_overlay(self, overlay):
+        if not self.fetched and overlay.name == "osaka_s2":
+            self.fetched.append("(raised) " + overlay.name)
+            raise RuntimeError("transient MPC STAC timeout")
+        self.fetched.append(overlay.name)
+        return PrefetchStats(overlay=overlay.name, downloaded_count=3, downloaded_bytes=10**9, elapsed_seconds=100.0)
+
+
+def test_prefetch_continues_past_per_overlay_error() -> None:
+    spec = _spec()
+    ex = _FlakyExecutor()
+    errored, paced = [], []
+
+    results = prefetch_planet(
+        spec, ex,
+        pacer=lambda stats: paced.append(stats.overlay),
+        on_error=lambda ov, exc: errored.append((ov.name, str(exc))),
+    )
+
+    # osaka raised but the run continued to kyoto; the error was reported
+    assert errored == [("osaka_s2", "transient MPC STAC timeout")]
+    assert [r.overlay for r in results] == ["kyoto_s2"]
+    assert paced == ["kyoto_s2"]  # pacer not called for the failed overlay
+
+
 def test_prefetch_only_sentinel2_overlays_and_paces_each() -> None:
     spec = _spec()
     ex = _FakeExecutor()

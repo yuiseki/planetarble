@@ -69,13 +69,18 @@ def prefetch_planet(
     *,
     pacer: Callable[[PrefetchStats], None],
     on_skip: Optional[Callable[[Any], None]] = None,
+    on_error: Optional[Callable[[Any, Exception], None]] = None,
 ) -> List[PrefetchStats]:
     """Download-only pass: warm the cache for each Sentinel-2 overlay, no tiling.
 
     Iterates the spec's overlays; for each ``sentinel2`` overlay it asks the
     executor to fetch that AOI's assets and then calls ``pacer`` (which sleeps
-    according to the measured throughput). Non-Sentinel-2 overlays are skipped
-    (prefetch only addresses the heavy MPC downloads). The executor and pacer are
+    according to the measured throughput). Non-Sentinel-2 overlays are skipped.
+
+    Resilient by design: a per-overlay error (e.g. a transient MPC STAC timeout)
+    is reported via ``on_error`` and the run CONTINUES to the next overlay rather
+    than aborting the whole unattended job. Already-fetched overlays stay cached,
+    so re-running picks up only the ones that failed. The executor and pacer are
     injected so the control flow is unit tested without GDAL, network or sleeps.
     """
     results: List[PrefetchStats] = []
@@ -84,7 +89,12 @@ def prefetch_planet(
             if on_skip is not None:
                 on_skip(overlay)
             continue
-        stats = executor.prefetch_overlay(overlay)
+        try:
+            stats = executor.prefetch_overlay(overlay)
+        except Exception as exc:  # noqa: BLE001 - keep the unattended run going
+            if on_error is not None:
+                on_error(overlay, exc)
+            continue
         results.append(stats)
         pacer(stats)
     return results

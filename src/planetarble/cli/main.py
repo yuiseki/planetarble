@@ -621,12 +621,21 @@ def _handle_prefetch(args: argparse.Namespace) -> int:
         if wait > 0:
             time.sleep(wait)
 
+    errors: list = []
+
+    def on_error(ov, exc) -> None:
+        errors.append(ov.name)
+        print(f"  ERROR {ov.name}: {exc} (skipped; re-run to retry)")
+
     results = prefetch_planet(
         spec, executor, pacer=pacer,
         on_skip=lambda ov: print(f"  skip {ov.name} (source={ov.source})"),
+        on_error=on_error,
     )
     total_mb = sum(r.downloaded_bytes for r in results) / 1e6
-    print(f"prefetch done: {len(results)} sentinel2 overlay(s), {total_mb:.0f}MB downloaded")
+    print(f"prefetch done: {len(results)} sentinel2 overlay(s) ok, {total_mb:.0f}MB downloaded")
+    if errors:
+        print(f"  {len(errors)} overlay(s) failed (transient): {', '.join(errors)} -- re-run to retry (cached ones skip fast)")
     return 0
 
 

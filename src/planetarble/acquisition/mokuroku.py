@@ -13,8 +13,40 @@ public API is a streaming line iterator; parsing one line is a pure function.
 
 from __future__ import annotations
 
+import gzip
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable, Iterator, Optional
+
+
+def mokuroku_url(layer: str) -> str:
+    return f"https://cyberjapandata.gsi.go.jp/xyz/{layer}/mokuroku.csv.gz"
+
+
+def fetch_mokuroku(url: str, dest: Path, *, timeout: int = 300) -> Path:
+    """Download a mokuroku.csv.gz to ``dest`` (skips if already present)."""
+    import urllib.request
+
+    dest = Path(dest)
+    if dest.exists() and dest.stat().st_size > 0:
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_suffix(dest.suffix + ".part")
+    with urllib.request.urlopen(url, timeout=timeout) as resp, tmp.open("wb") as fh:
+        while True:
+            chunk = resp.read(1024 * 1024)
+            if not chunk:
+                break
+            fh.write(chunk)
+    tmp.replace(dest)
+    return dest
+
+
+def read_mokuroku_gz(path: Path) -> Iterator[str]:
+    """Yield decoded lines from a local mokuroku.csv.gz (streaming)."""
+    with gzip.open(path, "rt", encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            yield line
 
 
 @dataclass(frozen=True)

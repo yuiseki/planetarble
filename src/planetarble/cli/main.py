@@ -413,6 +413,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print commands without executing GDAL",
     )
 
+    gsi_collect = subcommands.add_parser(
+        "gsi-collect",
+        help="Collect a GSI XYZ layer (e.g. seamlessphoto) nationwide into a zxy dir, mokuroku-driven",
+    )
+    gsi_collect.add_argument("--layer", default="seamlessphoto", help="GSI layer id (default: seamlessphoto)")
+    gsi_collect.add_argument("--zoom-min", type=int, default=8)
+    gsi_collect.add_argument("--zoom-max", type=int, default=16)
+    gsi_collect.add_argument("--out", type=Path, required=True, help="Output zxy tile directory")
+    gsi_collect.add_argument("--workers", type=int, default=10, help="Concurrent downloads (be polite; 403/429 trigger cool-down)")
+    gsi_collect.add_argument("--ext", default="jpg")
+    gsi_collect.add_argument("--mokuroku", default=None, help="mokuroku.csv.gz URL or local path (default: GSI URL for the layer)")
+    gsi_collect.add_argument("--config", type=Path, default=None, help="Pipeline config (for cache dir defaults)")
+    gsi_collect.add_argument("--dry-run", action="store_true", help="Report tile counts per zoom from mokuroku and exit")
+
     package = subcommands.add_parser("package", help="Create PMTiles distribution")
     package.add_argument(
         "--config",
@@ -508,6 +522,8 @@ def main(argv: Iterable[str] | None = None) -> int:
         return _handle_split_plan(args)
     if args.command == "mpc-fetch":
         return _handle_mpc_fetch(args)
+    if args.command == "gsi-collect":
+        return _handle_gsi_collect(args)
     if args.command == "gsi-fetch":
         return _handle_gsi_fetch(args)
     if args.command == "package":
@@ -1787,6 +1803,70 @@ def _handle_mpc_fetch(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(summary)
     return 0
+
+
+def _handle_gsi_collect(args: argparse.Namespace) -> int:
+    import time
+
+    from planetarble.acquisition.mokuroku import (
+        fetch_mokuroku, iter_mokuroku_lines, mokuroku_url, read_mokuroku_gz,
+    )
+    from planetarble.acquisition.tiles import download_xyz_tiles
+
+    cfg = load_config(_resolve_config_path(args.config))
+    layer = args.layer
+    template = f"https://cyberjapandata.gsi.go.jp/xyz/{layer}/{{z}}/{{x}}/{{y}}.{args.ext}"
+
+    # resolve the mokuroku catalog (download if a URL / default)
+    src = args.mokuroku or mokuroku_url(layer)
+    if str(src).startswith(("http://", "https://")):
+        cache = (cfg.data_dir / "cache" / "mokuroku" / f"{layer}.csv.gz").resolve()
+        LOGGER.info("fetching mokuroku", extra={"url": src, "dest": str(cache)})
+        gz = fetch_mokuroku(src, cache)
+    else:
+        gz = Path(src)
+
+    if args.dry_run:
+        counts: dict = {}
+        total_bytes = 0
+        for e in iter_mokuroku_lines(read_mokuroku_gz(gz), zoom_min=args.zoom_min, zoom_max=args.zoom_max):
+            counts[e.z] = counts.get(e.z, 0) + 1
+            total_bytes += e.size
+        n = sum(counts.values())
+        print(f"gsi-collect dry-run: {layer} z{args.zoom_min}-{args.zoom_max} = {n} tiles, {total_bytes/1e9:.1f} GB")
+        for z in sorted(counts):
+            print(f"  z{z}: {counts[z]} tiles")
+        return 0
+
+    def triplets():
+        for e in iter_mokuroku_lines(read_mokuroku_gz(gz), zoom_min=args.zoom_min, zoom_max=args.zoom_max):
+            yield (e.z, e.x, e.y)
+
+    start = time.monotonic()
+
+    def on_progress(stats) -> None:
+        el = time.monotonic() - start
+        done = stats.ok + stats.cached + stats.http_404 + stats.error + stats.failed
+        rate = done / el if el > 0 else 0
+        print(
+            f"gsi-collect {layer} z{args.zoom_min}-{args.zoom_max}: "
+            f"ok={stats.ok} cached={stats.cached} 404={stats.http_404} "
+            f"blocked={stats.blocked} err={stats.error} failed={stats.failed} "
+            f"{stats.downloaded_bytes/1e9:.1f}GB {rate:.0f} tiles/s {el/60:.1f}m",
+            flush=True,
+        )
+
+    stats = download_xyz_tiles(
+        triplets(), out_dir=args.out.resolve(), template=template, ext=args.ext,
+        workers=args.workers, on_progress=on_progress, report_every=30.0,
+    )
+    el = time.monotonic() - start
+    print(
+        f"gsi-collect done: {layer} z{args.zoom_min}-{args.zoom_max} -> {args.out} "
+        f"ok={stats.ok} cached={stats.cached} 404={stats.http_404} blocked={stats.blocked} "
+        f"err={stats.error} failed={stats.failed} {stats.downloaded_bytes/1e9:.1f}GB in {el/60:.1f}m"
+    )
+    return 1 if (stats.failed + stats.error) > 0 else 0
 
 
 def _handle_gsi_fetch(args: argparse.Namespace) -> int:

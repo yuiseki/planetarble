@@ -277,6 +277,8 @@ def build_parser() -> argparse.ArgumentParser:
     prefetch.add_argument("--throttle-floor", type=float, default=150.0, help="KiB/s below which the last tile counts as throttled")
     prefetch.add_argument("--cooldown-min", type=float, default=600.0, help="Min cooldown (s) after a throttled tile")
     prefetch.add_argument("--cooldown-max", type=float, default=900.0, help="Max cooldown (s) after a throttled tile")
+    prefetch.add_argument("--recovery-wait", type=float, default=1800.0, help="Seconds to wait between recovery rounds during a broad MPC outage")
+    prefetch.add_argument("--max-recovery-rounds", type=int, default=6, help="Max rounds re-attempting failed overlays (1 = no recovery wait); rides out an MPC STAC outage")
     prefetch.add_argument("--dry-run", action="store_true", help="List the Sentinel-2 overlays that would be prefetched and exit")
 
     split_plan = subcommands.add_parser(
@@ -621,21 +623,32 @@ def _handle_prefetch(args: argparse.Namespace) -> int:
         if wait > 0:
             time.sleep(wait)
 
-    errors: list = []
-
     def on_error(ov, exc) -> None:
-        errors.append(ov.name)
-        print(f"  ERROR {ov.name}: {exc} (skipped; re-run to retry)")
+        print(f"  ERROR {ov.name}: {exc}")
+
+    import time as _time
+
+    def on_recovery_wait(round_index, n_failed, wait_s) -> None:
+        print(
+            f"  MPC appears down: {n_failed} overlay(s) failed in round {round_index}; "
+            f"waiting {wait_s:.0f}s for recovery, then retrying (cached ones skip)"
+        )
 
     results = prefetch_planet(
         spec, executor, pacer=pacer,
         on_skip=lambda ov: print(f"  skip {ov.name} (source={ov.source})"),
         on_error=on_error,
+        recovery_wait_s=args.recovery_wait,
+        max_rounds=args.max_recovery_rounds,
+        on_recovery_wait=on_recovery_wait,
+        sleeper=_time.sleep,
     )
     total_mb = sum(r.downloaded_bytes for r in results) / 1e6
-    print(f"prefetch done: {len(results)} sentinel2 overlay(s) ok, {total_mb:.0f}MB downloaded")
-    if errors:
-        print(f"  {len(errors)} overlay(s) failed (transient): {', '.join(errors)} -- re-run to retry (cached ones skip fast)")
+    done_names = {r.overlay for r in results}
+    failed = [o.name for o in s2_overlays if o.name not in done_names]
+    print(f"prefetch done: {len(results)}/{len(s2_overlays)} sentinel2 overlay(s) ok, {total_mb:.0f}MB downloaded")
+    if failed:
+        print(f"  {len(failed)} still failing after {args.max_recovery_rounds} round(s): {', '.join(failed)} -- re-run later (cached ones skip fast)")
     return 0
 
 

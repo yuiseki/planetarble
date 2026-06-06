@@ -66,6 +66,52 @@ def test_prefetch_continues_past_per_overlay_error() -> None:
     assert paced == ["kyoto_s2"]  # pacer not called for the failed overlay
 
 
+class _OutageThenRecoverExecutor:
+    """Every sentinel2 overlay fails on round 1 (MPC outage), succeeds on round 2."""
+
+    def __init__(self):
+        self.attempts = {}
+
+    def prefetch_overlay(self, overlay):
+        self.attempts[overlay.name] = self.attempts.get(overlay.name, 0) + 1
+        if self.attempts[overlay.name] == 1:
+            raise RuntimeError("request exceeded the maximum allowed time")
+        return PrefetchStats(overlay=overlay.name, downloaded_count=3, downloaded_bytes=10**9, elapsed_seconds=50.0)
+
+
+def test_recovery_rounds_retry_failed_overlays_after_waiting() -> None:
+    spec = _spec()  # osaka_s2, city_oam, kyoto_s2
+    ex = _OutageThenRecoverExecutor()
+    slept, waits = [], []
+
+    results = prefetch_planet(
+        spec, ex,
+        pacer=lambda s: None,
+        on_error=lambda ov, exc: None,
+        recovery_wait_s=1800.0,
+        max_rounds=3,
+        on_recovery_wait=lambda rnd, n, wait: waits.append((rnd, n, wait)),
+        sleeper=lambda s: slept.append(s),
+    )
+
+    # round 1: both s2 overlays fail (outage) -> one recovery wait
+    # round 2: both succeed
+    assert slept == [1800.0]
+    assert waits == [(1, 2, 1800.0)]
+    assert sorted(r.overlay for r in results) == ["kyoto_s2", "osaka_s2"]
+    # each was attempted twice (fail, then success); never waited after success
+    assert ex.attempts == {"osaka_s2": 2, "kyoto_s2": 2}
+
+
+def test_no_recovery_wait_when_single_round() -> None:
+    spec = _spec()
+    ex = _OutageThenRecoverExecutor()
+    slept = []
+    prefetch_planet(spec, ex, pacer=lambda s: None, on_error=lambda ov, e: None,
+                    recovery_wait_s=1800.0, max_rounds=1, sleeper=lambda s: slept.append(s))
+    assert slept == []  # max_rounds=1 -> never waits even if all fail
+
+
 def test_prefetch_only_sentinel2_overlays_and_paces_each() -> None:
     spec = _spec()
     ex = _FakeExecutor()

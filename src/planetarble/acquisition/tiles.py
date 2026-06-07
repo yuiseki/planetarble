@@ -45,7 +45,7 @@ def tile_path(out_dir: Path, z: int, x: int, y: int, ext: str) -> Path:
 def download_xyz_tiles(
     triplets: Iterable[Triplet],
     *,
-    out_dir: Path,
+    out_dir: Optional[Path] = None,
     template: str,
     ext: str = "jpg",
     workers: int = 10,
@@ -57,10 +57,35 @@ def download_xyz_tiles(
     on_progress: Optional[Callable[[TileDownloadStats], None]] = None,
     report_every: float = 15.0,
     sleep: Callable[[float], None] = time.sleep,
+    sink: Optional[Callable[[int, int, int, bytes], None]] = None,
+    is_cached: Optional[Callable[[int, int, int], bool]] = None,
 ) -> TileDownloadStats:
-    """Download ``triplets`` (z,x,y) from ``template`` into ``out_dir`` in parallel."""
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    """Download ``triplets`` (z,x,y) from ``template`` in parallel.
+
+    By default each tile is written to ``out_dir`` as ``z/x/y.ext``. Pass a
+    ``sink(z, x, y, content)`` to send tile bytes elsewhere (e.g. straight into
+    an MBTiles, no intermediate files) and an ``is_cached(z, x, y) -> bool`` to
+    decide what to skip. ``sink`` may be called concurrently from worker threads,
+    so it must be thread-safe. Either ``out_dir`` or ``sink`` is required.
+    """
+    if sink is None and out_dir is None:
+        raise ValueError("download_xyz_tiles requires out_dir or sink")
+    if out_dir is not None:
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+    if sink is None:
+        def sink(z: int, x: int, y: int, content: bytes) -> None:  # noqa: F811
+            p = tile_path(out_dir, z, x, y, ext)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(content)
+    if is_cached is None:
+        def is_cached(z: int, x: int, y: int) -> bool:  # noqa: F811
+            if out_dir is None:
+                return False
+            p = tile_path(out_dir, z, x, y, ext)
+            return p.exists() and p.stat().st_size > 0
+
     stats = TileDownloadStats()
     lock = threading.Lock()
     pause_until = [0.0]  # shared cool-down deadline when the server blocks us
@@ -78,8 +103,7 @@ def download_xyz_tiles(
 
     def fetch(t: Triplet) -> None:
         z, x, y = t
-        path = tile_path(out_dir, z, x, y, ext)
-        if path.exists() and path.stat().st_size > 0:
+        if is_cached(z, x, y):
             with lock:
                 stats.cached += 1
             return
@@ -92,8 +116,7 @@ def download_xyz_tiles(
                 resp = getter(url, timeout)
                 code = resp.status_code
                 if code == 200:
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    path.write_bytes(resp.content)
+                    sink(z, x, y, resp.content)
                     with lock:
                         stats.ok += 1
                         stats.downloaded_bytes += len(resp.content)

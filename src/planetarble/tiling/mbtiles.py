@@ -3,12 +3,269 @@
 from __future__ import annotations
 
 import io
+import queue
 import shutil
 import sqlite3
+import threading
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Callable, Dict, Iterable, Iterator, Mapping, Optional, Set, Tuple
 
 _PIL_SAVE_FORMAT = {"webp": "WEBP", "png": "PNG", "jpg": "JPEG", "jpeg": "JPEG"}
+
+
+def iter_xyz_dir(tile_dir: Path) -> Iterator[Tuple[int, int, int, str]]:
+    """Yield ``(z, x, y, ext)`` for every ``z/x/y.ext`` tile under ``tile_dir``.
+
+    Non-numeric entries (e.g. a ``metadata.json`` sidecar or a stray file) are
+    skipped, so the directory can hold things other than tiles.
+    """
+    tile_dir = Path(tile_dir)
+    for zdir in tile_dir.iterdir():
+        if not zdir.is_dir() or not zdir.name.isdigit():
+            continue
+        z = int(zdir.name)
+        for xdir in zdir.iterdir():
+            if not xdir.is_dir() or not xdir.name.isdigit():
+                continue
+            x = int(xdir.name)
+            for yfile in xdir.iterdir():
+                stem, _, ext = yfile.name.partition(".")
+                if not stem.isdigit():
+                    continue
+                yield z, x, int(stem), ext
+
+
+def _init_mbtiles(conn: sqlite3.Connection) -> None:
+    # WAL + relaxed sync: this is a bulk write of millions of small blobs; we
+    # favour throughput over crash-durability (the source dir is the truth and
+    # the ingest is restartable via INSERT OR REPLACE).
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("CREATE TABLE IF NOT EXISTS metadata (name text, value text)")
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tiles "
+        "(zoom_level integer, tile_column integer, tile_row integer, tile_data blob)"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS tile_index "
+        "ON tiles (zoom_level, tile_column, tile_row)"
+    )
+
+
+def _set_metadata(conn: sqlite3.Connection, key: str, value: str) -> None:
+    if conn.execute("UPDATE metadata SET value=? WHERE name=?", (value, key)).rowcount == 0:
+        conn.execute("INSERT INTO metadata (name, value) VALUES (?, ?)", (key, value))
+
+
+def _load_existing_keys(conn: sqlite3.Connection) -> Set[Tuple[int, int, int]]:
+    """Return the set of XYZ ``(z, x, y)`` tiles already stored (TMS -> XYZ)."""
+    keys: Set[Tuple[int, int, int]] = set()
+    for z, x, row in conn.execute("SELECT zoom_level, tile_column, tile_row FROM tiles"):
+        keys.add((z, x, (1 << z) - 1 - row))
+    return keys
+
+
+class MbtilesSink:
+    """Thread-safe tile sink writing straight into an MBTiles archive.
+
+    Worker threads call the sink with ``(z, x, y, content)``; a single dedicated
+    writer thread drains a bounded queue and commits batched
+    ``INSERT OR REPLACE`` statements, so sqlite only ever sees one writer. This
+    lets a parallel downloader write directly into MBTiles with no intermediate
+    ``z/x/y`` files (no millions of inodes, no read-back pass).
+
+    Pre-loaded existing keys (``contains``) make re-runs resumable. Use as a
+    context manager so the writer thread is started and flushed deterministically.
+    """
+
+    def __init__(
+        self,
+        mbtiles_path: Path,
+        *,
+        tile_format: str = "jpg",
+        batch_size: int = 10000,
+        metadata: Optional[Mapping[str, str]] = None,
+        queue_maxsize: int = 20000,
+    ) -> None:
+        self.path = Path(mbtiles_path)
+        self.tile_format = tile_format
+        self.batch_size = batch_size
+        self.metadata = dict(metadata or {})
+        self._q: "queue.Queue[Optional[Tuple[int, int, int, bytes]]]" = queue.Queue(maxsize=queue_maxsize)
+        self._existing: Set[Tuple[int, int, int]] = set()
+        self._thread: Optional[threading.Thread] = None
+        self.written = 0
+
+    def __enter__(self) -> "MbtilesSink":
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        # init schema + snapshot existing keys on the calling thread, then hand
+        # the file to a dedicated writer thread (sqlite connections are per-thread)
+        conn = sqlite3.connect(str(self.path))
+        try:
+            _init_mbtiles(conn)
+            conn.commit()
+            self._existing = _load_existing_keys(conn)
+        finally:
+            conn.close()
+        self._thread = threading.Thread(target=self._writer, daemon=True)
+        self._thread.start()
+        return self
+
+    def contains(self, z: int, x: int, y: int) -> bool:
+        return (z, x, y) in self._existing
+
+    def __call__(self, z: int, x: int, y: int, content: bytes) -> None:
+        self._q.put((z, x, y, content))
+
+    def _writer(self) -> None:
+        conn = sqlite3.connect(str(self.path))
+        batch = []
+
+        def flush() -> None:
+            if not batch:
+                return
+            conn.executemany(
+                "INSERT OR REPLACE INTO tiles "
+                "(zoom_level, tile_column, tile_row, tile_data) VALUES (?,?,?,?)",
+                batch,
+            )
+            conn.commit()
+            self.written += len(batch)
+            batch.clear()
+
+        while True:
+            item = self._q.get()
+            if item is None:
+                flush()
+                break
+            z, x, y, content = item
+            batch.append((z, x, (1 << z) - 1 - y, content))
+            if len(batch) >= self.batch_size:
+                flush()
+
+        _set_metadata(conn, "format", self.tile_format)
+        min_zoom = conn.execute("SELECT MIN(zoom_level) FROM tiles").fetchone()[0]
+        max_zoom = conn.execute("SELECT MAX(zoom_level) FROM tiles").fetchone()[0]
+        if min_zoom is not None:
+            _set_metadata(conn, "minzoom", str(min_zoom))
+        if max_zoom is not None:
+            _set_metadata(conn, "maxzoom", str(max_zoom))
+        for key, value in self.metadata.items():
+            _set_metadata(conn, key, str(value))
+        conn.commit()
+        conn.close()
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self._q.put(None)
+        if self._thread is not None:
+            self._thread.join()
+
+
+def download_xyz_to_mbtiles(
+    triplets: Iterable[Tuple[int, int, int]],
+    *,
+    mbtiles_path: Path,
+    template: str,
+    ext: str = "jpg",
+    tile_format: Optional[str] = None,
+    workers: int = 10,
+    batch_size: int = 10000,
+    metadata: Optional[Mapping[str, str]] = None,
+    **download_kwargs,
+):
+    """Download ``(z, x, y)`` tiles straight into an MBTiles (no intermediate files).
+
+    Wires a :class:`MbtilesSink` into ``download_xyz_tiles``: parallel workers
+    fetch over the network and a single writer thread persists batched tiles.
+    Resumable — tiles already in the archive are skipped. Returns the downloader
+    stats. ``**download_kwargs`` are forwarded to ``download_xyz_tiles``.
+    """
+    from planetarble.acquisition.tiles import download_xyz_tiles
+
+    fmt = tile_format or ext
+    with MbtilesSink(
+        mbtiles_path, tile_format=fmt, batch_size=batch_size, metadata=metadata
+    ) as sink:
+        stats = download_xyz_tiles(
+            triplets,
+            template=template,
+            ext=ext,
+            workers=workers,
+            sink=sink,
+            is_cached=sink.contains,
+            **download_kwargs,
+        )
+    return stats
+
+
+def ingest_xyz_dir(
+    tile_dir: Path,
+    mbtiles_path: Path,
+    *,
+    tile_format: str = "jpg",
+    batch_size: int = 10000,
+    metadata: Optional[Mapping[str, str]] = None,
+    on_progress: Optional[Callable[[int], None]] = None,
+) -> int:
+    """Ingest a ``z/x/y.ext`` directory into an MBTiles archive (create or append).
+
+    Tiles are stored TMS (``tile_row = 2**z - 1 - y``) per the MBTiles spec,
+    batched with ``executemany`` and ``INSERT OR REPLACE`` so re-ingesting is
+    idempotent and re-running picks up new tiles. ``minzoom``/``maxzoom`` are
+    recomputed from the full table after writing; ``format`` plus any extra
+    ``metadata`` keys are set. Returns the number of tiles written.
+
+    Unlike ``mb-util`` this emits no per-tile logging and uses one batched
+    transaction stream, so packing millions of tiles is markedly faster.
+    """
+    tile_dir = Path(tile_dir)
+    mbtiles_path = Path(mbtiles_path)
+    mbtiles_path.parent.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(str(mbtiles_path))
+    try:
+        _init_mbtiles(conn)
+        written = 0
+        batch = []
+        for z, x, y, _ext in iter_xyz_dir(tile_dir):
+            data = (tile_dir / str(z) / str(x) / f"{y}.{_ext}").read_bytes()
+            tms_row = (1 << z) - 1 - y
+            batch.append((z, x, tms_row, data))
+            if len(batch) >= batch_size:
+                conn.executemany(
+                    "INSERT OR REPLACE INTO tiles "
+                    "(zoom_level, tile_column, tile_row, tile_data) VALUES (?,?,?,?)",
+                    batch,
+                )
+                conn.commit()
+                written += len(batch)
+                batch = []
+                if on_progress is not None:
+                    on_progress(written)
+        if batch:
+            conn.executemany(
+                "INSERT OR REPLACE INTO tiles "
+                "(zoom_level, tile_column, tile_row, tile_data) VALUES (?,?,?,?)",
+                batch,
+            )
+            conn.commit()
+            written += len(batch)
+            if on_progress is not None:
+                on_progress(written)
+
+        _set_metadata(conn, "format", tile_format)
+        min_zoom = conn.execute("SELECT MIN(zoom_level) FROM tiles").fetchone()[0]
+        max_zoom = conn.execute("SELECT MAX(zoom_level) FROM tiles").fetchone()[0]
+        if min_zoom is not None:
+            _set_metadata(conn, "minzoom", str(min_zoom))
+        if max_zoom is not None:
+            _set_metadata(conn, "maxzoom", str(max_zoom))
+        for key, value in (metadata or {}).items():
+            _set_metadata(conn, key, str(value))
+        conn.commit()
+    finally:
+        conn.close()
+    return written
 
 
 def merge_mbtiles(

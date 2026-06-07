@@ -420,12 +420,27 @@ def build_parser() -> argparse.ArgumentParser:
     gsi_collect.add_argument("--layer", default="seamlessphoto", help="GSI layer id (default: seamlessphoto)")
     gsi_collect.add_argument("--zoom-min", type=int, default=8)
     gsi_collect.add_argument("--zoom-max", type=int, default=16)
-    gsi_collect.add_argument("--out", type=Path, required=True, help="Output zxy tile directory")
+    gsi_collect.add_argument("--out", type=Path, default=None, help="Output zxy tile directory (omit when using --mbtiles)")
+    gsi_collect.add_argument("--mbtiles", type=Path, default=None, help="Write tiles directly into this MBTiles (no intermediate z/x/y files; resumable)")
+    gsi_collect.add_argument("--attribution", default=None, help="metadata attribution (when --mbtiles)")
+    gsi_collect.add_argument("--name", default=None, help="metadata name (when --mbtiles)")
     gsi_collect.add_argument("--workers", type=int, default=10, help="Concurrent downloads (be polite; 403/429 trigger cool-down)")
     gsi_collect.add_argument("--ext", default="jpg")
     gsi_collect.add_argument("--mokuroku", default=None, help="mokuroku.csv.gz URL or local path (default: GSI URL for the layer)")
     gsi_collect.add_argument("--config", type=Path, default=None, help="Pipeline config (for cache dir defaults)")
     gsi_collect.add_argument("--dry-run", action="store_true", help="Report tile counts per zoom from mokuroku and exit")
+
+    gsi_pack = subcommands.add_parser(
+        "gsi-pack",
+        help="Pack a z/x/y tile directory into an MBTiles archive (create or append; faster than mb-util)",
+    )
+    gsi_pack.add_argument("--tiles", type=Path, required=True, help="Source z/x/y tile directory")
+    gsi_pack.add_argument("--out", type=Path, required=True, help="Destination MBTiles (created or appended)")
+    gsi_pack.add_argument("--format", default="jpg", help="Tile image format stored in metadata (default: jpg)")
+    gsi_pack.add_argument("--name", default=None, help="metadata name")
+    gsi_pack.add_argument("--attribution", default=None, help="metadata attribution")
+    gsi_pack.add_argument("--bounds", default=None, help="metadata bounds 'minlon,minlat,maxlon,maxlat'")
+    gsi_pack.add_argument("--batch-size", type=int, default=10000, help="Insert batch size (default: 10000)")
 
     package = subcommands.add_parser("package", help="Create PMTiles distribution")
     package.add_argument(
@@ -524,6 +539,8 @@ def main(argv: Iterable[str] | None = None) -> int:
         return _handle_mpc_fetch(args)
     if args.command == "gsi-collect":
         return _handle_gsi_collect(args)
+    if args.command == "gsi-pack":
+        return _handle_gsi_pack(args)
     if args.command == "gsi-fetch":
         return _handle_gsi_fetch(args)
     if args.command == "package":
@@ -1838,6 +1855,10 @@ def _handle_gsi_collect(args: argparse.Namespace) -> int:
             print(f"  z{z}: {counts[z]} tiles")
         return 0
 
+    if args.out is None and args.mbtiles is None:
+        print("gsi-collect: one of --out (zxy dir) or --mbtiles is required")
+        return 2
+
     def triplets():
         for e in iter_mokuroku_lines(read_mokuroku_gz(gz), zoom_min=args.zoom_min, zoom_max=args.zoom_max):
             yield (e.z, e.x, e.y)
@@ -1856,17 +1877,63 @@ def _handle_gsi_collect(args: argparse.Namespace) -> int:
             flush=True,
         )
 
-    stats = download_xyz_tiles(
-        triplets(), out_dir=args.out.resolve(), template=template, ext=args.ext,
-        workers=args.workers, on_progress=on_progress, report_every=30.0,
-    )
+    if args.mbtiles is not None:
+        from planetarble.tiling.mbtiles import download_xyz_to_mbtiles
+
+        meta = {}
+        if args.name:
+            meta["name"] = args.name
+        if args.attribution:
+            meta["attribution"] = args.attribution
+        dest = args.mbtiles.resolve()
+        stats = download_xyz_to_mbtiles(
+            triplets(), mbtiles_path=dest, template=template, ext=args.ext,
+            tile_format=args.ext, workers=args.workers, metadata=meta or None,
+            on_progress=on_progress, report_every=30.0,
+        )
+    else:
+        dest = args.out.resolve()
+        stats = download_xyz_tiles(
+            triplets(), out_dir=dest, template=template, ext=args.ext,
+            workers=args.workers, on_progress=on_progress, report_every=30.0,
+        )
     el = time.monotonic() - start
     print(
-        f"gsi-collect done: {layer} z{args.zoom_min}-{args.zoom_max} -> {args.out} "
+        f"gsi-collect done: {layer} z{args.zoom_min}-{args.zoom_max} -> {dest} "
         f"ok={stats.ok} cached={stats.cached} 404={stats.http_404} blocked={stats.blocked} "
         f"err={stats.error} failed={stats.failed} {stats.downloaded_bytes/1e9:.1f}GB in {el/60:.1f}m"
     )
     return 1 if (stats.failed + stats.error) > 0 else 0
+
+
+def _handle_gsi_pack(args: argparse.Namespace) -> int:
+    import time
+
+    from planetarble.tiling.mbtiles import ingest_xyz_dir
+
+    metadata = {}
+    if args.name:
+        metadata["name"] = args.name
+    if args.attribution:
+        metadata["attribution"] = args.attribution
+    if args.bounds:
+        metadata["bounds"] = args.bounds
+
+    start = time.monotonic()
+
+    def on_progress(n: int) -> None:
+        el = time.monotonic() - start
+        rate = n / el if el > 0 else 0
+        print(f"gsi-pack: {n} tiles packed, {rate:.0f} tiles/s {el/60:.1f}m", flush=True)
+
+    n = ingest_xyz_dir(
+        args.tiles.resolve(), args.out.resolve(),
+        tile_format=args.format, batch_size=args.batch_size,
+        metadata=metadata or None, on_progress=on_progress,
+    )
+    el = time.monotonic() - start
+    print(f"gsi-pack done: {n} tiles -> {args.out} in {el/60:.1f}m")
+    return 0
 
 
 def _handle_gsi_fetch(args: argparse.Namespace) -> int:

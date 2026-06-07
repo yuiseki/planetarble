@@ -326,6 +326,71 @@ def merge_mbtiles(
     return output_path
 
 
+def union_mbtiles(
+    inputs: "Iterable[Path]",
+    destination: Path,
+    *,
+    tile_format: Optional[str] = None,
+    metadata: Optional[Mapping[str, str]] = None,
+) -> Path:
+    """Union several MBTiles archives into one (for disjoint pieces, e.g. Quadrans).
+
+    Creates a fresh archive and inserts every input's tiles in a single pass
+    (no repeated base copy, unlike chaining ``merge_mbtiles``). ``INSERT OR
+    IGNORE`` keeps it safe even if pieces happen to overlap — the first input
+    wins. ``minzoom``/``maxzoom`` are recomputed from the result; ``format`` and
+    ``name``/``attribution``/``bounds`` are carried from the first input unless
+    overridden via ``tile_format`` / ``metadata``.
+    """
+    inputs = [Path(p) for p in inputs]
+    if not inputs:
+        raise ValueError("union_mbtiles requires at least one input")
+    for p in inputs:
+        if not p.exists():
+            raise FileNotFoundError(f"MBTiles not found: {p}")
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        destination.unlink()
+
+    base_meta: Dict[str, str] = {}
+    c0 = sqlite3.connect(str(inputs[0]))
+    try:
+        if c0.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='metadata'").fetchone():
+            base_meta = dict(c0.execute("SELECT name, value FROM metadata"))
+    finally:
+        c0.close()
+
+    conn = sqlite3.connect(str(destination))
+    try:
+        _init_mbtiles(conn)
+        for src in inputs:
+            conn.execute("ATTACH DATABASE ? AS src", (str(src),))
+            conn.execute(
+                "INSERT OR IGNORE INTO tiles (zoom_level, tile_column, tile_row, tile_data) "
+                "SELECT zoom_level, tile_column, tile_row, tile_data FROM src.tiles"
+            )
+            conn.commit()
+            conn.execute("DETACH DATABASE src")
+
+        _set_metadata(conn, "format", tile_format or base_meta.get("format", "jpg"))
+        for key in ("name", "attribution", "bounds"):
+            if key in base_meta:
+                _set_metadata(conn, key, base_meta[key])
+        min_zoom = conn.execute("SELECT MIN(zoom_level) FROM tiles").fetchone()[0]
+        max_zoom = conn.execute("SELECT MAX(zoom_level) FROM tiles").fetchone()[0]
+        if min_zoom is not None:
+            _set_metadata(conn, "minzoom", str(min_zoom))
+        if max_zoom is not None:
+            _set_metadata(conn, "maxzoom", str(max_zoom))
+        for key, value in (metadata or {}).items():
+            _set_metadata(conn, key, str(value))
+        conn.commit()
+    finally:
+        conn.close()
+    return destination
+
+
 def composite_mbtiles(
     base_path: Path,
     overlay_path: Path,

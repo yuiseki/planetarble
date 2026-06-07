@@ -34,7 +34,7 @@ from planetarble.logging import configure_logging, get_logger, log_skip
 from planetarble.packaging import PackagingManager
 from planetarble.processing import ProcessingManager
 from planetarble.tiling import PmtilesTilingManager, TilingManager
-from planetarble.tiling.mbtiles import merge_mbtiles
+from planetarble.tiling.mbtiles import merge_mbtiles, union_mbtiles
 
 LOGGER = get_logger(__name__)
 
@@ -254,6 +254,13 @@ def build_parser() -> argparse.ArgumentParser:
     tiling_merge.add_argument("--overlay", type=Path, required=True, help="Overlay MBTiles archive")
     tiling_merge.add_argument("--out", type=Path, required=True, help="Output MBTiles archive")
 
+    tiling_union = tiling_subcommands.add_parser(
+        "union-mbtiles",
+        help="Union several MBTiles into one in a single pass (for disjoint Quadrans pieces)",
+    )
+    tiling_union.add_argument("--inputs", type=Path, nargs="+", required=True, help="Input MBTiles archives")
+    tiling_union.add_argument("--out", type=Path, required=True, help="Output MBTiles archive")
+
     build = subcommands.add_parser(
         "build",
         help="Build a custom planet from an AOI overlay spec (ADR 0001)",
@@ -426,6 +433,8 @@ def build_parser() -> argparse.ArgumentParser:
     gsi_collect.add_argument("--name", default=None, help="metadata name (when --mbtiles)")
     gsi_collect.add_argument("--workers", type=int, default=10, help="Concurrent downloads (be polite; 403/429 trigger cool-down)")
     gsi_collect.add_argument("--ext", default="jpg")
+    gsi_collect.add_argument("--quadrans", choices=["north", "east", "south", "west"], default=None,
+                             help="Only collect tiles in this Quadrans region (UNopenGIS/7#909) — for splitting work")
     gsi_collect.add_argument("--mokuroku", default=None, help="mokuroku.csv.gz URL or local path (default: GSI URL for the layer)")
     gsi_collect.add_argument("--config", type=Path, default=None, help="Pipeline config (for cache dir defaults)")
     gsi_collect.add_argument("--dry-run", action="store_true", help="Report tile counts per zoom from mokuroku and exit")
@@ -527,6 +536,8 @@ def main(argv: Iterable[str] | None = None) -> int:
             return _handle_tiling_pmtiles(args)
         if args.tiling_command == "merge-mbtiles":
             return _handle_merge_mbtiles(args)
+        if args.tiling_command == "union-mbtiles":
+            return _handle_union_mbtiles(args)
         parser.error("Unknown tiling subcommand")
         return 1
     if args.command == "build":
@@ -1488,6 +1499,21 @@ def _handle_merge_mbtiles(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_union_mbtiles(args: argparse.Namespace) -> int:
+    import time
+
+    inputs = [p.resolve() for p in args.inputs]
+    out = args.out.resolve()
+    start = time.monotonic()
+    union_mbtiles(inputs, out)
+    LOGGER.info(
+        "mbtiles union complete",
+        extra={"inputs": [str(p) for p in inputs], "output": str(out),
+               "seconds": round(time.monotonic() - start, 1)},
+    )
+    return 0
+
+
 def _handle_package(args: argparse.Namespace) -> int:
     config_path = _resolve_config_path(args.config)
     cfg = load_config(config_path)
@@ -1843,10 +1869,16 @@ def _handle_gsi_collect(args: argparse.Namespace) -> int:
     else:
         gz = Path(src)
 
+    quad = getattr(args, "quadrans", None)
+    if quad is not None:
+        from planetarble.tiling.quadrans import quadrans_of_tile
+
     if args.dry_run:
         counts: dict = {}
         total_bytes = 0
         for e in iter_mokuroku_lines(read_mokuroku_gz(gz), zoom_min=args.zoom_min, zoom_max=args.zoom_max):
+            if quad is not None and quadrans_of_tile(e.z, e.x, e.y) != quad:
+                continue
             counts[e.z] = counts.get(e.z, 0) + 1
             total_bytes += e.size
         n = sum(counts.values())
@@ -1861,6 +1893,8 @@ def _handle_gsi_collect(args: argparse.Namespace) -> int:
 
     def triplets():
         for e in iter_mokuroku_lines(read_mokuroku_gz(gz), zoom_min=args.zoom_min, zoom_max=args.zoom_max):
+            if quad is not None and quadrans_of_tile(e.z, e.x, e.y) != quad:
+                continue
             yield (e.z, e.x, e.y)
 
     start = time.monotonic()

@@ -75,3 +75,26 @@ pmtiles extract all.pmtiles tokyo.pmtiles --bbox 139.5,35.5,140.0,35.9
 
 Receivers can also `pmtiles extract` directly from a remote URL over HTTP range,
 pulling only the zooms/area they need — no client-side merge required.
+
+## Consuming the tiles — use `tileSize: 256`
+
+GSI seamlessphoto tiles are **256×256 px**, and these archives store them
+verbatim (byte-identical to GSI — verified by md5). MapLibre GL (and viewers
+built on it, including pmtiles.io) default raster sources to **512 px**. If you
+load these tiles as 512 they render one zoom level too coarse and look blocky —
+this is a viewer setting, not a defect in the data.
+
+Always set `tileSize: 256` on the raster source:
+
+```js
+map.addSource("gsi", {
+  type: "raster",
+  tiles: ["pmtiles://https://z.yuiseki.net/static/gsi/seamlessphoto/z2-z16.pmtiles/{z}/{x}/{y}"],
+  tileSize: 256,           // REQUIRED — GSI tiles are 256px
+  minzoom: 2, maxzoom: 16,
+  attribution: "国土地理院 シームレス空中写真 CC BY 4.0",
+});
+```
+
+A side-by-side 256-vs-512 demo lives at
+`https://z.yuiseki.net/static/gsi/seamlessphoto/compare.html`.

@@ -332,15 +332,28 @@ def union_mbtiles(
     *,
     tile_format: Optional[str] = None,
     metadata: Optional[Mapping[str, str]] = None,
+    chunk_size: int = 50_000,
+    on_progress: Optional[Callable[[int], None]] = None,
 ) -> Path:
     """Union several MBTiles archives into one (for disjoint pieces, e.g. Quadrans).
 
-    Creates a fresh archive and inserts every input's tiles in a single pass
-    (no repeated base copy, unlike chaining ``merge_mbtiles``). ``INSERT OR
-    IGNORE`` keeps it safe even if pieces happen to overlap — the first input
-    wins. ``minzoom``/``maxzoom`` are recomputed from the result; ``format`` and
+    The **first** input is copied verbatim as the base (a fast file copy, no
+    row-by-row SQL), then every remaining input is appended in ``chunk_size``-row
+    transactions. ``INSERT OR IGNORE`` keeps it safe even if pieces happen to
+    overlap — the first input wins, exactly as before. Two properties matter at
+    scale (hundreds of GB):
+
+    * **No re-insert of the biggest set** — pass the largest piece first and its
+      tiles arrive via ``shutil.copy2`` instead of millions of INSERTs.
+    * **Bounded journal** — each chunk commits under ``journal_mode=DELETE``, so
+      the rollback journal never grows past one chunk (a single giant
+      transaction would balloon the journal to ~output size and lose everything
+      on failure). The source pieces remain the truth, so the run is restartable.
+
+    ``minzoom``/``maxzoom`` are recomputed from the result; ``format`` and
     ``name``/``attribution``/``bounds`` are carried from the first input unless
-    overridden via ``tile_format`` / ``metadata``.
+    overridden via ``tile_format`` / ``metadata``. ``on_progress`` (if given) is
+    called with the running inserted-row count after each committed chunk.
     """
     inputs = [Path(p) for p in inputs]
     if not inputs:
@@ -361,17 +374,50 @@ def union_mbtiles(
     finally:
         c0.close()
 
+    # Copy the first input as the base instead of re-inserting it row by row.
+    shutil.copy2(inputs[0], destination)
+
     conn = sqlite3.connect(str(destination))
     try:
-        _init_mbtiles(conn)
-        for src in inputs:
-            conn.execute("ATTACH DATABASE ? AS src", (str(src),))
-            conn.execute(
-                "INSERT OR IGNORE INTO tiles (zoom_level, tile_column, tile_row, tile_data) "
-                "SELECT zoom_level, tile_column, tile_row, tile_data FROM src.tiles"
-            )
-            conn.commit()
-            conn.execute("DETACH DATABASE src")
+        # The copied base already carries the schema, but a foreign archive might
+        # lack the unique index OR IGNORE relies on; ensure it (idempotent on ours).
+        conn.execute("CREATE TABLE IF NOT EXISTS metadata (name text, value text)")
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS tiles "
+            "(zoom_level integer, tile_column integer, tile_row integer, tile_data blob)"
+        )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS tile_index "
+            "ON tiles (zoom_level, tile_column, tile_row)"
+        )
+        # Bound the journal to one chunk; sources are the truth so durability is moot.
+        conn.execute("PRAGMA journal_mode=DELETE")
+        conn.execute("PRAGMA synchronous=OFF")
+
+        inserted = 0
+        for src in inputs[1:]:
+            # Read from a separate connection so committing the writer never
+            # disturbs the open source cursor.
+            rconn = sqlite3.connect(str(src))
+            try:
+                cur = rconn.execute(
+                    "SELECT zoom_level, tile_column, tile_row, tile_data FROM tiles"
+                )
+                while True:
+                    batch = cur.fetchmany(chunk_size)
+                    if not batch:
+                        break
+                    conn.executemany(
+                        "INSERT OR IGNORE INTO tiles "
+                        "(zoom_level, tile_column, tile_row, tile_data) VALUES (?,?,?,?)",
+                        batch,
+                    )
+                    conn.commit()
+                    inserted += len(batch)
+                    if on_progress is not None:
+                        on_progress(inserted)
+            finally:
+                rconn.close()
 
         _set_metadata(conn, "format", tile_format or base_meta.get("format", "jpg"))
         for key in ("name", "attribution", "bounds"):

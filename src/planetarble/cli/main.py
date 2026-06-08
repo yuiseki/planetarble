@@ -258,8 +258,11 @@ def build_parser() -> argparse.ArgumentParser:
         "union-mbtiles",
         help="Union several MBTiles into one in a single pass (for disjoint Quadrans pieces)",
     )
-    tiling_union.add_argument("--inputs", type=Path, nargs="+", required=True, help="Input MBTiles archives")
+    tiling_union.add_argument("--inputs", type=Path, nargs="+", required=True,
+                              help="Input MBTiles archives (pass the LARGEST first — it becomes the copy base)")
     tiling_union.add_argument("--out", type=Path, required=True, help="Output MBTiles archive")
+    tiling_union.add_argument("--chunk-size", type=int, default=50_000,
+                              help="Rows per commit when appending non-base inputs (bounds journal growth)")
 
     build = subcommands.add_parser(
         "build",
@@ -1505,7 +1508,22 @@ def _handle_union_mbtiles(args: argparse.Namespace) -> int:
     inputs = [p.resolve() for p in args.inputs]
     out = args.out.resolve()
     start = time.monotonic()
-    union_mbtiles(inputs, out)
+    last = [start]
+
+    def _progress(inserted: int) -> None:
+        now = time.monotonic()
+        if now - last[0] < 30:
+            return
+        last[0] = now
+        elapsed = now - start
+        LOGGER.info(
+            "mbtiles union progress",
+            extra={"inserted": inserted,
+                   "tiles_per_s": round(inserted / elapsed) if elapsed else 0,
+                   "seconds": round(elapsed, 1)},
+        )
+
+    union_mbtiles(inputs, out, chunk_size=args.chunk_size, on_progress=_progress)
     LOGGER.info(
         "mbtiles union complete",
         extra={"inputs": [str(p) for p in inputs], "output": str(out),

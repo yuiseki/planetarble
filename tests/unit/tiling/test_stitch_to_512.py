@@ -160,3 +160,21 @@ def test_parallel_matches_serial(tmp_path: Path) -> None:
     # metadata carried through the shard union too
     assert _meta(parallel)["attribution"] == "CC BY 4.0"
     assert _meta(parallel)["minzoom"] == "1" and _meta(parallel)["maxzoom"] == "2"
+
+
+def test_shard_dir_separates_shards_from_output(tmp_path: Path) -> None:
+    tiles = {(2, x, y): ((x * 9) % 256, (y * 11) % 256, 50) for x in range(4) for y in range(4)}
+    src = tmp_path / "s.mbtiles"
+    _mbtiles(src, tiles)
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    shard_dir = tmp_path / "shards"
+    serial = tmp_path / "serial.mbtiles"
+    stitch_to_512(src, serial, tile_format="png", src_tile_size=SUB, workers=1)
+    parallel = out_dir / "parallel.mbtiles"
+    stitch_to_512(src, parallel, tile_format="png", src_tile_size=SUB, workers=3, shard_dir=shard_dir)
+
+    assert _dump(serial) == _dump(parallel)
+    # shards were created under shard_dir (and cleaned up), not next to the output
+    assert not list(out_dir.glob(".parallel.mbtiles.part*"))
+    assert not list(shard_dir.glob(".parallel.mbtiles.part*"))  # cleaned after union

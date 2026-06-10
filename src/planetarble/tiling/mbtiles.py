@@ -732,6 +732,7 @@ def stitch_to_512(
     background: Tuple[int, int, int] = (0, 0, 0),
     src_tile_size: int = 256,
     workers: int = 1,
+    shard_dir: Optional[Path] = None,
     metadata: Optional[Mapping[str, str]] = None,
     on_progress: Optional[Callable[[int], None]] = None,
 ) -> Path:
@@ -808,7 +809,8 @@ def stitch_to_512(
         _stitch_parallel(
             source, destination, units, workers,
             tile_format=tile_format, quality=quality,
-            background=background, src_tile_size=src_tile_size, on_progress=on_progress,
+            background=background, src_tile_size=src_tile_size,
+            shard_dir=shard_dir, on_progress=on_progress,
         )
     else:
         # serial: write straight into destination
@@ -861,12 +863,21 @@ def _stitch_parallel(
     quality: int,
     background: Tuple[int, int, int],
     src_tile_size: int,
+    shard_dir: Optional[Path],
     on_progress: Optional[Callable[[int], None]],
 ) -> None:
-    """Shard ``units`` round-robin across ``workers`` processes, then union shards."""
+    """Shard ``units`` round-robin across ``workers`` processes, then union shards.
+
+    Shards are written under ``shard_dir`` (default: next to ``destination``).
+    Placing them on a *different* filesystem from ``destination`` lets the
+    transient shard set and the unioned output live on separate disks — useful
+    when neither NVMe alone holds shards + output together.
+    """
     import multiprocessing as mp
 
-    shards = [destination.parent / f".{destination.name}.part{i}" for i in range(workers)]
+    shard_base = Path(shard_dir) if shard_dir is not None else destination.parent
+    shard_base.mkdir(parents=True, exist_ok=True)
+    shards = [shard_base / f".{destination.name}.part{i}" for i in range(workers)]
     for s in shards:
         if s.exists():
             s.unlink()

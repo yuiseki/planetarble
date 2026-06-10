@@ -264,6 +264,15 @@ def build_parser() -> argparse.ArgumentParser:
     tiling_union.add_argument("--chunk-size", type=int, default=50_000,
                               help="Rows per commit when appending non-base inputs (bounds journal growth)")
 
+    tiling_stitch = tiling_subcommands.add_parser(
+        "stitch-512",
+        help="Build a 512px pyramid from a 256px source (output zoom z <- source zoom z+1)",
+    )
+    tiling_stitch.add_argument("--source", type=Path, required=True, help="256px source MBTiles")
+    tiling_stitch.add_argument("--out", type=Path, required=True, help="Output 512px MBTiles")
+    tiling_stitch.add_argument("--format", default="jpg", help="Output tile format (default jpg)")
+    tiling_stitch.add_argument("--quality", type=int, default=90, help="JPEG/WebP quality (default 90)")
+
     build = subcommands.add_parser(
         "build",
         help="Build a custom planet from an AOI overlay spec (ADR 0001)",
@@ -541,6 +550,8 @@ def main(argv: Iterable[str] | None = None) -> int:
             return _handle_merge_mbtiles(args)
         if args.tiling_command == "union-mbtiles":
             return _handle_union_mbtiles(args)
+        if args.tiling_command == "stitch-512":
+            return _handle_stitch_512(args)
         parser.error("Unknown tiling subcommand")
         return 1
     if args.command == "build":
@@ -1527,6 +1538,38 @@ def _handle_union_mbtiles(args: argparse.Namespace) -> int:
     LOGGER.info(
         "mbtiles union complete",
         extra={"inputs": [str(p) for p in inputs], "output": str(out),
+               "seconds": round(time.monotonic() - start, 1)},
+    )
+    return 0
+
+
+def _handle_stitch_512(args: argparse.Namespace) -> int:
+    import time
+
+    from planetarble.tiling.mbtiles import stitch_to_512
+
+    source = args.source.resolve()
+    out = args.out.resolve()
+    start = time.monotonic()
+    last = [start]
+
+    def _progress(written: int) -> None:
+        now = time.monotonic()
+        if now - last[0] < 30:
+            return
+        last[0] = now
+        elapsed = now - start
+        LOGGER.info(
+            "stitch-512 progress",
+            extra={"out_tiles": written,
+                   "tiles_per_s": round(written / elapsed) if elapsed else 0,
+                   "seconds": round(elapsed, 1)},
+        )
+
+    stitch_to_512(source, out, tile_format=args.format, quality=args.quality, on_progress=_progress)
+    LOGGER.info(
+        "stitch-512 complete",
+        extra={"source": str(source), "output": str(out),
                "seconds": round(time.monotonic() - start, 1)},
     )
     return 0

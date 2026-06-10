@@ -646,3 +646,130 @@ def composite_overzoom(
         for conn in conns:
             conn.close()
     return destination
+
+
+def stitch_to_512(
+    source: Path,
+    destination: Path,
+    *,
+    tile_format: str = "jpg",
+    quality: int = 90,
+    background: Tuple[int, int, int] = (0, 0, 0),
+    src_tile_size: int = 256,
+    metadata: Optional[Mapping[str, str]] = None,
+    on_progress: Optional[Callable[[int], None]] = None,
+) -> Path:
+    """Build a double-resolution (512px) tile pyramid from a 256px source.
+
+    Each output tile ``(z, x, y)`` is the 2x2 mosaic of the source tiles
+    ``(z+1, 2x|2x+1, 2y|2y+1)``: output zoom ``z`` is drawn from source zoom
+    ``z+1``, so a 256px source spanning ``[zmin..zmax]`` yields a 512px pyramid
+    spanning ``[zmin-1 .. zmax-1]`` (e.g. GSI 256px z2..z18 -> 512px z1..z17,
+    matching the "256px culture is one zoom finer" convention). This is the
+    repackaging that lets consumers use the default ``tileSize: 512`` directly.
+
+    Coordinates are XYZ; MBTiles store TMS rows (``row = 2**z - 1 - y``).
+    Children are placed north-up: the western child (``x`` even) fills the left
+    half, the northern child (``y`` even) the top half. Missing children leave
+    their quadrant filled with ``background`` (JPEG carries no transparency).
+    Stitching decodes and re-encodes, so it is lossy relative to the source
+    JPEGs — unavoidable when merging four tiles into one image.
+
+    Memory is bounded: tiles are processed one parent-column strip at a time, so
+    a planet-scale z18 source never loads wholesale. ``format`` /
+    ``minzoom`` / ``maxzoom`` are written; ``name`` / ``attribution`` /
+    ``bounds`` / ``center`` are carried from the source unless overridden via
+    ``metadata``.
+    """
+    from PIL import Image  # local import; Pillow only needed for stitching
+
+    pil_format = _PIL_SAVE_FORMAT.get(tile_format.lower())
+    if pil_format is None:
+        raise ValueError(f"Unsupported tile_format: {tile_format}")
+    source = Path(source)
+    if not source.exists():
+        raise FileNotFoundError(f"MBTiles not found: {source}")
+    out_size = 2 * src_tile_size
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        destination.unlink()
+
+    def _encode(img) -> bytes:
+        buf = io.BytesIO()
+        if pil_format == "JPEG":
+            img = img.convert("RGB")
+        img.save(buf, format=pil_format, quality=quality)
+        return buf.getvalue()
+
+    rconn = sqlite3.connect(str(source))
+    conn = sqlite3.connect(str(destination))
+    try:
+        _init_mbtiles(conn)
+        conn.execute("PRAGMA synchronous=OFF")
+        zr = rconn.execute("SELECT MIN(zoom_level), MAX(zoom_level) FROM tiles").fetchone()
+        written = 0
+        out_min = None
+        out_max = None
+        if zr and zr[0] is not None:
+            szmin, szmax = zr
+            for sz in range(szmin, szmax + 1):
+                oz = sz - 1
+                if oz < 0:
+                    continue  # source zoom 0 has no 512 parent
+                n = 1 << sz
+                pcols = [
+                    r[0]
+                    for r in rconn.execute(
+                        "SELECT DISTINCT tile_column >> 1 FROM tiles WHERE zoom_level=? ORDER BY 1",
+                        (sz,),
+                    )
+                ]
+                for ox in pcols:
+                    strip: Dict[int, Dict[Tuple[int, int], bytes]] = {}
+                    for sx, srow, blob in rconn.execute(
+                        "SELECT tile_column, tile_row, tile_data FROM tiles "
+                        "WHERE zoom_level=? AND (tile_column=? OR tile_column=?)",
+                        (sz, 2 * ox, 2 * ox + 1),
+                    ):
+                        y = (n - 1) - srow  # TMS -> XYZ
+                        strip.setdefault(y >> 1, {})[(sx & 1, y & 1)] = blob
+                    for oy, kids in strip.items():
+                        canvas = Image.new("RGB", (out_size, out_size), background)
+                        for (dx, dy), blob in kids.items():
+                            im = Image.open(io.BytesIO(blob)).convert("RGB")
+                            if im.size != (src_tile_size, src_tile_size):
+                                im = im.resize((src_tile_size, src_tile_size), Image.Resampling.LANCZOS)
+                            canvas.paste(im, (dx * src_tile_size, dy * src_tile_size))
+                        orow = ((1 << oz) - 1) - oy
+                        conn.execute(
+                            "INSERT OR REPLACE INTO tiles "
+                            "(zoom_level, tile_column, tile_row, tile_data) VALUES (?,?,?,?)",
+                            (oz, ox, orow, _encode(canvas)),
+                        )
+                        written += 1
+                        if on_progress is not None and written % 1000 == 0:
+                            conn.commit()
+                            on_progress(written)
+                    conn.commit()
+                out_min = oz if out_min is None else min(out_min, oz)
+                out_max = oz if out_max is None else max(out_max, oz)
+
+        _set_metadata(conn, "format", tile_format)
+        if out_min is not None:
+            _set_metadata(conn, "minzoom", str(out_min))
+            _set_metadata(conn, "maxzoom", str(out_max))
+        if rconn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='metadata'"
+        ).fetchone():
+            srcmeta = dict(rconn.execute("SELECT name, value FROM metadata"))
+            for key in ("name", "attribution", "bounds", "center"):
+                if key in srcmeta:
+                    _set_metadata(conn, key, srcmeta[key])
+        for key, value in (metadata or {}).items():
+            _set_metadata(conn, key, str(value))
+        conn.commit()
+    finally:
+        rconn.close()
+        conn.close()
+    return destination

@@ -648,6 +648,81 @@ def composite_overzoom(
     return destination
 
 
+def _stitch_column(
+    rconn: sqlite3.Connection,
+    conn: sqlite3.Connection,
+    sz: int,
+    ox: int,
+    *,
+    tile_format: str,
+    quality: int,
+    background: Tuple[int, int, int],
+    src_tile_size: int,
+) -> int:
+    """Stitch every parent tile in one output column (source zoom ``sz`` -> ``sz-1``).
+
+    Reads the two source columns ``2*ox`` / ``2*ox+1`` (a parent-column strip),
+    groups them into 2x2 parents and writes each as a ``2*src_tile_size`` tile to
+    ``conn``. Returns the number of output tiles written. Memory is bounded to
+    one strip.
+    """
+    from PIL import Image  # local import; Pillow only needed for stitching
+
+    pil_format = _PIL_SAVE_FORMAT[tile_format.lower()]
+    out_size = 2 * src_tile_size
+    n = 1 << sz
+    oz = sz - 1
+    strip: Dict[int, Dict[Tuple[int, int], bytes]] = {}
+    for sx, srow, blob in rconn.execute(
+        "SELECT tile_column, tile_row, tile_data FROM tiles "
+        "WHERE zoom_level=? AND (tile_column=? OR tile_column=?)",
+        (sz, 2 * ox, 2 * ox + 1),
+    ):
+        y = (n - 1) - srow  # TMS -> XYZ
+        strip.setdefault(y >> 1, {})[(sx & 1, y & 1)] = blob
+    written = 0
+    for oy, kids in strip.items():
+        canvas = Image.new("RGB", (out_size, out_size), background)
+        for (dx, dy), blob in kids.items():
+            im = Image.open(io.BytesIO(blob)).convert("RGB")
+            if im.size != (src_tile_size, src_tile_size):
+                im = im.resize((src_tile_size, src_tile_size), Image.Resampling.LANCZOS)
+            canvas.paste(im, (dx * src_tile_size, dy * src_tile_size))
+        buf = io.BytesIO()
+        canvas.save(buf, format=pil_format, quality=quality)
+        orow = ((1 << oz) - 1) - oy
+        conn.execute(
+            "INSERT OR REPLACE INTO tiles "
+            "(zoom_level, tile_column, tile_row, tile_data) VALUES (?,?,?,?)",
+            (oz, ox, orow, buf.getvalue()),
+        )
+        written += 1
+    return written
+
+
+def _stitch_worker(payload) -> int:
+    """Worker entrypoint: stitch an assigned set of columns into a shard MBTiles."""
+    source, shard, units, tile_format, quality, background, src_tile_size = payload
+    rconn = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
+    conn = sqlite3.connect(shard)
+    try:
+        _init_mbtiles(conn)
+        conn.execute("PRAGMA synchronous=OFF")
+        total = 0
+        for sz, ox in units:
+            total += _stitch_column(
+                rconn, conn, sz, ox,
+                tile_format=tile_format, quality=quality,
+                background=background, src_tile_size=src_tile_size,
+            )
+            conn.commit()
+        conn.commit()
+        return total
+    finally:
+        rconn.close()
+        conn.close()
+
+
 def stitch_to_512(
     source: Path,
     destination: Path,
@@ -656,6 +731,7 @@ def stitch_to_512(
     quality: int = 90,
     background: Tuple[int, int, int] = (0, 0, 0),
     src_tile_size: int = 256,
+    workers: int = 1,
     metadata: Optional[Mapping[str, str]] = None,
     on_progress: Optional[Callable[[int], None]] = None,
 ) -> Path:
@@ -675,101 +751,138 @@ def stitch_to_512(
     Stitching decodes and re-encodes, so it is lossy relative to the source
     JPEGs — unavoidable when merging four tiles into one image.
 
-    Memory is bounded: tiles are processed one parent-column strip at a time, so
-    a planet-scale z18 source never loads wholesale. ``format`` /
-    ``minzoom`` / ``maxzoom`` are written; ``name`` / ``attribution`` /
-    ``bounds`` / ``center`` are carried from the source unless overridden via
-    ``metadata``.
-    """
-    from PIL import Image  # local import; Pillow only needed for stitching
+    With ``workers > 1`` the parent columns are sharded round-robin across that
+    many processes (the work is CPU-bound JPEG decode/encode); each writes its
+    own shard MBTiles on disk — tile bytes never cross the process boundary — and
+    the shards are unioned into ``destination`` at the end. Memory stays bounded
+    to one column strip per process either way, so a planet-scale z18 source
+    never loads wholesale.
 
+    ``format`` / ``minzoom`` / ``maxzoom`` are written; ``name`` /
+    ``attribution`` / ``bounds`` / ``center`` are carried from the source unless
+    overridden via ``metadata``.
+    """
     pil_format = _PIL_SAVE_FORMAT.get(tile_format.lower())
     if pil_format is None:
         raise ValueError(f"Unsupported tile_format: {tile_format}")
     source = Path(source)
     if not source.exists():
         raise FileNotFoundError(f"MBTiles not found: {source}")
-    out_size = 2 * src_tile_size
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         destination.unlink()
 
-    def _encode(img) -> bytes:
-        buf = io.BytesIO()
-        if pil_format == "JPEG":
-            img = img.convert("RGB")
-        img.save(buf, format=pil_format, quality=quality)
-        return buf.getvalue()
-
-    rconn = sqlite3.connect(str(source))
-    conn = sqlite3.connect(str(destination))
+    # Enumerate work units (one per output column) and the output zoom range.
+    rconn = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
     try:
-        _init_mbtiles(conn)
-        conn.execute("PRAGMA synchronous=OFF")
         zr = rconn.execute("SELECT MIN(zoom_level), MAX(zoom_level) FROM tiles").fetchone()
-        written = 0
-        out_min = None
-        out_max = None
+        units: list = []
+        out_min: Optional[int] = None
+        out_max: Optional[int] = None
         if zr and zr[0] is not None:
-            szmin, szmax = zr
-            for sz in range(szmin, szmax + 1):
+            for sz in range(zr[0], zr[1] + 1):
                 oz = sz - 1
                 if oz < 0:
                     continue  # source zoom 0 has no 512 parent
-                n = 1 << sz
-                pcols = [
+                cols = [
                     r[0]
                     for r in rconn.execute(
                         "SELECT DISTINCT tile_column >> 1 FROM tiles WHERE zoom_level=? ORDER BY 1",
                         (sz,),
                     )
                 ]
-                for ox in pcols:
-                    strip: Dict[int, Dict[Tuple[int, int], bytes]] = {}
-                    for sx, srow, blob in rconn.execute(
-                        "SELECT tile_column, tile_row, tile_data FROM tiles "
-                        "WHERE zoom_level=? AND (tile_column=? OR tile_column=?)",
-                        (sz, 2 * ox, 2 * ox + 1),
-                    ):
-                        y = (n - 1) - srow  # TMS -> XYZ
-                        strip.setdefault(y >> 1, {})[(sx & 1, y & 1)] = blob
-                    for oy, kids in strip.items():
-                        canvas = Image.new("RGB", (out_size, out_size), background)
-                        for (dx, dy), blob in kids.items():
-                            im = Image.open(io.BytesIO(blob)).convert("RGB")
-                            if im.size != (src_tile_size, src_tile_size):
-                                im = im.resize((src_tile_size, src_tile_size), Image.Resampling.LANCZOS)
-                            canvas.paste(im, (dx * src_tile_size, dy * src_tile_size))
-                        orow = ((1 << oz) - 1) - oy
-                        conn.execute(
-                            "INSERT OR REPLACE INTO tiles "
-                            "(zoom_level, tile_column, tile_row, tile_data) VALUES (?,?,?,?)",
-                            (oz, ox, orow, _encode(canvas)),
-                        )
-                        written += 1
-                        if on_progress is not None and written % 1000 == 0:
-                            conn.commit()
-                            on_progress(written)
-                    conn.commit()
-                out_min = oz if out_min is None else min(out_min, oz)
-                out_max = oz if out_max is None else max(out_max, oz)
+                if cols:
+                    units.extend((sz, ox) for ox in cols)
+                    out_min = oz if out_min is None else min(out_min, oz)
+                    out_max = oz if out_max is None else max(out_max, oz)
+        srcmeta = (
+            dict(rconn.execute("SELECT name, value FROM metadata"))
+            if rconn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='metadata'").fetchone()
+            else {}
+        )
+    finally:
+        rconn.close()
 
+    if workers and workers > 1 and len(units) > 1:
+        _stitch_parallel(
+            source, destination, units, workers,
+            tile_format=tile_format, quality=quality,
+            background=background, src_tile_size=src_tile_size, on_progress=on_progress,
+        )
+    else:
+        # serial: write straight into destination
+        rconn = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
+        conn = sqlite3.connect(str(destination))
+        try:
+            _init_mbtiles(conn)
+            conn.execute("PRAGMA synchronous=OFF")
+            written = 0
+            for sz, ox in units:
+                written += _stitch_column(
+                    rconn, conn, sz, ox,
+                    tile_format=tile_format, quality=quality,
+                    background=background, src_tile_size=src_tile_size,
+                )
+                conn.commit()
+                if on_progress is not None:
+                    on_progress(written)
+            conn.commit()
+        finally:
+            rconn.close()
+            conn.close()
+
+    # finalize metadata on destination (also creates tables if source was empty)
+    conn = sqlite3.connect(str(destination))
+    try:
+        _init_mbtiles(conn)
         _set_metadata(conn, "format", tile_format)
         if out_min is not None:
             _set_metadata(conn, "minzoom", str(out_min))
             _set_metadata(conn, "maxzoom", str(out_max))
-        if rconn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='metadata'"
-        ).fetchone():
-            srcmeta = dict(rconn.execute("SELECT name, value FROM metadata"))
-            for key in ("name", "attribution", "bounds", "center"):
-                if key in srcmeta:
-                    _set_metadata(conn, key, srcmeta[key])
+        for key in ("name", "attribution", "bounds", "center"):
+            if key in srcmeta:
+                _set_metadata(conn, key, srcmeta[key])
         for key, value in (metadata or {}).items():
             _set_metadata(conn, key, str(value))
         conn.commit()
     finally:
-        rconn.close()
         conn.close()
     return destination
+
+
+def _stitch_parallel(
+    source: Path,
+    destination: Path,
+    units: list,
+    workers: int,
+    *,
+    tile_format: str,
+    quality: int,
+    background: Tuple[int, int, int],
+    src_tile_size: int,
+    on_progress: Optional[Callable[[int], None]],
+) -> None:
+    """Shard ``units`` round-robin across ``workers`` processes, then union shards."""
+    import multiprocessing as mp
+
+    shards = [destination.parent / f".{destination.name}.part{i}" for i in range(workers)]
+    for s in shards:
+        if s.exists():
+            s.unlink()
+    payloads = [
+        (str(source), str(shards[i]), units[i::workers], tile_format, quality, background, src_tile_size)
+        for i in range(workers)
+    ]
+    done = 0
+    with mp.Pool(workers) as pool:
+        for cnt in pool.imap_unordered(_stitch_worker, payloads):
+            done += cnt
+            if on_progress is not None:
+                on_progress(done)
+    existing = [s for s in shards if s.exists()]
+    # union largest-first so the copy-base does the least extra work
+    existing.sort(key=lambda p: p.stat().st_size, reverse=True)
+    union_mbtiles(existing, destination, tile_format=tile_format)
+    for s in existing:
+        s.unlink()

@@ -129,3 +129,34 @@ def test_metadata_carried_and_format(tmp_path: Path) -> None:
 def test_missing_source_raises(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         stitch_to_512(tmp_path / "nope.mbtiles", tmp_path / "o.mbtiles")
+
+
+def _dump(path: Path) -> dict:
+    """All output tiles as {(zoom, col, row): bytes} for exact comparison."""
+    conn = sqlite3.connect(str(path))
+    rows = conn.execute("SELECT zoom_level, tile_column, tile_row, tile_data FROM tiles").fetchall()
+    conn.close()
+    return {(z, x, r): bytes(b) for z, x, r, b in rows}
+
+
+def test_parallel_matches_serial(tmp_path: Path) -> None:
+    # a multi-column, multi-zoom source so round-robin sharding actually splits
+    tiles = {}
+    for sz in (2, 3):
+        for x in range(1 << sz):
+            for y in range(1 << sz):
+                tiles[(sz, x, y)] = ((x * 17) % 256, (y * 31) % 256, (sz * 53) % 256)
+    src = tmp_path / "s.mbtiles"
+    _mbtiles(src, tiles, meta={"name": "GSI", "attribution": "CC BY 4.0"})
+
+    serial = tmp_path / "serial.mbtiles"
+    parallel = tmp_path / "parallel.mbtiles"
+    stitch_to_512(src, serial, tile_format="png", src_tile_size=SUB, workers=1)
+    stitch_to_512(src, parallel, tile_format="png", src_tile_size=SUB, workers=4)
+
+    assert _dump(serial) == _dump(parallel)
+    # sanity: shard temp files cleaned up
+    assert not list(tmp_path.glob(".parallel.mbtiles.part*"))
+    # metadata carried through the shard union too
+    assert _meta(parallel)["attribution"] == "CC BY 4.0"
+    assert _meta(parallel)["minzoom"] == "1" and _meta(parallel)["maxzoom"] == "2"

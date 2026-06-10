@@ -272,6 +272,8 @@ def build_parser() -> argparse.ArgumentParser:
     tiling_stitch.add_argument("--out", type=Path, required=True, help="Output 512px MBTiles")
     tiling_stitch.add_argument("--format", default="jpg", help="Output tile format (default jpg)")
     tiling_stitch.add_argument("--quality", type=int, default=90, help="JPEG/WebP quality (default 90)")
+    tiling_stitch.add_argument("--workers", type=int, default=1,
+                               help="Parallel processes (CPU-bound; shards are unioned at the end)")
 
     build = subcommands.add_parser(
         "build",
@@ -1566,7 +1568,8 @@ def _handle_stitch_512(args: argparse.Namespace) -> int:
                    "seconds": round(elapsed, 1)},
         )
 
-    stitch_to_512(source, out, tile_format=args.format, quality=args.quality, on_progress=_progress)
+    stitch_to_512(source, out, tile_format=args.format, quality=args.quality,
+                  workers=args.workers, on_progress=_progress)
     LOGGER.info(
         "stitch-512 complete",
         extra={"source": str(source), "output": str(out),

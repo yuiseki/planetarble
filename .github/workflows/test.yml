@@ -1,0 +1,75 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gdal:
+    # Full suite against the OS GDAL bindings, the same layout as README
+    # "Local setup (uv)": ubuntu-24.04 ships python3-gdal 3.8 built against
+    # the system numpy 1.26 on Python 3.12.
+    name: pytest (system GDAL, Python 3.12)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install GDAL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gdal-bin python3-gdal
+
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+
+      - name: Create venv on system Python with system site-packages
+        run: uv venv --python /usr/bin/python3 --system-site-packages
+
+      - name: Sync dependencies
+        run: uv sync --locked
+
+      - name: Check GDAL bindings are visible
+        # Fail loudly here instead of letting the GDAL tests skip.
+        run: uv run python -c "from osgeo import gdal, gdal_array; import numpy; print(gdal.__version__, numpy.__version__)"
+
+      - name: Run tests
+        run: uv run pytest -rs
+
+  no-gdal:
+    # Collection-only hosts have neither GDAL nor numpy; the CLI must still
+    # import and the GDAL/numpy tests must skip rather than error.
+    name: pytest (no GDAL, Python ${{ matrix.python-version }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Sync dependencies
+        run: uv sync --locked
+
+      - name: CLI imports without GDAL
+        run: uv run planetarble --help
+
+      - name: Run tests
+        run: uv run pytest -rs

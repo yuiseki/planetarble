@@ -303,6 +303,148 @@ def _mpc_sas_token(collection: str) -> str:
     return fetch_sas_token(collection, timeout=60)
 
 
+class NZImageryAdapter(BaseSourceAdapter):
+    """New Zealand aerial and satellite imagery from LINZ (ADR 0003 step 5).
+
+    Toitū Te Whenua LINZ publishes every survey as a collection in a static
+    STAC catalog on a public S3 bucket, with one COG item per map sheet.
+    Planning reads the root, the collections and the chosen collection's items
+    (each cached under ``cache_dir`` by its checksum in the parent link, so a
+    re-plan only fetches what changed), picks a current
+    RGB survey that intersects the AOI: the finest among surveys flown within
+    ``max_age_years`` of the newest one (or the ``collection`` slug given), and
+    returns the COGs of the sheets that intersect the AOI. The credit names
+    the survey and its licensor, as the CC BY 4.0 licence requires.
+    """
+
+    name = "nz-imagery"
+    _ROOT = "https://nz-imagery.s3.ap-southeast-2.amazonaws.com/catalog.json"
+    _CURRENT = {"urban-aerial-photos", "rural-aerial-photos", "satellite-imagery"}
+    _LICENCES = {"CC-BY-4.0"}
+
+    def __init__(
+        self,
+        collection: Optional[str] = None,
+        *,
+        max_age_years: int = 5,
+        cache_dir: Any = "data/cache/nz-imagery",
+        fetch_json: Optional[Callable[[str], Dict[str, Any]]] = None,
+        run: Optional[Callable[[List[str]], Any]] = None,
+        concurrency: int = 16,
+    ) -> None:
+        self._collection = collection
+        self._max_age_years = int(max_age_years)
+        self._cache = Path(str(cache_dir))
+        self._fetch_json = fetch_json or _fetch_json
+        self._run = run or _run_checked
+        self._concurrency = max(1, int(concurrency))
+        self.credit: Optional[str] = None
+
+    def plan(self, aoi: Any, zoom_range: Tuple[int, int]) -> List[str]:
+        from urllib.parse import urljoin
+
+        bbox = tuple(float(v) for v in (getattr(aoi, "bbox", None) or aoi))
+        root = self._fetch_json(self._ROOT)
+        links = [link for link in root.get("links", []) if link.get("rel") == "child" and "/rgb/" in link["href"]]
+        if self._collection:
+            links = [link for link in links if f"/{self._collection}/" in link["href"]]
+            if not links:
+                raise ValueError(f"no New Zealand imagery collection named {self._collection}")
+        urls = [urljoin(self._ROOT, link["href"]) for link in links]
+        collections = self._fetch_all(urls, [link.get("file:checksum") for link in links])
+
+        candidates = []
+        for url, col in zip(urls, collections, strict=True):
+            if not _bbox_intersects(col["extent"]["spatial"]["bbox"][0], bbox):
+                continue
+            if not self._collection and (
+                col.get("linz:geospatial_category") not in self._CURRENT or col.get("linz:lifecycle") != "completed"
+            ):
+                continue
+            candidates.append((url, col))
+        if not candidates:
+            raise ValueError(f"no New Zealand imagery collection covers bbox {bbox}")
+        # Finest survey among the recent ones: a city's 7.5 cm urban survey
+        # beats a 0.2 m regional survey flown a year later, but not one from
+        # a decade ago.
+        newest = max(_nz_year(c[1]) for c in candidates)
+        recent = [c for c in candidates if _nz_year(c[1]) >= newest - self._max_age_years]
+        url, col = min(recent, key=lambda c: (_nz_gsd(c[1]), -_nz_year(c[1])))
+        if col.get("license") not in self._LICENCES:
+            raise ValueError(f"{col.get('linz:slug')}: licence {col.get('license')} is not CC BY 4.0")
+
+        item_links = [link for link in col.get("links", []) if link.get("rel") == "item"]
+        item_urls = [urljoin(url, link["href"]) for link in item_links]
+        items = self._fetch_all(item_urls, [link.get("file:checksum") for link in item_links])
+        hrefs = [
+            urljoin(item_url, item["assets"]["visual"]["href"])
+            for item_url, item in zip(item_urls, items, strict=True)
+            if _bbox_intersects(item["bbox"], bbox)
+        ]
+        if not hrefs:
+            raise ValueError(f"{col.get('linz:slug')} has no imagery inside bbox {bbox}")
+        licensors = ", ".join(
+            p["name"] for p in col.get("providers", []) if "licensor" in (p.get("roles") or [])
+        )
+        self.credit = (
+            f"Imagery: {col['title']}, {licensors}, via Toitū Te Whenua Land Information New Zealand (CC BY 4.0)"
+            if licensors
+            else f"Imagery: {col['title']}, Toitū Te Whenua Land Information New Zealand (CC BY 4.0)"
+        )
+        return sorted(hrefs)
+
+    def build_raster(self, plan: Any, workspace: object, *, aoi_bbox: Any = None) -> Path:
+        from .cogwarp import cog_warp_commands
+
+        output = Path(str(workspace))
+        for command in cog_warp_commands(list(plan), aoi_bbox=tuple(aoi_bbox), output_path=output):
+            self._run(command)
+        return output
+
+    def _fetch_all(self, urls: List[str], checksums: List[Optional[str]]) -> List[Dict[str, Any]]:
+        import json
+        from concurrent.futures import ThreadPoolExecutor
+
+        def one(pair: Tuple[str, Optional[str]]) -> Dict[str, Any]:
+            url, checksum = pair
+            cached = self._cache / f"{checksum}.json" if checksum else None
+            if cached is not None and cached.exists():
+                return json.loads(cached.read_text(encoding="utf-8"))
+            doc = self._fetch_json(url)
+            if cached is not None:
+                cached.parent.mkdir(parents=True, exist_ok=True)
+                cached.write_text(json.dumps(doc), encoding="utf-8")
+            return doc
+
+        with ThreadPoolExecutor(max_workers=self._concurrency) as pool:
+            return list(pool.map(one, zip(urls, checksums, strict=True)))
+
+
+def _bbox_intersects(a: Any, b: Any) -> bool:
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+def _nz_year(collection: Dict[str, Any]) -> int:
+    end = collection["extent"]["temporal"]["interval"][0][-1] or collection["extent"]["temporal"]["interval"][0][0]
+    return int(str(end)[:4])
+
+
+def _nz_gsd(collection: Dict[str, Any]) -> float:
+    import re
+
+    match = re.search(r"_(\d+(?:\.\d+)?)m$", str(collection.get("linz:slug", "")))
+    return float(match.group(1)) if match else float("inf")
+
+
+def _fetch_json(url: str) -> Dict[str, Any]:
+    import requests
+
+    response = requests.get(url, timeout=60)
+    response.raise_for_status()
+    result: Dict[str, Any] = response.json()
+    return result
+
+
 def _http_exists(url: str) -> bool:
     import requests
 
@@ -332,6 +474,7 @@ _ADAPTERS: Dict[str, Type[BaseSourceAdapter]] = {
         OpenAerialMapAdapter,
         ESAWorldCoverAdapter,
         NAIPAdapter,
+        NZImageryAdapter,
     )
 }
 

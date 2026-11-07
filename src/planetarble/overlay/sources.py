@@ -71,6 +71,13 @@ SOURCE_REGISTRY: Dict[str, SourceInfo] = {
         note="USDA NAIP aerial imagery via Planetary Computer, 0.3 to 1m, contiguous US",
         attribution="NAIP imagery courtesy of USDA Farm Service Agency",
     ),
+    "nz-imagery": SourceInfo(
+        "nz-imagery",
+        21,
+        resolution_varies=True,
+        note="New Zealand aerial and satellite imagery from LINZ, 0.05 to 10m, per survey",
+        attribution="Imagery: Toitū Te Whenua Land Information New Zealand and the survey licensors (CC BY 4.0)",
+    ),
 }
 
 

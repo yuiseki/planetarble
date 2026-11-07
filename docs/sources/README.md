@@ -30,6 +30,7 @@ Ground resolution at the equator for 256 px tiles is `156543.03 / 2^z` m/px. For
 | worldwide (scattered) | [OpenAerialMap](global/openaerialmap.md) | `openaerialmap` | varies, sub-metre | z22 (per item) | CC BY 4.0 |
 | Japan | [GSI orthophotos](japan/gsi-orthophotos.md) | `gsi_orthophotos` | 0.2 to 0.4 m | z18 | PDL 1.0 (CC BY compatible) |
 | United States | [NAIP](united-states/naip.md) | `naip` | 0.3 to 1 m | z18 | public domain |
+| New Zealand | [LINZ imagery](new-zealand/nz-imagery.md) | `nz-imagery` | 0.05 to 10 m | z21 | CC BY 4.0 (per survey) |
 
 ## Elevation, bathymetry and vectors
 
@@ -55,6 +56,6 @@ Ground resolution at the equator for 256 px tiles is `156543.03 / 2^z` m/px. For
 | z8 | BMNG 500 m, MODIS, (VIIRS), ETOPO/GEBCO shading |
 | z11 to z12 | HLS v2, Landsat C2 L2 (land only) |
 | z14 | Sentinel-2 L2A, Copernicus WMS, ESA WorldCover composites (global, no login) |
-| z18 and above | GSI (Japan), NAIP (US), OpenAerialMap (where imagery exists) |
+| z18 and above | GSI (Japan), NAIP (US), LINZ (New Zealand), OpenAerialMap (where imagery exists) |
 
 The intended composition is staged: global coverage at low zoom (BMNG/HLS plus ETOPO ocean), with region-limited sources overlaid at high zoom (see ADR 0001 and ADR 0003).

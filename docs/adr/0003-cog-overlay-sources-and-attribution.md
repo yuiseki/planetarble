@@ -11,7 +11,7 @@
 - Step 2, shared COG warp (done): `overlay/cogwarp.py`
 - Step 3, `esa-worldcover` (done): verified over Tokyo; sea tiles (404) are skipped at planning
 - Step 4, `naip` (done): verified over San Francisco Civic Center (2022, 0.6 m)
-- Step 5, `nz-imagery`: not started
+- Step 5, `nz-imagery` (done): verified over central Wellington (2025 urban survey, 7.5 cm); credits decided while building (survey and licensor) flow into the planet attribution
 - Step 6, generic `cog`: not started
 
 ## Context

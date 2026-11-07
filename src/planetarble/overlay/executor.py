@@ -49,6 +49,8 @@ class DefaultPlanetExecutor:
         self._tile_size = tile_size
         self._tile_format = tile_format
         self._quality = quality
+        # credits decided while building (overlay name -> credit line)
+        self.overlay_credits: dict = {}
 
     # --- base -------------------------------------------------------------
     def build_base(self, base: BaseSpec) -> Path:
@@ -81,6 +83,8 @@ class DefaultPlanetExecutor:
             return self._build_esa_worldcover_cog(overlay, resolved)
         if overlay.source == "naip":
             return self._build_naip_cog(overlay, resolved)
+        if overlay.source == "nz-imagery":
+            return self._build_nz_imagery_cog(overlay, resolved)
         raise NotImplementedError(f"overlay source not wired in executor: {overlay.source}")
 
     def _build_oam_cog(self, overlay: Overlay, resolved) -> Path:
@@ -107,6 +111,16 @@ class DefaultPlanetExecutor:
         adapter = NAIPAdapter(**dict(overlay.source_options or {}))
         urls = adapter.plan(resolved, (overlay.min_zoom, overlay.max_zoom))
         return adapter.build_raster(urls, self._work / f"{overlay.name}_naip.tif", aoi_bbox=resolved.bbox)
+
+    def _build_nz_imagery_cog(self, overlay: Overlay, resolved) -> Path:
+        from .adapters import NZImageryAdapter
+
+        opts = {"cache_dir": self._data_dir / "cache" / "nz-imagery", **dict(overlay.source_options or {})}
+        adapter = NZImageryAdapter(**opts)
+        urls = adapter.plan(resolved, (overlay.min_zoom, overlay.max_zoom))
+        if adapter.credit:
+            self.overlay_credits[overlay.name] = adapter.credit
+        return adapter.build_raster(urls, self._work / f"{overlay.name}_nz_imagery.tif", aoi_bbox=resolved.bbox)
 
     def _build_hls_cog(self, overlay: Overlay, resolved) -> Path:
         from planetarble.acquisition.hls import (
@@ -244,7 +258,11 @@ class DefaultPlanetExecutor:
         )
         return manager.pack_mbtiles(
             zxy, source_path=alpha, tile_format=fmt, min_zoom=min_zoom, max_zoom=overlay.max_zoom,
-            name=overlay.name, attribution=overlay.attribution or SOURCE_REGISTRY[overlay.source].credit(overlay.source_options),
+            name=overlay.name, attribution=(
+                overlay.attribution
+                or self.overlay_credits.get(overlay.name)
+                or SOURCE_REGISTRY[overlay.source].credit(overlay.source_options)
+            ),
         )
 
     # --- compose ----------------------------------------------------------

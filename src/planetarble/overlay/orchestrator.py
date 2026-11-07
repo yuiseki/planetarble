@@ -50,10 +50,18 @@ class BuildResult:
     stacks: List[Path] = field(default_factory=list)
 
 
-def planet_attribution(spec: PipelineSpec) -> str:
-    """Credits of the base and every overlay, in build order, without duplicates."""
+def planet_attribution(spec: PipelineSpec, overlay_credits: Optional[Mapping[str, str]] = None) -> str:
+    """Credits of the base and every overlay, in build order, without duplicates.
+
+    Per overlay: the spec's ``attribution`` if set, else a credit the executor
+    determined while building (e.g. the survey and licensor a source picked),
+    else the source's registry credit.
+    """
     credits: List[str] = []
-    entries: List[Tuple[str, Optional[str], Mapping[str, Any]]] = [(spec.base.source, None, {})] + [(o.source, o.attribution, o.source_options) for o in spec.overlays]
+    decided = overlay_credits or {}
+    entries: List[Tuple[str, Optional[str], Mapping[str, Any]]] = [(spec.base.source, None, {})] + [
+        (o.source, o.attribution or decided.get(o.name), o.source_options) for o in spec.overlays
+    ]
     for source, override, options in entries:
         info = SOURCE_REGISTRY.get(source)
         credit = override or (info.credit(options) if info else "")
@@ -89,5 +97,9 @@ def build_planet(
         stacks.append(stack)
         planet = executor.merge(planet, stack)
 
-    planet = executor.package(planet, spec.output_name, attribution=planet_attribution(spec))
+    planet = executor.package(
+        planet,
+        spec.output_name,
+        attribution=planet_attribution(spec, getattr(executor, "overlay_credits", None)),
+    )
     return BuildResult(planet=planet, base_mbtiles=base_mbtiles, stacks=stacks)

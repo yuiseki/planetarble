@@ -114,3 +114,11 @@ def test_attribution_templates_take_the_overlay_options() -> None:
     ex = _RecordingExecutor()
     build_planet(parse_pipeline_spec(spec), ex, data_dir=Path("data"))
     assert "© ESA WorldCover project 2020 / Contains modified Copernicus Sentinel data (2020)" in ex.attribution
+
+
+def test_credits_decided_while_building_replace_the_registry_default() -> None:
+    ex = _RecordingExecutor()
+    ex.overlay_credits = {"city": "Imagery: Some Survey (2021), Some Council (CC BY 4.0)"}
+    build_planet(parse_pipeline_spec(SPEC), ex, data_dir=Path("data"))
+    assert ex.attribution.endswith("; Imagery: Some Survey (2021), Some Council (CC BY 4.0)")
+    assert "OpenAerialMap" not in ex.attribution

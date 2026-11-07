@@ -30,6 +30,7 @@ planetarble が取り込めるデータソースは、1 データセットにつ
 | 世界各地 (点在) | [OpenAerialMap](global/openaerialmap.md) | `openaerialmap` | 画像ごと、1 m 未満が多い | z22 (画像ごと) | CC BY 4.0 |
 | 日本 | [地理院の写真](japan/gsi-orthophotos.md) | `gsi_orthophotos` | 0.2〜0.4 m | z18 | 公共データ利用規約 1.0 (CC BY 互換) |
 | 米国 | [NAIP](united-states/naip.md) | `naip` | 0.3〜1 m | z18 | パブリックドメイン |
+| ニュージーランド | [LINZ の画像](new-zealand/nz-imagery.md) | `nz-imagery` | 0.05〜10 m | z21 | CC BY 4.0 (調査ごと) |
 
 ## 標高、水深、ベクタ
 
@@ -55,6 +56,6 @@ planetarble が取り込めるデータソースは、1 データセットにつ
 | z8 | BMNG 500 m、MODIS、(VIIRS)、ETOPO/GEBCO の陰影 |
 | z11〜z12 | HLS v2、Landsat C2 L2 (陸域のみ) |
 | z14 | Sentinel-2 L2A、Copernicus WMS、ESA WorldCover の合成 (全球、ログイン不要) |
-| z18 以上 | 地理院 (日本)、NAIP (米国)、OpenAerialMap (画像がある場所) |
+| z18 以上 | 地理院 (日本)、NAIP (米国)、LINZ (ニュージーランド)、OpenAerialMap (画像がある場所) |
 
 低いズームで全球を覆い (BMNG/HLS と ETOPO の海)、高いズームで地域限定のソースを重ねる、段階的な構成を想定しています (ADR 0001 と ADR 0003)。

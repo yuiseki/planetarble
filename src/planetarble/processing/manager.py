@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, cast
 
-from planetarble.acquisition.copernicus import copernicus_layer_slug
+from planetarble.acquisition.copernicus import copernicus_layer_slug, tile_bounds_3857
 from planetarble.acquisition.hls import (
     _geom_intersects_bbox,
     load_land_geometry,
@@ -44,7 +44,6 @@ from .copernicus import (
     _compression_for_format,
 )
 from .geometry import (
-    _tile_bounds,
     bbox_from_geometry,
     clip_land_to_region,
 )
@@ -743,7 +742,7 @@ class ProcessingManager(DataProcessor):
         for tile_path, zoom, x, y in tile_records:
             vrt_path = vrt_dir / f"{zoom}_{x}_{y}.vrt"
             if force or not vrt_path.exists():
-                minx, miny, maxx, maxy = _tile_bounds(x, y, zoom)
+                minx, miny, maxx, maxy = tile_bounds_3857(x, y, zoom)
                 command = [
                     "gdal_translate",
                     "-of",

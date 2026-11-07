@@ -367,7 +367,7 @@ def _download_layer_tiles(
                     )
                     tiles_skipped += 1
                     continue
-                minx, miny, maxx, maxy = _tile_bounds(x, y, zoom)
+                minx, miny, maxx, maxy = tile_bounds_3857(x, y, zoom)
                 params = {
                     "SERVICE": "WMS",
                     "REQUEST": "GetMap",
@@ -582,7 +582,12 @@ def _lat_to_tile(lat: float, zoom: int) -> float:
     return (1 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2 * n
 
 
-def _tile_bounds(x: int, y: int, zoom: int) -> Tuple[float, float, float, float]:
+def tile_bounds_3857(x: int, y: int, zoom: int) -> Tuple[float, float, float, float]:
+    """EPSG:3857 bounds (minx, miny, maxx, maxy) of XYZ tile x/y at zoom.
+
+    Acquisition names Copernicus tiles by x/y and processing georeferences
+    them with these bounds, so both use this one function.
+    """
     n = 2**zoom
     tile_size = (ORIGIN_SHIFT * 2) / n
     minx = -ORIGIN_SHIFT + x * tile_size

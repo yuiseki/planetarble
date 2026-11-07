@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Tuple
 
 if TYPE_CHECKING:  # GDAL is optional at runtime; imported lazily where used
     from osgeo import ogr
 
-
-ORIGIN_SHIFT = 20037508.342789244
 
 
 def bbox_from_geometry(geometry: "ogr.Geometry") -> Tuple[float, float, float, float]:
@@ -58,50 +55,3 @@ def write_geometry_geojson(geometry: "ogr.Geometry", path: Path) -> None:
     layer.CreateFeature(feature)
     feature = None
     dataset = None
-
-
-def _tile_bounds(x: int, y: int, zoom: int) -> Tuple[float, float, float, float]:
-    n = 2**zoom
-    tile_size = (ORIGIN_SHIFT * 2) / n
-    minx = -ORIGIN_SHIFT + x * tile_size
-    maxx = minx + tile_size
-    maxy = ORIGIN_SHIFT - y * tile_size
-    miny = maxy - tile_size
-    return minx, miny, maxx, maxy
-
-
-def _tile_range(bbox: Tuple[float, float, float, float], zoom: int) -> Tuple[int, int, int, int]:
-    min_lon, min_lat, max_lon, max_lat = bbox
-    min_lon = max(-180.0, min(180.0, min_lon))
-    max_lon = max(-180.0, min(180.0, max_lon))
-    min_lat = max(-85.05112878, min(85.05112878, min_lat))
-    max_lat = max(-85.05112878, min(85.05112878, max_lat))
-    if max_lon < min_lon:
-        min_lon, max_lon = max_lon, min_lon
-    if max_lat < min_lat:
-        min_lat, max_lat = max_lat, min_lat
-
-    epsilon = 1e-9
-    x_min = int(math.floor(_lon_to_tile(min_lon, zoom)))
-    x_max = int(math.floor(_lon_to_tile(max_lon - epsilon, zoom)))
-    y_min = int(math.floor(_lat_to_tile(max_lat - epsilon, zoom)))
-    y_max = int(math.floor(_lat_to_tile(min_lat, zoom)))
-
-    n = 2**zoom
-    x_min = max(0, min(x_min, n - 1))
-    x_max = max(0, min(x_max, n - 1))
-    y_min = max(0, min(y_min, n - 1))
-    y_max = max(0, min(y_max, n - 1))
-    return x_min, x_max, y_min, y_max
-
-
-def _lon_to_tile(lon: float, zoom: int) -> float:
-    n = 2**zoom
-    return (lon + 180.0) / 360.0 * n
-
-
-def _lat_to_tile(lat: float, zoom: int) -> float:
-    lat = max(-85.05112878, min(85.05112878, lat))
-    lat_rad = math.radians(lat)
-    n = 2**zoom
-    return (1 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2 * n

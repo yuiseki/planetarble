@@ -45,7 +45,6 @@ def _resolve_copernicus_cog(processing_dir: Path, layers: Iterable[CopernicusLay
     return ordered
 
 
-
 def _resolve_hls_plan_path(cfg: PipelineConfig, plan_region: Optional[str]) -> Path:
     region = plan_region or cfg.hls.plan_region
     if region:

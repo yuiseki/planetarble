@@ -77,4 +77,4 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-"planetarble.data" = ["ocean/*.json"]
+"planetarble" = ["viewer/*.html", "data/ocean/*.json"]

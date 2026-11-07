@@ -18,6 +18,10 @@ from .checks import _resolve_config_path
 
 LOGGER = get_logger(__name__)
 
+# Shipped as package data (pyproject: [tool.setuptools.package-data]), so the
+# default works from any working directory and from an installed wheel.
+PACKAGED_VIEWER_ROOT = Path(__file__).resolve().parent.parent / "viewer"
+
 
 def _handle_serve(args: argparse.Namespace) -> int:
     if args.pmtiles is None and not args.region:
@@ -73,7 +77,7 @@ def _handle_serve(args: argparse.Namespace) -> int:
     if not pmtiles_path.exists():
         raise SystemExit(f"PMTiles file not found: {pmtiles_path}")
 
-    viewer_root = args.viewer_root.resolve()
+    viewer_root = (args.viewer_root or PACKAGED_VIEWER_ROOT).resolve()
     if not viewer_root.exists():
         raise SystemExit(f"Viewer directory not found: {viewer_root}")
 
@@ -209,7 +213,7 @@ def register_serve(subcommands: argparse._SubParsersAction) -> None:
     serve.add_argument(
         "--viewer-root",
         type=Path,
-        default=Path("src/planetarble/viewer"),
-        help="Directory containing viewer assets",
+        default=None,
+        help="Directory containing viewer assets (default: the viewer bundled with the package)",
     )
     serve.add_argument("--open", action="store_true", help="Open the viewer URL in a browser")

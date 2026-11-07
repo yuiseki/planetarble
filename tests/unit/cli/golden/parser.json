@@ -2088,11 +2088,11 @@
      "dest": "viewer_root",
      "required": false,
      "nargs": null,
-     "default": "PosixPath('src/planetarble/viewer')",
+     "default": "None",
      "type": "Path",
      "choices": null,
      "metavar": null,
-     "help": "Directory containing viewer assets"
+     "help": "Directory containing viewer assets (default: the viewer bundled with the package)"
     },
     {
      "kind": "_StoreTrueAction",

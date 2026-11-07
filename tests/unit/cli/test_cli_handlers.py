@@ -693,3 +693,11 @@ def test_process_legacy_bmng_gsi_error_exits(tmp_path, use_cfg, fake, patch_cli)
     patch_cli("fetch_gsi_ortho_clip", MagicMock(side_effect=acquisition.GSIError("blocked")))
     with pytest.raises(SystemExit, match="Failed to fetch GSI orthophotos"):
         cli.main(["process"])
+
+
+def test_serve_defaults_to_the_packaged_viewer() -> None:
+    from planetarble.cli.serve import PACKAGED_VIEWER_ROOT
+
+    assert (PACKAGED_VIEWER_ROOT / "index.html").is_file()
+    args = cli.build_parser().parse_args(["serve", "--pmtiles", "x.pmtiles"])
+    assert args.viewer_root is None

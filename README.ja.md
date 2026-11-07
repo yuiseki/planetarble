@@ -38,7 +38,9 @@ uv run mypy         # src/ の段階的な型検査
 uv run pytest
 ```
 
-リファクタリングで変えてはいけない振る舞いを、2 組の golden ファイルで固定しています。`tests/unit/cli/golden/parser.json` は CLI のすべてのオプションと既定値と help の文面、`tests/unit/processing/golden/` は `ProcessingManager` が組み立てる GDAL のコマンド列です。意図して変えるときは `PLANETARBLE_UPDATE_GOLDEN=1 uv run pytest` で作り直し、差分を確かめてください。
+モジュールの構成は `docs/architecture.md`、設計の判断は `docs/adr/` にまとめています。
+
+リファクタリングで変えてはいけない振る舞いを、golden ファイルで固定しています。`tests/unit/cli/golden/parser.json` は CLI のすべてのオプションと既定値と help の文面、`tests/unit/processing/golden/` は `ProcessingManager` が組み立てる GDAL のコマンド列、`tests/unit/tiling/golden/` は `planetarble tile` のコマンド列です。意図して変えるときは `PLANETARBLE_UPDATE_GOLDEN=1 uv run pytest` で作り直し、差分を確かめてください。
 
 設定ファイルは読み込むときに検査します。知らないセクションやキー、型の違う値 (たとえば `max_zoom: twelve`) があると、その名前を示して止まります。
 

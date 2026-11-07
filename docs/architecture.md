@@ -1,4 +1,4 @@
-# Repository Structure
+# Architecture: repository layout
 
 This describes the repository as it is. Keep it in sync when modules move.
 
@@ -10,7 +10,7 @@ Repository root
 - Dockerfile — GDAL + go-pmtiles + mb-util runtime image with the CLI
 - Makefile — regional HLS batch targets (Kanto, Chubu, Kinki)
 - configs/ — pipeline configurations
-- docs/ — architecture decisions (adr/) and operational notes (operations/)
+- docs/ — this file, architecture decisions (adr/), operational notes (operations/) and the original spec (history/)
 - src/planetarble/ — the Python package and `planetarble` CLI
 - tests/unit/ — pytest suite (no network; GDAL / numpy tests skip when absent)
 - tools/ — one-off generators (e.g. gen_miniplanets.py)
@@ -48,5 +48,5 @@ src/planetarble/
 
 tests/unit/
 - mirrors the package layout (acquisition/, cli/, config/, overlay/, processing/, tiling/)
-- cli/golden/parser.json — pinned CLI interface; processing/golden/ — pinned GDAL command lines
+- cli/golden/parser.json — pinned CLI interface; processing/golden/ and tiling/golden/ — pinned GDAL command lines
 - regenerate goldens with `PLANETARBLE_UPDATE_GOLDEN=1` only for an intended change, and review the diff

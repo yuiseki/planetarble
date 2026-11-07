@@ -92,7 +92,9 @@ uv run mypy         # gradual type checking of src/
 uv run pytest
 ```
 
-Two sets of golden files pin behaviour that refactoring must not change: `tests/unit/cli/golden/parser.json` (every CLI option, default and help text) and `tests/unit/processing/golden/` (the GDAL command lines `ProcessingManager` builds). When a change to either is intended, regenerate them with `PLANETARBLE_UPDATE_GOLDEN=1 uv run pytest` and review the diff.
+The module layout is described in `docs/architecture.md` and design decisions in `docs/adr/`.
+
+Golden files pin behaviour that refactoring must not change: `tests/unit/cli/golden/parser.json` (every CLI option, default and help text), `tests/unit/processing/golden/` (the GDAL command lines `ProcessingManager` builds) and `tests/unit/tiling/golden/` (the `planetarble tile` command lines). When a change to one of them is intended, regenerate them with `PLANETARBLE_UPDATE_GOLDEN=1 uv run pytest` and review the diff.
 
 Configuration files are validated on load: an unknown section or key, or a value of the wrong type (for example `max_zoom: twelve`), stops with an error that names it.
 

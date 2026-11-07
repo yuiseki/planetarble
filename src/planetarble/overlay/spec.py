@@ -83,6 +83,9 @@ class Overlay:
     max_zoom: int
     min_zoom: int = 0
     source_options: Dict[str, Any] = field(default_factory=dict)
+    # Credit line for the published planet; defaults to the source's
+    # SOURCE_REGISTRY attribution when omitted.
+    attribution: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -138,6 +141,7 @@ def parse_pipeline_spec(data: Mapping[str, Any]) -> PipelineSpec:
                 max_zoom=int(raw["max_zoom"]),
                 min_zoom=int(raw.get("min_zoom", 0)),
                 source_options=dict(raw.get("source_options") or {}),
+                attribution=str(raw["attribution"]) if raw.get("attribution") else None,
             )
         )
 

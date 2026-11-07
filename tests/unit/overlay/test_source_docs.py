@@ -46,3 +46,9 @@ def test_index_links_every_page() -> None:
         index = (DOCS / name).read_text(encoding="utf-8")
         for path in PAGES:
             assert f"({path.parent.name}/{path.name})" in index, f"{name} does not link {path}"
+
+
+@pytest.mark.parametrize("source", sorted(SOURCE_REGISTRY))
+def test_registry_attribution_matches_the_page(source: str) -> None:
+    path, fm = BY_ID[source]
+    assert SOURCE_REGISTRY[source].attribution == fm["attribution"], path

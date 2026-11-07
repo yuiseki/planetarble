@@ -897,3 +897,16 @@ def _stitch_parallel(
     union_mbtiles(existing, destination, tile_format=tile_format)
     for s in existing:
         s.unlink()
+
+
+def set_mbtiles_metadata(path: Path, values: Dict[str, str]) -> None:
+    """Set (update or insert) rows of an MBTiles ``metadata`` table."""
+    conn = sqlite3.connect(str(path))
+    try:
+        conn.execute("CREATE TABLE IF NOT EXISTS metadata (name TEXT, value TEXT)")
+        for key, value in values.items():
+            if conn.execute("UPDATE metadata SET value=? WHERE name=?", (value, key)).rowcount == 0:
+                conn.execute("INSERT INTO metadata (name, value) VALUES (?, ?)", (key, value))
+        conn.commit()
+    finally:
+        conn.close()

@@ -39,8 +39,9 @@ class _RecordingExecutor:
         self.calls.append(("merge", Path(base).stem, Path(overlay).stem))
         return Path(f"{Path(base).stem}+{Path(overlay).stem}.mbtiles")
 
-    def package(self, mbtiles, name):  # noqa: ANN001
+    def package(self, mbtiles, name, attribution=""):  # noqa: ANN001
         self.calls.append(("package", Path(mbtiles).stem, name))
+        self.attribution = attribution
         return Path(f"{name}.pmtiles")
 
 
@@ -80,3 +81,25 @@ def test_build_planet_base_only() -> None:
     result = build_planet(spec, ex, data_dir=Path("data"))
     assert [c[0] for c in ex.calls] == ["base", "package"]
     assert result.planet == Path("p.pmtiles")
+
+
+def test_package_receives_base_and_overlay_attributions_in_order() -> None:
+    ex = _RecordingExecutor()
+    build_planet(parse_pipeline_spec(SPEC), ex, data_dir=Path("data"))
+    assert ex.attribution == (
+        "Image courtesy NASA Earth Observatory; HLS v2.0 (NASA/USGS); OpenAerialMap contributors (CC BY 4.0)"
+    )
+
+
+def test_overlay_attribution_overrides_the_default_and_duplicates_collapse() -> None:
+    spec = dict(SPEC)
+    spec["overlays"] = [
+        {**SPEC["overlays"][0]},
+        {**SPEC["overlays"][1], "attribution": "Imagery: HOTOSM via OpenAerialMap (CC BY 4.0)"},
+        {**SPEC["overlays"][0], "name": "ctx2"},
+    ]
+    ex = _RecordingExecutor()
+    build_planet(parse_pipeline_spec(spec), ex, data_dir=Path("data"))
+    assert ex.attribution == (
+        "Image courtesy NASA Earth Observatory; HLS v2.0 (NASA/USGS); Imagery: HOTOSM via OpenAerialMap (CC BY 4.0)"
+    )

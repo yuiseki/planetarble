@@ -16,9 +16,14 @@ from pathlib import Path
 from typing import List
 
 from planetarble.core.models import HLSPlanRegion, ProcessingConfig
-from planetarble.tiling.mbtiles import composite_overzoom, merge_mbtiles
+from planetarble.tiling.mbtiles import (
+    composite_overzoom,
+    merge_mbtiles,
+    set_mbtiles_metadata,
+)
 from planetarble.tiling.pmtiles import PmtilesTilingManager
 
+from .sources import SOURCE_REGISTRY
 from .spec import BaseSpec, Overlay, PipelineSpec
 
 
@@ -221,7 +226,7 @@ class DefaultPlanetExecutor:
         )
         return manager.pack_mbtiles(
             zxy, source_path=alpha, tile_format=fmt, min_zoom=min_zoom, max_zoom=overlay.max_zoom,
-            name=overlay.name, attribution="",
+            name=overlay.name, attribution=overlay.attribution or SOURCE_REGISTRY[overlay.source].attribution,
         )
 
     # --- compose ----------------------------------------------------------
@@ -237,8 +242,13 @@ class DefaultPlanetExecutor:
         dest = self._work / f"merged_{Path(overlay_mbtiles).stem}.mbtiles"
         return merge_mbtiles(Path(base_mbtiles), Path(overlay_mbtiles), destination=dest)
 
-    def package(self, mbtiles: Path, output_name: str) -> Path:
+    def package(self, mbtiles: Path, output_name: str, attribution: str = "") -> Path:
         import subprocess
+
+        metadata = {"name": output_name}
+        if attribution:
+            metadata["attribution"] = attribution
+        set_mbtiles_metadata(Path(mbtiles), metadata)
 
         out = (self._cfg.output_dir / "distribution" / f"{output_name}.pmtiles").resolve()
         out.parent.mkdir(parents=True, exist_ok=True)

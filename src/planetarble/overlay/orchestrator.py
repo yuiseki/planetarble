@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import List, Protocol
 
 from .resolve import resolve_aoi
+from .sources import SOURCE_REGISTRY
 from .spec import BaseSpec, Overlay, PipelineSpec
 from .validate import validate_pipeline_spec
 
@@ -34,8 +35,12 @@ class PlanetExecutor(Protocol):
     def merge(self, base_mbtiles: Path, overlay_mbtiles: Path) -> Path:
         """Overlay one MBTiles onto another and return the merged path."""
 
-    def package(self, mbtiles: Path, output_name: str) -> Path:
-        """Convert the final MBTiles into a PMTiles artifact and return it."""
+    def package(self, mbtiles: Path, output_name: str, attribution: str = "") -> Path:
+        """Convert the final MBTiles into a PMTiles artifact and return it.
+
+        ``attribution`` is the credit line for every source used, written
+        into the artifact's metadata.
+        """
 
 
 @dataclass
@@ -43,6 +48,18 @@ class BuildResult:
     planet: Path
     base_mbtiles: Path
     stacks: List[Path] = field(default_factory=list)
+
+
+def planet_attribution(spec: PipelineSpec) -> str:
+    """Credits of the base and every overlay, in build order, without duplicates."""
+    credits: List[str] = []
+    entries = [(spec.base.source, None)] + [(o.source, o.attribution) for o in spec.overlays]
+    for source, override in entries:
+        info = SOURCE_REGISTRY.get(source)
+        credit = override or (info.attribution if info else "")
+        if credit and credit not in credits:
+            credits.append(credit)
+    return "; ".join(credits)
 
 
 def build_planet(
@@ -72,5 +89,5 @@ def build_planet(
         stacks.append(stack)
         planet = executor.merge(planet, stack)
 
-    planet = executor.package(planet, spec.output_name)
+    planet = executor.package(planet, spec.output_name, attribution=planet_attribution(spec))
     return BuildResult(planet=planet, base_mbtiles=base_mbtiles, stacks=stacks)

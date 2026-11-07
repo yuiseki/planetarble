@@ -36,3 +36,21 @@ def test_merge_mbtiles_overlays_tiles(tmp_path: Path) -> None:
         ).fetchone()
         assert rows is not None
         assert rows[0] == b"keep"
+
+
+def test_set_mbtiles_metadata_updates_and_inserts(tmp_path) -> None:
+    import sqlite3
+
+    from planetarble.tiling.mbtiles import set_mbtiles_metadata
+
+    path = tmp_path / "m.mbtiles"
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE metadata (name TEXT, value TEXT)")
+    conn.execute("INSERT INTO metadata VALUES ('name', 'old')")
+    conn.commit()
+    conn.close()
+
+    set_mbtiles_metadata(path, {"name": "planet", "attribution": "A; B"})
+
+    rows = dict(sqlite3.connect(path).execute("SELECT name, value FROM metadata").fetchall())
+    assert rows == {"name": "planet", "attribution": "A; B"}

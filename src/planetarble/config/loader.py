@@ -10,15 +10,15 @@ from typing import Any, Dict, Optional
 from planetarble.core.models import (
     CopernicusConfig,
     CopernicusLayerConfig,
-    Sentinel2Config,
     GSIOrthophotoConfig,
-    HLSPlanRegion,
     HLSConfig,
+    HLSPlanRegion,
     HLSSeasonWindow,
+    ModisConfig,
     NaturalEarthRegion,
     OceanConfig,
-    ModisConfig,
     ProcessingConfig,
+    Sentinel2Config,
     ViirsConfig,
 )
 

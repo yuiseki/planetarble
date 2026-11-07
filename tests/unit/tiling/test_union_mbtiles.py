@@ -5,6 +5,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from planetarble.tiling.mbtiles import ingest_xyz_dir, union_mbtiles
 
 
@@ -56,11 +58,8 @@ def test_union_overlap_first_input_wins(tmp_path: Path) -> None:
 
 
 def test_union_requires_inputs(tmp_path: Path) -> None:
-    try:
+    with pytest.raises(ValueError):
         union_mbtiles([], tmp_path / "x.mbtiles")
-        assert False, "expected ValueError"
-    except ValueError:
-        pass
 
 
 def test_union_chunked_keeps_all_tiles(tmp_path: Path) -> None:

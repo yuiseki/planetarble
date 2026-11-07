@@ -1,5 +1,5 @@
-from planetarble.processing.hls_mosaic import _refresh_hls_scene_urls
 from planetarble.core.models import HLSConfig
+from planetarble.processing.hls_mosaic import _refresh_hls_scene_urls
 
 
 def test_refresh_hls_scene_urls_strips_query(monkeypatch) -> None:

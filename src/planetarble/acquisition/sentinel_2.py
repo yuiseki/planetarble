@@ -13,9 +13,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
+from planetarble.acquisition.mpc import MPCError, fetch_sas_token
 from planetarble.core.models import Sentinel2Config
 from planetarble.logging import get_logger
-from planetarble.acquisition.mpc import MPCError, fetch_sas_token
 
 try:
     from pystac import Item  # type: ignore

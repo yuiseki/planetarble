@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import math
 import os
@@ -12,10 +13,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import requests
-import fcntl
 
-from planetarble.logging import get_logger
 from planetarble.core.models import CopernicusConfig, CopernicusLayerConfig
+from planetarble.logging import get_logger
 
 LOGGER = get_logger(__name__)
 

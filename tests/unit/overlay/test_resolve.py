@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
+from planetarble.acquisition.miniplanets import miniplanet_geo_bbox
 from planetarble.overlay import AOI
 from planetarble.overlay.resolve import ResolvedAOI, resolve_aoi
-from planetarble.acquisition.miniplanets import miniplanet_geo_bbox
 
 DATA = Path("data")
 

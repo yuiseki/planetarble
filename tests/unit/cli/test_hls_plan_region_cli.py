@@ -1,16 +1,21 @@
-from pathlib import Path
-
 import importlib
+from pathlib import Path
 
 import pytest
 
 from planetarble.config import PipelineConfig
-from planetarble.core.models import HLSConfig, HLSPlanRegion, NaturalEarthRegion, OceanConfig, ProcessingConfig
+from planetarble.core.models import (
+    HLSConfig,
+    HLSPlanRegion,
+    NaturalEarthRegion,
+    OceanConfig,
+    ProcessingConfig,
+)
 
 cli_main = importlib.import_module("planetarble.cli.main")
 
 
-def test_acquire_plan_region_invokes_region_planner(patch_cli, 
+def test_acquire_plan_region_invokes_region_planner(patch_cli,
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_path = tmp_path / "pipeline.yaml"
@@ -67,7 +72,7 @@ def test_acquire_plan_region_invokes_region_planner(patch_cli,
     assert called["build_hls_plans"]["selected_region"] == "tokyo_land"
 
 
-def test_process_plan_region_uses_region_plan_paths(patch_cli, 
+def test_process_plan_region_uses_region_plan_paths(patch_cli,
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_path = tmp_path / "pipeline.yaml"

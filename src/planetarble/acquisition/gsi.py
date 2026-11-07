@@ -13,7 +13,6 @@ import requests
 
 from planetarble.logging import get_logger, log_progress
 
-
 LOGGER = get_logger(__name__)
 
 DEFAULT_TILE_TEMPLATE = "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"

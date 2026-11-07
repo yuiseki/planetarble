@@ -35,7 +35,7 @@ def _solid(color) -> Image.Image:
 
 def _assert_near(actual, expected, tol: int = 40) -> None:
     # WEBP is lossy, so colors shift slightly; assert proximity, not equality.
-    for a, e in zip(actual[:3], expected):
+    for a, e in zip(actual[:3], expected, strict=True):
         assert abs(a - e) <= tol, f"{actual[:3]} not near {expected}"
 
 

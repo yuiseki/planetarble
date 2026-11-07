@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from planetarble.processing.hls_mosaic import _mask_band_command, _qa_mask_value
 
 

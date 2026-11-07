@@ -2,7 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from planetarble.acquisition.copernicus import CopernicusAccessError, _RateLimiter, _fetch_tile
+from planetarble.acquisition.copernicus import (
+    CopernicusAccessError,
+    _fetch_tile,
+    _RateLimiter,
+)
 from planetarble.core.models import CopernicusConfig
 
 

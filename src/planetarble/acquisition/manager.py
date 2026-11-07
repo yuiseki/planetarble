@@ -10,7 +10,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from planetarble.core.models import AssetManifest, CopernicusConfig, HLSConfig, HLSPlanRegion
+from planetarble.core.models import (
+    AssetManifest,
+    CopernicusConfig,
+    HLSConfig,
+    HLSPlanRegion,
+)
 from planetarble.logging import get_logger
 
 from .appeears import (
@@ -20,24 +25,26 @@ from .appeears import (
     download_mcd43a4_tiles,
     download_viirs_corrected_reflectance,
 )
+from .base import DataAcquisition
+from .catalog import AssetCatalog, AssetRecord
 from .copernicus import (
     CopernicusAccessError,
     CopernicusAuthError,
     CopernicusCredentials,
     CopernicusCredentialsMissing,
-    download_tiles as download_copernicus_wms_tiles,
     verify_copernicus_connection,
 )
-from .base import DataAcquisition
-from .catalog import AssetCatalog, AssetRecord
+from .copernicus import (
+    download_tiles as download_copernicus_wms_tiles,
+)
 from .download import DownloadError, DownloadManager, DownloadResult, calculate_sha256
-from .manifest import build_manifest, write_manifest
 from .hls import (
     HLSMosaicPlanner,
     HLSPlanSummary,
     load_land_geometry,
     load_region_geometry,
 )
+from .manifest import build_manifest, write_manifest
 
 LOGGER = get_logger(__name__)
 

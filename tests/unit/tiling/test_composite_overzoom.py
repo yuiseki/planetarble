@@ -46,7 +46,7 @@ def _read_xyz(path: Path, z: int, x: int, y: int):
 
 
 def _near(actual, expected, tol: int = 50) -> None:
-    for a, e in zip(actual[:3], expected):
+    for a, e in zip(actual[:3], expected, strict=True):
         assert abs(a - e) <= tol, f"{actual[:3]} not near {expected}"
 
 

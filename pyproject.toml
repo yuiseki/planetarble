@@ -35,10 +35,20 @@ target-version = "py311"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-# Pyflakes only: undefined names and unused/redefined imports. This is the
-# safety net for moving code between modules, since much of the CLI and
-# processing code is not exercised by tests.
-select = ["F"]
+# F: undefined names and unused imports (the safety net for code that tests
+#    do not reach). E/W: pycodestyle errors and whitespace. I: import order.
+# B: bugbear (likely bugs, e.g. zip() without strict=).
+# Line length (E501) is not enforced; the code base predates a formatter.
+select = ["F", "E", "W", "I", "B"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# numpy-dependent tests call pytest.importorskip("numpy") before importing
+# the modules that need it, so collection-only hosts skip instead of failing.
+"tests/**" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["planetarble"]
 
 [project.scripts]
 planetarble = "planetarble.cli.main:main"

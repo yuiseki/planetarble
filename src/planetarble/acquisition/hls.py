@@ -2,14 +2,24 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
-import hashlib
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 if TYPE_CHECKING:  # GDAL is optional at runtime; imported lazily where used
     from osgeo import ogr
@@ -33,11 +43,16 @@ except Exception as exc:  # pragma: no cover - executed when sqlite is missing
     _PYSTAC_IMPORT_ERROR = exc
     _PYSTAC_ERRORS = (Exception,)
 
-from planetarble.core.models import HLSConfig, HLSPlanRegion, HLSSeasonWindow, NaturalEarthRegion
+from planetarble.core.models import (
+    HLSConfig,
+    HLSPlanRegion,
+    HLSSeasonWindow,
+    NaturalEarthRegion,
+)
 from planetarble.logging import get_logger
 
 from .miniplanets import tile_to_miniplanet_id
-from .mpc import MPCError, STAC_API_ROOT, append_sas_token, fetch_sas_token
+from .mpc import STAC_API_ROOT, MPCError, append_sas_token, fetch_sas_token
 
 LOGGER = get_logger(__name__)
 

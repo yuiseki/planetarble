@@ -10,6 +10,7 @@ from typing import Dict, Iterable, Optional, Tuple
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
+
 try:  # pragma: no cover - optional dependency availability
     from pystac_client import Client
     from pystac_client import exceptions as pc_exceptions
@@ -28,7 +29,6 @@ except Exception as exc:  # pragma: no cover
     _PYSTAC_ERRORS = (Exception,)
 
 from planetarble.logging import get_logger
-
 
 LOGGER = get_logger(__name__)
 

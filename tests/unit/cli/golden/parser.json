@@ -1,0 +1,2168 @@
+{
+ "description": "Planetarble command-line interface",
+ "arguments": [
+  {
+   "kind": "_HelpAction",
+   "options": [
+    "-h",
+    "--help"
+   ],
+   "dest": "help",
+   "required": false,
+   "nargs": 0,
+   "default": "'==SUPPRESS=='",
+   "type": null,
+   "choices": null,
+   "metavar": null,
+   "help": "show this help message and exit"
+  },
+  {
+   "kind": "_StoreTrueAction",
+   "options": [
+    "--log-json"
+   ],
+   "dest": "log_json",
+   "required": false,
+   "nargs": 0,
+   "default": "False",
+   "type": null,
+   "choices": null,
+   "metavar": null,
+   "help": "Emit logs in JSON format"
+  },
+  {
+   "kind": "_StoreAction",
+   "options": [
+    "--log-level"
+   ],
+   "dest": "log_level",
+   "required": false,
+   "nargs": null,
+   "default": "'INFO'",
+   "type": null,
+   "choices": null,
+   "metavar": null,
+   "help": "Logging level (default: INFO)"
+  }
+ ],
+ "subcommands": [
+  {
+   "name": "acquire",
+   "help": "Download source datasets and emit manifest",
+   "description": null,
+   "arguments": [
+    {
+     "kind": "_HelpAction",
+     "options": [
+      "-h",
+      "--help"
+     ],
+     "dest": "help",
+     "required": false,
+     "nargs": 0,
+     "default": "'==SUPPRESS=='",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "show this help message and exit"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--config"
+     ],
+     "dest": "config",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Path to pipeline configuration file (YAML or JSON)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--manifest"
+     ],
+     "dest": "manifest",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Explicit manifest output path (defaults to output_dir/MANIFEST.json)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--plan-region"
+     ],
+     "dest": "plan_region",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Named HLS/Sentinel-2 plan region to generate (matches hls.plan_regions entries)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--bmng-resolution"
+     ],
+     "dest": "bmng_resolution",
+     "required": false,
+     "nargs": null,
+     "default": "'500m'",
+     "type": null,
+     "choices": [
+      "2km",
+      "500m"
+     ],
+     "metavar": null,
+     "help": "Preferred BMNG resolution (default: 500m)"
+    },
+    {
+     "kind": "_StoreTrueAction",
+     "options": [
+      "--force"
+     ],
+     "dest": "force",
+     "required": false,
+     "nargs": 0,
+     "default": "False",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Force re-download even if files already exist"
+    },
+    {
+     "kind": "_StoreTrueAction",
+     "options": [
+      "--no-aria2"
+     ],
+     "dest": "no_aria2",
+     "required": false,
+     "nargs": 0,
+     "default": "False",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Disable aria2c integration and use built-in downloader"
+    }
+   ],
+   "subcommands": []
+  },
+  {
+   "name": "process",
+   "help": "Run raster preprocessing pipeline",
+   "description": null,
+   "arguments": [
+    {
+     "kind": "_HelpAction",
+     "options": [
+      "-h",
+      "--help"
+     ],
+     "dest": "help",
+     "required": false,
+     "nargs": 0,
+     "default": "'==SUPPRESS=='",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "show this help message and exit"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--config"
+     ],
+     "dest": "config",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Path to pipeline configuration file (YAML or JSON)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--plan-region"
+     ],
+     "dest": "plan_region",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Named HLS/Sentinel-2 plan region to process (matches plan_regions entries)"
+    },
+    {
+     "kind": "_StoreTrueAction",
+     "options": [
+      "--dry-run"
+     ],
+     "dest": "dry_run",
+     "required": false,
+     "nargs": 0,
+     "default": "False",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Print commands without executing them"
+    },
+    {
+     "kind": "_StoreTrueAction",
+     "options": [
+      "--force"
+     ],
+     "dest": "force",
+     "required": false,
+     "nargs": 0,
+     "default": "False",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Regenerate processing outputs even if cached"
+    }
+   ],
+   "subcommands": []
+  },
+  {
+   "name": "tile",
+   "help": "Generate MBTiles output",
+   "description": null,
+   "arguments": [
+    {
+     "kind": "_HelpAction",
+     "options": [
+      "-h",
+      "--help"
+     ],
+     "dest": "help",
+     "required": false,
+     "nargs": 0,
+     "default": "'==SUPPRESS=='",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "show this help message and exit"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--config"
+     ],
+     "dest": "config",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Path to pipeline configuration file (YAML or JSON)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--plan-region"
+     ],
+     "dest": "plan_region",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Named plan region to tile when tile_source is hls or sentinel2"
+    },
+    {
+     "kind": "_StoreTrueAction",
+     "options": [
+      "--dry-run"
+     ],
+     "dest": "dry_run",
+     "required": false,
+     "nargs": 0,
+     "default": "False",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Print tiling commands without executing"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--min-zoom"
+     ],
+     "dest": "min_zoom",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "int",
+     "choices": null,
+     "metavar": null,
+     "help": "Override minimum zoom level"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--max-zoom"
+     ],
+     "dest": "max_zoom",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "int",
+     "choices": null,
+     "metavar": null,
+     "help": "Override maximum zoom level"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--tile-format"
+     ],
+     "dest": "tile_format",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": null,
+     "choices": [
+      "JPEG",
+      "PNG",
+      "WEBP"
+     ],
+     "metavar": null,
+     "help": "Override tile image format"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--quality"
+     ],
+     "dest": "quality",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "int",
+     "choices": null,
+     "metavar": null,
+     "help": "Override tile encoding quality"
+    },
+    {
+     "kind": "_StoreTrueAction",
+     "options": [
+      "--force"
+     ],
+     "dest": "force",
+     "required": false,
+     "nargs": 0,
+     "default": "False",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Regenerate tiles even if output exists"
+    }
+   ],
+   "subcommands": []
+  },
+  {
+   "name": "tiling",
+   "help": "Advanced tiling utilities",
+   "description": null,
+   "arguments": [
+    {
+     "kind": "_HelpAction",
+     "options": [
+      "-h",
+      "--help"
+     ],
+     "dest": "help",
+     "required": false,
+     "nargs": 0,
+     "default": "'==SUPPRESS=='",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "show this help message and exit"
+    }
+   ],
+   "subcommands": [
+    {
+     "name": "pmtiles",
+     "help": "Convert a raster into PMTiles via XYZ and MBTiles",
+     "description": null,
+     "arguments": [
+      {
+       "kind": "_HelpAction",
+       "options": [
+        "-h",
+        "--help"
+       ],
+       "dest": "help",
+       "required": false,
+       "nargs": 0,
+       "default": "'==SUPPRESS=='",
+       "type": null,
+       "choices": null,
+       "metavar": null,
+       "help": "show this help message and exit"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--input"
+       ],
+       "dest": "input",
+       "required": true,
+       "nargs": null,
+       "default": "None",
+       "type": "Path",
+       "choices": null,
+       "metavar": null,
+       "help": "Source raster path"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--out"
+       ],
+       "dest": "out",
+       "required": true,
+       "nargs": null,
+       "default": "None",
+       "type": "Path",
+       "choices": null,
+       "metavar": null,
+       "help": "Destination directory for PMTiles and intermediate artifacts"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--min-zoom"
+       ],
+       "dest": "min_zoom",
+       "required": false,
+       "nargs": null,
+       "default": "None",
+       "type": "int",
+       "choices": null,
+       "metavar": null,
+       "help": "Minimum zoom level (default: config or 0)"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--max-zoom"
+       ],
+       "dest": "max_zoom",
+       "required": false,
+       "nargs": null,
+       "default": "None",
+       "type": "int",
+       "choices": null,
+       "metavar": null,
+       "help": "Maximum zoom level"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--format"
+       ],
+       "dest": "format",
+       "required": false,
+       "nargs": null,
+       "default": "None",
+       "type": null,
+       "choices": [
+        "jpg",
+        "png",
+        "webp"
+       ],
+       "metavar": null,
+       "help": "Tile image format"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--quality"
+       ],
+       "dest": "quality",
+       "required": false,
+       "nargs": null,
+       "default": "None",
+       "type": "int",
+       "choices": null,
+       "metavar": null,
+       "help": "Compression quality for JPEG/WEBP tiles"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--resampling"
+       ],
+       "dest": "resampling",
+       "required": false,
+       "nargs": null,
+       "default": "None",
+       "type": null,
+       "choices": null,
+       "metavar": null,
+       "help": "Resampling kernel for gdal raster tile (default: config value)"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--name"
+       ],
+       "dest": "name",
+       "required": false,
+       "nargs": null,
+       "default": "None",
+       "type": null,
+       "choices": null,
+       "metavar": null,
+       "help": "Human-readable tileset name"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--attribution"
+       ],
+       "dest": "attribution",
+       "required": false,
+       "nargs": null,
+       "default": "None",
+       "type": null,
+       "choices": null,
+       "metavar": null,
+       "help": "Attribution string embedded into MBTiles metadata"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--bounds-mode"
+       ],
+       "dest": "bounds_mode",
+       "required": false,
+       "nargs": null,
+       "default": "'auto'",
+       "type": null,
+       "choices": [
+        "auto",
+        "global"
+       ],
+       "metavar": null,
+       "help": "Strategy to derive bounds metadata"
+      },
+      {
+       "kind": "_StoreTrueAction",
+       "options": [
+        "--no-deduplication"
+       ],
+       "dest": "no_deduplication",
+       "required": false,
+       "nargs": 0,
+       "default": "False",
+       "type": null,
+       "choices": null,
+       "metavar": null,
+       "help": "Disable PMTiles deduplication during conversion"
+      },
+      {
+       "kind": "_StoreTrueAction",
+       "options": [
+        "--cluster"
+       ],
+       "dest": "cluster",
+       "required": false,
+       "nargs": 0,
+       "default": "False",
+       "type": null,
+       "choices": null,
+       "metavar": null,
+       "help": "Run pmtiles cluster after conversion"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--temp-dir"
+       ],
+       "dest": "temp_dir",
+       "required": false,
+       "nargs": null,
+       "default": "None",
+       "type": "Path",
+       "choices": null,
+       "metavar": null,
+       "help": "Temporary workspace directory (defaults to <out>/tmp)"
+      },
+      {
+       "kind": "_StoreTrueAction",
+       "options": [
+        "--dry-run"
+       ],
+       "dest": "dry_run",
+       "required": false,
+       "nargs": 0,
+       "default": "False",
+       "type": null,
+       "choices": null,
+       "metavar": null,
+       "help": "Print commands without executing them"
+      }
+     ],
+     "subcommands": []
+    },
+    {
+     "name": "merge-mbtiles",
+     "help": "Overlay tiles from one MBTiles archive onto another",
+     "description": null,
+     "arguments": [
+      {
+       "kind": "_HelpAction",
+       "options": [
+        "-h",
+        "--help"
+       ],
+       "dest": "help",
+       "required": false,
+       "nargs": 0,
+       "default": "'==SUPPRESS=='",
+       "type": null,
+       "choices": null,
+       "metavar": null,
+       "help": "show this help message and exit"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--base"
+       ],
+       "dest": "base",
+       "required": true,
+       "nargs": null,
+       "default": "None",
+       "type": "Path",
+       "choices": null,
+       "metavar": null,
+       "help": "Base MBTiles archive"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--overlay"
+       ],
+       "dest": "overlay",
+       "required": true,
+       "nargs": null,
+       "default": "None",
+       "type": "Path",
+       "choices": null,
+       "metavar": null,
+       "help": "Overlay MBTiles archive"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--out"
+       ],
+       "dest": "out",
+       "required": true,
+       "nargs": null,
+       "default": "None",
+       "type": "Path",
+       "choices": null,
+       "metavar": null,
+       "help": "Output MBTiles archive"
+      }
+     ],
+     "subcommands": []
+    },
+    {
+     "name": "union-mbtiles",
+     "help": "Union several MBTiles into one in a single pass (for disjoint Quadrans pieces)",
+     "description": null,
+     "arguments": [
+      {
+       "kind": "_HelpAction",
+       "options": [
+        "-h",
+        "--help"
+       ],
+       "dest": "help",
+       "required": false,
+       "nargs": 0,
+       "default": "'==SUPPRESS=='",
+       "type": null,
+       "choices": null,
+       "metavar": null,
+       "help": "show this help message and exit"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--inputs"
+       ],
+       "dest": "inputs",
+       "required": true,
+       "nargs": "+",
+       "default": "None",
+       "type": "Path",
+       "choices": null,
+       "metavar": null,
+       "help": "Input MBTiles archives (pass the LARGEST first — it becomes the copy base)"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--out"
+       ],
+       "dest": "out",
+       "required": true,
+       "nargs": null,
+       "default": "None",
+       "type": "Path",
+       "choices": null,
+       "metavar": null,
+       "help": "Output MBTiles archive"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--chunk-size"
+       ],
+       "dest": "chunk_size",
+       "required": false,
+       "nargs": null,
+       "default": "50000",
+       "type": "int",
+       "choices": null,
+       "metavar": null,
+       "help": "Rows per commit when appending non-base inputs (bounds journal growth)"
+      }
+     ],
+     "subcommands": []
+    },
+    {
+     "name": "stitch-512",
+     "help": "Build a 512px pyramid from a 256px source (output zoom z <- source zoom z+1)",
+     "description": null,
+     "arguments": [
+      {
+       "kind": "_HelpAction",
+       "options": [
+        "-h",
+        "--help"
+       ],
+       "dest": "help",
+       "required": false,
+       "nargs": 0,
+       "default": "'==SUPPRESS=='",
+       "type": null,
+       "choices": null,
+       "metavar": null,
+       "help": "show this help message and exit"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--source"
+       ],
+       "dest": "source",
+       "required": true,
+       "nargs": null,
+       "default": "None",
+       "type": "Path",
+       "choices": null,
+       "metavar": null,
+       "help": "256px source MBTiles"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--out"
+       ],
+       "dest": "out",
+       "required": true,
+       "nargs": null,
+       "default": "None",
+       "type": "Path",
+       "choices": null,
+       "metavar": null,
+       "help": "Output 512px MBTiles"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--format"
+       ],
+       "dest": "format",
+       "required": false,
+       "nargs": null,
+       "default": "'jpg'",
+       "type": null,
+       "choices": null,
+       "metavar": null,
+       "help": "Output tile format (default jpg)"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--quality"
+       ],
+       "dest": "quality",
+       "required": false,
+       "nargs": null,
+       "default": "90",
+       "type": "int",
+       "choices": null,
+       "metavar": null,
+       "help": "JPEG/WebP quality (default 90)"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--workers"
+       ],
+       "dest": "workers",
+       "required": false,
+       "nargs": null,
+       "default": "1",
+       "type": "int",
+       "choices": null,
+       "metavar": null,
+       "help": "Parallel processes (CPU-bound; shards are unioned at the end)"
+      },
+      {
+       "kind": "_StoreAction",
+       "options": [
+        "--shard-dir"
+       ],
+       "dest": "shard_dir",
+       "required": false,
+       "nargs": null,
+       "default": "None",
+       "type": "Path",
+       "choices": null,
+       "metavar": null,
+       "help": "Dir for worker shards (default: next to --out; put on a separate disk to split shards/output)"
+      }
+     ],
+     "subcommands": []
+    }
+   ],
+   "subcommand_dest": "tiling_command",
+   "subcommand_required": true
+  },
+  {
+   "name": "build",
+   "help": "Build a custom planet from an AOI overlay spec (ADR 0001)",
+   "description": null,
+   "arguments": [
+    {
+     "kind": "_HelpAction",
+     "options": [
+      "-h",
+      "--help"
+     ],
+     "dest": "help",
+     "required": false,
+     "nargs": 0,
+     "default": "'==SUPPRESS=='",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "show this help message and exit"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--spec"
+     ],
+     "dest": "spec",
+     "required": true,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "AOI overlay pipeline spec (YAML)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--config"
+     ],
+     "dest": "config",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Base pipeline config (defaults to configs/base/pipeline.yaml)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--base-mbtiles"
+     ],
+     "dest": "base_mbtiles",
+     "required": true,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Prebuilt global base MBTiles (the floor)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--work-dir"
+     ],
+     "dest": "work_dir",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Scratch dir for intermediates (default: output/build)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--tile-size"
+     ],
+     "dest": "tile_size",
+     "required": false,
+     "nargs": null,
+     "default": "512",
+     "type": "int",
+     "choices": null,
+     "metavar": null,
+     "help": null
+    },
+    {
+     "kind": "_StoreTrueAction",
+     "options": [
+      "--no-strict"
+     ],
+     "dest": "no_strict",
+     "required": false,
+     "nargs": 0,
+     "default": "False",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Warn instead of failing on zoom-ceiling violations"
+    }
+   ],
+   "subcommands": []
+  },
+  {
+   "name": "prefetch",
+   "help": "Download-only: warm the Sentinel-2 asset cache for a spec's AOIs (no tiling)",
+   "description": null,
+   "arguments": [
+    {
+     "kind": "_HelpAction",
+     "options": [
+      "-h",
+      "--help"
+     ],
+     "dest": "help",
+     "required": false,
+     "nargs": 0,
+     "default": "'==SUPPRESS=='",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "show this help message and exit"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--spec"
+     ],
+     "dest": "spec",
+     "required": true,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "AOI overlay pipeline spec (YAML)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--config"
+     ],
+     "dest": "config",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Base pipeline config (defaults to configs/base/pipeline.yaml)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--work-dir"
+     ],
+     "dest": "work_dir",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Scratch dir (default: output/build)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--pace-min"
+     ],
+     "dest": "pace_min",
+     "required": false,
+     "nargs": null,
+     "default": "60.0",
+     "type": "float",
+     "choices": null,
+     "metavar": null,
+     "help": "Min inter-tile wait (s) when throughput was healthy"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--pace-max"
+     ],
+     "dest": "pace_max",
+     "required": false,
+     "nargs": null,
+     "default": "300.0",
+     "type": "float",
+     "choices": null,
+     "metavar": null,
+     "help": "Max inter-tile wait (s) when throughput was healthy"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--throttle-floor"
+     ],
+     "dest": "throttle_floor",
+     "required": false,
+     "nargs": null,
+     "default": "150.0",
+     "type": "float",
+     "choices": null,
+     "metavar": null,
+     "help": "KiB/s below which the last tile counts as throttled"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--cooldown-min"
+     ],
+     "dest": "cooldown_min",
+     "required": false,
+     "nargs": null,
+     "default": "600.0",
+     "type": "float",
+     "choices": null,
+     "metavar": null,
+     "help": "Min cooldown (s) after a throttled tile"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--cooldown-max"
+     ],
+     "dest": "cooldown_max",
+     "required": false,
+     "nargs": null,
+     "default": "900.0",
+     "type": "float",
+     "choices": null,
+     "metavar": null,
+     "help": "Max cooldown (s) after a throttled tile"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--recovery-wait"
+     ],
+     "dest": "recovery_wait",
+     "required": false,
+     "nargs": null,
+     "default": "1800.0",
+     "type": "float",
+     "choices": null,
+     "metavar": null,
+     "help": "Seconds to wait between recovery rounds during a broad MPC outage"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--max-recovery-rounds"
+     ],
+     "dest": "max_recovery_rounds",
+     "required": false,
+     "nargs": null,
+     "default": "6",
+     "type": "int",
+     "choices": null,
+     "metavar": null,
+     "help": "Max rounds re-attempting failed overlays (1 = no recovery wait); rides out an MPC STAC outage"
+    },
+    {
+     "kind": "_StoreTrueAction",
+     "options": [
+      "--dry-run"
+     ],
+     "dest": "dry_run",
+     "required": false,
+     "nargs": 0,
+     "default": "False",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "List the Sentinel-2 overlays that would be prefetched and exit"
+    }
+   ],
+   "subcommands": []
+  },
+  {
+   "name": "split-plan",
+   "help": "Split a global HLS plan into one ndjson shard per miniplanet",
+   "description": null,
+   "arguments": [
+    {
+     "kind": "_HelpAction",
+     "options": [
+      "-h",
+      "--help"
+     ],
+     "dest": "help",
+     "required": false,
+     "nargs": 0,
+     "default": "'==SUPPRESS=='",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "show this help message and exit"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--config"
+     ],
+     "dest": "config",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Path to pipeline configuration file (YAML or JSON)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--plan"
+     ],
+     "dest": "plan",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Explicit plan ndjson to split (defaults to the global HLS plan)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--out"
+     ],
+     "dest": "out",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Output directory for shards (defaults to data_dir/plans/shards)"
+    }
+   ],
+   "subcommands": []
+  },
+  {
+   "name": "mpc-fetch",
+   "help": "Download a Sentinel-2 true color clip via Microsoft Planetary Computer",
+   "description": null,
+   "arguments": [
+    {
+     "kind": "_HelpAction",
+     "options": [
+      "-h",
+      "--help"
+     ],
+     "dest": "help",
+     "required": false,
+     "nargs": 0,
+     "default": "'==SUPPRESS=='",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "show this help message and exit"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--lat"
+     ],
+     "dest": "lat",
+     "required": true,
+     "nargs": null,
+     "default": "None",
+     "type": "float",
+     "choices": null,
+     "metavar": null,
+     "help": "Latitude of the target point"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--lon"
+     ],
+     "dest": "lon",
+     "required": true,
+     "nargs": null,
+     "default": "None",
+     "type": "float",
+     "choices": null,
+     "metavar": null,
+     "help": "Longitude of the target point"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--width-m"
+     ],
+     "dest": "width_m",
+     "required": false,
+     "nargs": null,
+     "default": "500.0",
+     "type": "float",
+     "choices": null,
+     "metavar": null,
+     "help": "Clip width in meters (default: 500)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--height-m"
+     ],
+     "dest": "height_m",
+     "required": false,
+     "nargs": null,
+     "default": "500.0",
+     "type": "float",
+     "choices": null,
+     "metavar": null,
+     "help": "Clip height in meters (default: 500)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--max-cloud"
+     ],
+     "dest": "max_cloud",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "float",
+     "choices": null,
+     "metavar": null,
+     "help": "Maximum acceptable cloud cover percentage"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--start"
+     ],
+     "dest": "start_datetime",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "ISO8601 start datetime filter (inclusive)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--end"
+     ],
+     "dest": "end_datetime",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "ISO8601 end datetime filter (inclusive)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--output"
+     ],
+     "dest": "output",
+     "required": false,
+     "nargs": null,
+     "default": "PosixPath('mpc_true_color.tif')",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Output GeoTIFF path (default: mpc_true_color.tif)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--gdal-translate"
+     ],
+     "dest": "gdal_translate",
+     "required": false,
+     "nargs": null,
+     "default": "'gdal_translate'",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "gdal_translate executable name (default: gdal_translate)"
+    },
+    {
+     "kind": "_StoreTrueAction",
+     "options": [
+      "--dry-run"
+     ],
+     "dest": "dry_run",
+     "required": false,
+     "nargs": 0,
+     "default": "False",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Print commands without executing GDAL"
+    }
+   ],
+   "subcommands": []
+  },
+  {
+   "name": "gsi-fetch",
+   "help": "Download a GSI high-resolution orthophoto clip via the XYZ tile service",
+   "description": null,
+   "arguments": [
+    {
+     "kind": "_HelpAction",
+     "options": [
+      "-h",
+      "--help"
+     ],
+     "dest": "help",
+     "required": false,
+     "nargs": 0,
+     "default": "'==SUPPRESS=='",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "show this help message and exit"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--lat"
+     ],
+     "dest": "lat",
+     "required": true,
+     "nargs": null,
+     "default": "None",
+     "type": "float",
+     "choices": null,
+     "metavar": null,
+     "help": "Latitude of the target point"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--lon"
+     ],
+     "dest": "lon",
+     "required": true,
+     "nargs": null,
+     "default": "None",
+     "type": "float",
+     "choices": null,
+     "metavar": null,
+     "help": "Longitude of the target point"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--width-m"
+     ],
+     "dest": "width_m",
+     "required": false,
+     "nargs": null,
+     "default": "400.0",
+     "type": "float",
+     "choices": null,
+     "metavar": null,
+     "help": "Clip width in meters (default: 400)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--height-m"
+     ],
+     "dest": "height_m",
+     "required": false,
+     "nargs": null,
+     "default": "400.0",
+     "type": "float",
+     "choices": null,
+     "metavar": null,
+     "help": "Clip height in meters (default: 400)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--zoom"
+     ],
+     "dest": "zoom",
+     "required": false,
+     "nargs": null,
+     "default": "18",
+     "type": "int",
+     "choices": null,
+     "metavar": null,
+     "help": "Tile zoom level (default: 18)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--tile-template"
+     ],
+     "dest": "tile_template",
+     "required": false,
+     "nargs": null,
+     "default": "'https://cyberjapandata.gsi.go.jp/xyz/ortho/{z}/{x}/{y}.jpg'",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "XYZ tile template URL (default: GSI ortho)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--output"
+     ],
+     "dest": "output",
+     "required": false,
+     "nargs": null,
+     "default": "PosixPath('gsi_ortho.tif')",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Output GeoTIFF path (default: gsi_ortho.tif)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--gdal-translate"
+     ],
+     "dest": "gdal_translate",
+     "required": false,
+     "nargs": null,
+     "default": "'gdal_translate'",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "gdal_translate executable name (default: gdal_translate)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--gdal-buildvrt"
+     ],
+     "dest": "gdal_buildvrt",
+     "required": false,
+     "nargs": null,
+     "default": "'gdalbuildvrt'",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "gdalbuildvrt executable name (default: gdalbuildvrt)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--gdal-warp"
+     ],
+     "dest": "gdal_warp",
+     "required": false,
+     "nargs": null,
+     "default": "'gdalwarp'",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "gdalwarp executable name (default: gdalwarp)"
+    },
+    {
+     "kind": "_StoreTrueAction",
+     "options": [
+      "--dry-run"
+     ],
+     "dest": "dry_run",
+     "required": false,
+     "nargs": 0,
+     "default": "False",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Print commands without executing GDAL"
+    }
+   ],
+   "subcommands": []
+  },
+  {
+   "name": "gsi-collect",
+   "help": "Collect a GSI XYZ layer (e.g. seamlessphoto) nationwide into a zxy dir, mokuroku-driven",
+   "description": null,
+   "arguments": [
+    {
+     "kind": "_HelpAction",
+     "options": [
+      "-h",
+      "--help"
+     ],
+     "dest": "help",
+     "required": false,
+     "nargs": 0,
+     "default": "'==SUPPRESS=='",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "show this help message and exit"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--layer"
+     ],
+     "dest": "layer",
+     "required": false,
+     "nargs": null,
+     "default": "'seamlessphoto'",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "GSI layer id (default: seamlessphoto)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--zoom-min"
+     ],
+     "dest": "zoom_min",
+     "required": false,
+     "nargs": null,
+     "default": "8",
+     "type": "int",
+     "choices": null,
+     "metavar": null,
+     "help": null
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--zoom-max"
+     ],
+     "dest": "zoom_max",
+     "required": false,
+     "nargs": null,
+     "default": "16",
+     "type": "int",
+     "choices": null,
+     "metavar": null,
+     "help": null
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--out"
+     ],
+     "dest": "out",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Output zxy tile directory (omit when using --mbtiles)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--mbtiles"
+     ],
+     "dest": "mbtiles",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Write tiles directly into this MBTiles (no intermediate z/x/y files; resumable)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--attribution"
+     ],
+     "dest": "attribution",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "metadata attribution (when --mbtiles)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--name"
+     ],
+     "dest": "name",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "metadata name (when --mbtiles)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--workers"
+     ],
+     "dest": "workers",
+     "required": false,
+     "nargs": null,
+     "default": "10",
+     "type": "int",
+     "choices": null,
+     "metavar": null,
+     "help": "Concurrent downloads (be polite; 403/429 trigger cool-down)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--ext"
+     ],
+     "dest": "ext",
+     "required": false,
+     "nargs": null,
+     "default": "'jpg'",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": null
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--quadrans"
+     ],
+     "dest": "quadrans",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": null,
+     "choices": [
+      "east",
+      "north",
+      "south",
+      "west"
+     ],
+     "metavar": null,
+     "help": "Only collect tiles in this Quadrans region (UNopenGIS/7#909) — for splitting work"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--mokuroku"
+     ],
+     "dest": "mokuroku",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "mokuroku.csv.gz URL or local path (default: GSI URL for the layer)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--config"
+     ],
+     "dest": "config",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Pipeline config (for cache dir defaults)"
+    },
+    {
+     "kind": "_StoreTrueAction",
+     "options": [
+      "--dry-run"
+     ],
+     "dest": "dry_run",
+     "required": false,
+     "nargs": 0,
+     "default": "False",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Report tile counts per zoom from mokuroku and exit"
+    }
+   ],
+   "subcommands": []
+  },
+  {
+   "name": "gsi-pack",
+   "help": "Pack a z/x/y tile directory into an MBTiles archive (create or append; faster than mb-util)",
+   "description": null,
+   "arguments": [
+    {
+     "kind": "_HelpAction",
+     "options": [
+      "-h",
+      "--help"
+     ],
+     "dest": "help",
+     "required": false,
+     "nargs": 0,
+     "default": "'==SUPPRESS=='",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "show this help message and exit"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--tiles"
+     ],
+     "dest": "tiles",
+     "required": true,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Source z/x/y tile directory"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--out"
+     ],
+     "dest": "out",
+     "required": true,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Destination MBTiles (created or appended)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--format"
+     ],
+     "dest": "format",
+     "required": false,
+     "nargs": null,
+     "default": "'jpg'",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Tile image format stored in metadata (default: jpg)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--name"
+     ],
+     "dest": "name",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "metadata name"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--attribution"
+     ],
+     "dest": "attribution",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "metadata attribution"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--bounds"
+     ],
+     "dest": "bounds",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "metadata bounds 'minlon,minlat,maxlon,maxlat'"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--batch-size"
+     ],
+     "dest": "batch_size",
+     "required": false,
+     "nargs": null,
+     "default": "10000",
+     "type": "int",
+     "choices": null,
+     "metavar": null,
+     "help": "Insert batch size (default: 10000)"
+    }
+   ],
+   "subcommands": []
+  },
+  {
+   "name": "package",
+   "help": "Create PMTiles distribution",
+   "description": null,
+   "arguments": [
+    {
+     "kind": "_HelpAction",
+     "options": [
+      "-h",
+      "--help"
+     ],
+     "dest": "help",
+     "required": false,
+     "nargs": 0,
+     "default": "'==SUPPRESS=='",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "show this help message and exit"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--config"
+     ],
+     "dest": "config",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Path to pipeline configuration file (YAML or JSON)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--pmtiles-name"
+     ],
+     "dest": "pmtiles_name",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "str",
+     "choices": null,
+     "metavar": null,
+     "help": "Filename for the PMTiles archive (defaults to planet_<year>_<max_zoom_level>z.pmtiles)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--input"
+     ],
+     "dest": "input",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Path to an MBTiles archive to package (defaults to the latest tiling output)"
+    },
+    {
+     "kind": "_StoreTrueAction",
+     "options": [
+      "--dry-run"
+     ],
+     "dest": "dry_run",
+     "required": false,
+     "nargs": 0,
+     "default": "False",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Print packaging commands without executing"
+    },
+    {
+     "kind": "_StoreTrueAction",
+     "options": [
+      "--force"
+     ],
+     "dest": "force",
+     "required": false,
+     "nargs": 0,
+     "default": "False",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Regenerate PMTiles even if output exists"
+    }
+   ],
+   "subcommands": []
+  },
+  {
+   "name": "serve",
+   "help": "Serve PMTiles with a simple web viewer",
+   "description": null,
+   "arguments": [
+    {
+     "kind": "_HelpAction",
+     "options": [
+      "-h",
+      "--help"
+     ],
+     "dest": "help",
+     "required": false,
+     "nargs": 0,
+     "default": "'==SUPPRESS=='",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "show this help message and exit"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--pmtiles"
+     ],
+     "dest": "pmtiles",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Path to the PMTiles archive"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--region"
+     ],
+     "dest": "region",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "str",
+     "choices": null,
+     "metavar": null,
+     "help": "Region name to resolve PMTiles from distribution"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--config"
+     ],
+     "dest": "config",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Path to pipeline configuration file (YAML or JSON) for region resolution"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--host"
+     ],
+     "dest": "host",
+     "required": false,
+     "nargs": null,
+     "default": "'0.0.0.0'",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Host interface to bind (default: 0.0.0.0)"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--tiles-port"
+     ],
+     "dest": "tiles_port",
+     "required": false,
+     "nargs": null,
+     "default": "8080",
+     "type": "int",
+     "choices": null,
+     "metavar": null,
+     "help": "Port for pmtiles server"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--ui-port"
+     ],
+     "dest": "ui_port",
+     "required": false,
+     "nargs": null,
+     "default": "8081",
+     "type": "int",
+     "choices": null,
+     "metavar": null,
+     "help": "Port for the viewer UI"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--viewer-root"
+     ],
+     "dest": "viewer_root",
+     "required": false,
+     "nargs": null,
+     "default": "PosixPath('src/planetarble/viewer')",
+     "type": "Path",
+     "choices": null,
+     "metavar": null,
+     "help": "Directory containing viewer assets"
+    },
+    {
+     "kind": "_StoreTrueAction",
+     "options": [
+      "--open"
+     ],
+     "dest": "open",
+     "required": false,
+     "nargs": 0,
+     "default": "False",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Open the viewer URL in a browser"
+    }
+   ],
+   "subcommands": []
+  },
+  {
+   "name": "copernicus-layers",
+   "help": "List available Copernicus WMS layers for the configured instance",
+   "description": null,
+   "arguments": [
+    {
+     "kind": "_HelpAction",
+     "options": [
+      "-h",
+      "--help"
+     ],
+     "dest": "help",
+     "required": false,
+     "nargs": 0,
+     "default": "'==SUPPRESS=='",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "show this help message and exit"
+    },
+    {
+     "kind": "_StoreAction",
+     "options": [
+      "--instance-id"
+     ],
+     "dest": "instance_id",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Override COPERNICUS_INSTANCE_ID for listing layers"
+    },
+    {
+     "kind": "_StoreTrueAction",
+     "options": [
+      "--no-credentials"
+     ],
+     "dest": "no_credentials",
+     "required": false,
+     "nargs": 0,
+     "default": "False",
+     "type": null,
+     "choices": null,
+     "metavar": null,
+     "help": "Do not use client credentials when fetching capabilities"
+    }
+   ],
+   "subcommands": []
+  }
+ ],
+ "subcommand_dest": "command",
+ "subcommand_required": true
+}

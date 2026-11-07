@@ -11,7 +11,7 @@ np = pytest.importorskip("numpy")  # provided by the system alongside GDAL
 
 def test_dilate_fmask_buffers_cloud_bits(tmp_path: Path) -> None:
     gdal = pytest.importorskip("osgeo.gdal")
-    from planetarble.processing.manager import _dilate_fmask
+    from planetarble.processing.hls_mosaic import _dilate_fmask
 
     # 5x5 Fmask: one cloud pixel (bit 2 = cloud) at center, rest clear
     qa = np.zeros((5, 5), dtype=np.uint16)

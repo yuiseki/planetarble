@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from planetarble.processing.manager import _write_hls_band_lists
+from planetarble.processing.hls_mosaic import _write_hls_band_lists
 
 
 def _scene(item_id: str, cloud, url: str):

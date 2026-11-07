@@ -13,7 +13,7 @@ import pytest
 
 np = pytest.importorskip("numpy")  # provided by the system alongside GDAL
 
-from planetarble.processing.manager import _build_hls_median_rgb, _use_median_strategy
+from planetarble.processing.hls_mosaic import _build_hls_median_rgb, _use_median_strategy
 
 
 def test_use_median_strategy_predicate() -> None:

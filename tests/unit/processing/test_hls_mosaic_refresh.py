@@ -1,4 +1,4 @@
-from planetarble.processing.manager import _refresh_hls_scene_urls
+from planetarble.processing.hls_mosaic import _refresh_hls_scene_urls
 from planetarble.core.models import HLSConfig
 
 
@@ -9,8 +9,8 @@ def test_refresh_hls_scene_urls_strips_query(monkeypatch) -> None:
     def fake_append(url, token):  # type: ignore[no-untyped-def]
         return f"{url}?{token}"
 
-    monkeypatch.setattr("planetarble.processing.manager.fetch_sas_token", fake_token)
-    monkeypatch.setattr("planetarble.processing.manager.append_sas_token", fake_append)
+    monkeypatch.setattr("planetarble.processing.hls_mosaic.fetch_sas_token", fake_token)
+    monkeypatch.setattr("planetarble.processing.hls_mosaic.append_sas_token", fake_append)
 
     scenes = [
         {

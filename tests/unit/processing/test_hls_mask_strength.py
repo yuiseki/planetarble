@@ -14,7 +14,7 @@ np = pytest.importorskip("numpy")  # provided by the system alongside GDAL
 
 from planetarble.core.models import HLSConfig
 from planetarble.processing.composite import dilate_boolean
-from planetarble.processing.manager import _qa_mask_value
+from planetarble.processing.hls_mosaic import _qa_mask_value
 
 
 def test_default_flags_mask_cirrus_and_adjacent_cloud() -> None:

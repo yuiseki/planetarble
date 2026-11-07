@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from planetarble.processing.manager import _translate_hls_rgb
+from planetarble.processing.hls_mosaic import _translate_hls_rgb
 
 
 class _Runner:

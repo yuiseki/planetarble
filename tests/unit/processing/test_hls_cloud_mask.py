@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from planetarble.processing.manager import _mask_band_command, _qa_mask_value
+from planetarble.processing.hls_mosaic import _mask_band_command, _qa_mask_value
 
 
 def test_qa_mask_value_combines_bits() -> None:

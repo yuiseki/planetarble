@@ -159,8 +159,9 @@ class _RangeRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
                 self.send_header("Content-Length", str(end - start + 1))
                 self.end_headers()
-                f.seek(start)
-                self.wfile.write(f.read(end - start + 1))
+                if self.command != "HEAD":
+                    f.seek(start)
+                    self.wfile.write(f.read(end - start + 1))
                 f.close()
                 return None
 
@@ -177,17 +178,31 @@ class _RangeRequestHandler(http.server.SimpleHTTPRequestHandler):
             return None
 
     def _parse_range(self, header: str, size: int) -> tuple[Optional[int], int]:
+        """First byte range of a Range header, or (None, 0) if unsatisfiable.
+
+        Malformed values, reversed ranges and an empty suffix (bytes=-0) are
+        treated as unsatisfiable (416) rather than raising or producing a
+        negative Content-Length. Only the first of several ranges is served.
+        """
         if not header.startswith("bytes="):
             return None, 0
-        range_spec = header.split("=", 1)[1]
-        if "," in range_spec:
-            range_spec = range_spec.split(",", 1)[0]
-        start_str, end_str = range_spec.split("-", 1)
-        if start_str == "":
-            length = int(end_str)
-            start = max(size - length, 0)
-            end = size - 1
-            return start, end
+        range_spec = header.split("=", 1)[1].split(",", 1)[0].strip()
+        start_str, sep, end_str = range_spec.partition("-")
+        if not sep:
+            return None, 0
+        try:
+            if start_str == "":
+                length = int(end_str)
+                if length <= 0:
+                    return None, 0
+                return max(size - length, 0), size - 1
+            start = int(start_str)
+            end = int(end_str) if end_str else size - 1
+        except ValueError:
+            return None, 0
+        if start < 0 or start >= size or end < start:
+            return None, 0
+        return start, min(end, size - 1)
         start = int(start_str)
         end = int(end_str) if end_str else size - 1
         if start >= size:

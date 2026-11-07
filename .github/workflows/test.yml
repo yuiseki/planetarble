@@ -16,7 +16,7 @@ concurrency:
 jobs:
   lint:
     name: ruff (pyflakes)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -30,7 +30,7 @@ jobs:
 
   typecheck:
     name: mypy
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -52,7 +52,7 @@ jobs:
     # "Local setup (uv)": ubuntu-24.04 ships python3-gdal 3.8 built against
     # the system numpy 1.26 on Python 3.12.
     name: pytest (system GDAL, Python 3.12)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -83,7 +83,7 @@ jobs:
     # Collection-only hosts have neither GDAL nor numpy; the CLI must still
     # import and the GDAL/numpy tests must skip rather than error.
     name: pytest (no GDAL, Python ${{ matrix.python-version }})
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     strategy:
       fail-fast: false

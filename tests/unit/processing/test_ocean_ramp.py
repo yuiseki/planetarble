@@ -11,11 +11,6 @@ from planetarble.core.models import OceanConfig
 from planetarble.processing.ocean import _load_depth_ramp
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="src/planetarble/data/ocean/depth_ramp.json was never committed (it was "
-    "hidden by the data/ rule in .gitignore); restore it from the build host",
-)
 def test_default_packaged_ramp_loads() -> None:
     entries = _load_depth_ramp(OceanConfig().depth_color_ramp)
     assert entries and all("depth" in e and len(e["color"]) >= 3 for e in entries)

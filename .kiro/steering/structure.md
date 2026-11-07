@@ -1,74 +1,52 @@
 # Repository Structure
 
+This describes the repository as it is. Keep it in sync when modules move.
+
 Repository root
-- README.md — project overview, installation, and quickstart pipeline instructions
-- LICENSE — open source license for the reproducibility toolkit
-- pyproject.toml / poetry.lock — Python packaging metadata for the CLI and modules
-- Makefile — shortcuts for linting, testing, and running pipeline stages
-- .gitignore — excludes `data/`, `tmp/`, build artifacts, and virtual environments
-- configs/ — version-controlled configuration templates and schema definitions
-- docs/ — written documentation (architecture, operations, tutorials)
-- examples/ — sample configuration files and minimal scripts for demonstrations
-- scripts/ — thin wrappers for orchestration tasks (e.g., bootstrap, verification)
-- src/ — Python package implementation for the Planetarble pipeline
-- tests/ — automated unit, integration, and performance tests with synthetic fixtures
-- tools/ — helper utilities (e.g., schema validators, profiling helpers)
-- viewer/ — static MapLibre PMTiles viewer assets for offline validation
-- data/ — runtime workspace for downloaded datasets (git-ignored)
-- tmp/ — transient processing workspace, caches, and intermediate artifacts (git-ignored)
+- README.md / README.ja.md — overview, local setup (uv), quickstart, imagery options
+- SOURCE.md / SOURCE.ja.md — the source matrix (resolution and licence per imagery source)
+- AGENTS.md — rules for coding agents working in this repository
+- pyproject.toml / uv.lock — packaging, pinned dependencies, ruff and mypy settings
+- Dockerfile — GDAL + go-pmtiles + mb-util runtime image with the CLI
+- Makefile — regional HLS batch targets (Kanto, Chubu, Kinki)
+- configs/ — pipeline configurations
+- docs/ — architecture decisions (adr/) and operational notes (operations/)
+- src/planetarble/ — the Python package and `planetarble` CLI
+- tests/unit/ — pytest suite (no network; GDAL / numpy tests skip when absent)
+- tools/ — one-off generators (e.g. gen_miniplanets.py)
+- data/, tmp/, output/ — runtime workspaces (git-ignored)
 
 configs/
-- base/ — default YAML/JSON pipeline configurations
-- profiles/ — tuned parameter sets for different resolutions or quality targets
-- schema/ — JSON Schema definitions for validating configuration files
-
-docs/
-- architecture/ — system diagrams, module overviews, data flow descriptions
-- operations/ — deployment guides, air-gap procedures, troubleshooting
-- reference/ — API documentation generated from the source code
-- tutorials/ — step-by-step walkthroughs for running the pipeline end-to-end
-
-examples/
-- pipelines/ — example end-to-end scripts chaining modules together
-- notebooks/ — optional Jupyter notebooks using synthetic data for experimentation
-
-scripts/
-- bootstrap_env.py — environment checks for GDAL, PMTiles CLI, and dependencies
-- run_pipeline.py — convenience entry point executing the full workflow
-- verify_output.py — automated checksumming and pmtiles verification helpers
+- base/pipeline.yaml — default pipeline configuration
+- base/assets.yaml — asset catalog (download sources and checksums)
+- profiles/ — ready-made recipes (global BMNG z8, regional HLS z11, Sentinel-2 z14)
+- overlays/ — AOI overlay specs for `planetarble build` / `prefetch` (ADR 0001)
 
 src/planetarble/
-- __init__.py — package exports
-- config/ — configuration loading, validation, and defaults
-- logging/ — structured logging setup shared across modules
-- acquisition/ — asset catalog, manifests, and data downloaders
-- processing/ — raster normalization, hillshade, mask generation, COG utilities
-- tiling/ — reprojection, tile pyramid generation, MBTiles creation, optimization
-- packaging/ — PMTiles conversion, metadata management, distribution packaging
-- deployment/ — CLI wrappers for `pmtiles serve` and viewer preparation
-- cli/ — argparse/Typer-based command-line interface definitions
-- orchestrator/ — pipeline coordination, checkpointing, and resume logic
-- qa/ — quality assurance checks, benchmarks, and license compliance validators
-- utils/ — shared helpers (e.g., path management, checksum utilities)
+- __init__.py — lazy exports of the main managers and config types
+- config/loader.py — YAML/JSON loading into dataclasses; rejects unknown keys and wrong scalar types
+- core/models.py — config and metadata dataclasses shared by every module
+- logging/ — structured logging (`configure_logging`, `log_step`, `log_skip`)
+- acquisition/ — downloads and planning: asset catalog and manifest, BMNG/GEBCO/Natural Earth, HLS planning and STAC search (hls.py), Sentinel-2 (sentinel_2.py), Microsoft Planetary Computer (mpc.py), Copernicus WMS, GSI tiles and mokuroku, OpenAerialMap, miniplanets
+- processing/ — raster processing behind `planetarble process`
+  - manager.py — `ProcessingManager`, the orchestrator for every tile source
+  - runner.py — `CommandRunner` (all external GDAL commands go through it)
+  - assets.py — HLS / Sentinel-2 asset download, cache and validity checks
+  - hls_mosaic.py, sentinel2_mosaic.py — per-source mosaic building
+  - copernicus.py, geometry.py, composite.py, ocean.py, hls.py (scene manifests)
+- tiling/ — MBTiles / PMTiles generation and MBTiles utilities (merge, union, stitch, overzoom compositing)
+- packaging/ — PMTiles conversion, TileJSON and distribution bundle
+- overlay/ — AOI overlay pipeline (spec parsing, source adapters, orchestrator, executor)
+- prefetch.py — throttle-aware asset prefetch for overlays
+- cli/ — the `planetarble` command (ADR 0002)
+  - main.py — `build_parser()` and `main()`; dispatch via `set_defaults(handler=...)`
+  - acquire.py, process.py, tile.py, package.py — the four pipeline stages
+  - tiling.py, overlay.py, gsi.py, sources.py, serve.py — the other subcommands
+  - checks.py — path resolution and artefact validation shared by the commands
+- viewer/index.html — MapLibre + pmtiles.js viewer used by `planetarble serve`
+- data/ — packaged data (ocean depth ramps)
 
-tests/
-- unit/ — fine-grained tests with mocked data sources
-- integration/ — end-to-end flows using synthetic fixtures stored under `tests/fixtures`
-- performance/ — benchmarks for critical processing segments
-- fixtures/ — synthetic raster/tile assets small enough for version control
-
-viewer/
-- index.html — standalone MapLibre + pmtiles.js viewer
-- assets/ — CSS, JavaScript bundles, and attribution templates
-- examples/ — sample HTML configurations referencing generated PMTiles
-
-tools/
-- schemas/ — validation tools for manifests and metadata
-- profiling/ — scripts for memory/time profiling of processing steps
-- dev/ — developer productivity aids (pre-commit hooks, lint configurations)
-
-Supporting files
-- .pre-commit-config.yaml — linting/formatting automation
-- noxfile.py or tox.ini — test automation entry points
-- CONTRIBUTING.md — guidelines for collaborators
-- CHANGELOG.md — tracked release notes for reproducibility updates
+tests/unit/
+- mirrors the package layout (acquisition/, cli/, config/, overlay/, processing/, tiling/)
+- cli/golden/parser.json — pinned CLI interface; processing/golden/ — pinned GDAL command lines
+- regenerate goldens with `PLANETARBLE_UPDATE_GOLDEN=1` only for an intended change, and review the diff

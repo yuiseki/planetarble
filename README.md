@@ -82,6 +82,20 @@ Hosts that only collect GSI tiles need neither GDAL nor numpy; plain `uv sync` i
 
 If a conda environment is active, its `GDAL_DATA`, `GDAL_DRIVER_PATH`, and `PROJ_DATA` point the system GDAL at conda's plugins and data, and GDAL-backed tests fail. Deactivate conda first, or unset them: `env -u GDAL_DATA -u GDAL_DRIVER_PATH -u PROJ_DATA uv run pytest`.
 
+### Development checks
+
+CI runs these on every push and pull request:
+
+```bash
+uv run ruff check   # pyflakes, pycodestyle, import order, bugbear
+uv run mypy         # gradual type checking of src/
+uv run pytest
+```
+
+Two sets of golden files pin behaviour that refactoring must not change: `tests/unit/cli/golden/parser.json` (every CLI option, default and help text) and `tests/unit/processing/golden/` (the GDAL command lines `ProcessingManager` builds). When a change to either is intended, regenerate them with `PLANETARBLE_UPDATE_GOLDEN=1 uv run pytest` and review the diff.
+
+Configuration files are validated on load: an unknown section or key, or a value of the wrong type (for example `max_zoom: twelve`), stops with an error that names it.
+
 ## Quickstart
 
 ```bash

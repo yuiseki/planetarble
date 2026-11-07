@@ -28,6 +28,20 @@ uv run planetarble --help
 
 conda の環境が有効になっていると、`GDAL_DATA`、`GDAL_DRIVER_PATH`、`PROJ_DATA` がシステムの GDAL に conda のプラグインとデータを読ませてしまい、GDAL を使うテストが失敗します。先に conda を無効にするか、`env -u GDAL_DATA -u GDAL_DRIVER_PATH -u PROJ_DATA uv run pytest` のように外してください。
 
+### 開発時の検査
+
+CI は push と pull request のたびに次を実行します。
+
+```bash
+uv run ruff check   # pyflakes、pycodestyle、import の並び、bugbear
+uv run mypy         # src/ の段階的な型検査
+uv run pytest
+```
+
+リファクタリングで変えてはいけない振る舞いを、2 組の golden ファイルで固定しています。`tests/unit/cli/golden/parser.json` は CLI のすべてのオプションと既定値と help の文面、`tests/unit/processing/golden/` は `ProcessingManager` が組み立てる GDAL のコマンド列です。意図して変えるときは `PLANETARBLE_UPDATE_GOLDEN=1 uv run pytest` で作り直し、差分を確かめてください。
+
+設定ファイルは読み込むときに検査します。知らないセクションやキー、型の違う値 (たとえば `max_zoom: twelve`) があると、その名前を示して止まります。
+
 ## クイックスタート
 
 ```bash

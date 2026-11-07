@@ -90,8 +90,15 @@ class OceanRenderer:
 def _load_depth_ramp(spec: str) -> List[Dict[str, Any]]:
     if spec.startswith("planetarble:"):
         relative = spec.split(":", 1)[1]
-        package_path = resources.files("planetarble.data").joinpath(relative)
-        with package_path.open("r", encoding="utf-8") as handle:
+        try:
+            package_path = resources.files("planetarble.data").joinpath(relative)
+            handle = package_path.open("r", encoding="utf-8")
+        except (ModuleNotFoundError, FileNotFoundError) as exc:
+            raise FileNotFoundError(
+                f"packaged depth color ramp {spec!r} is missing from planetarble.data; "
+                "point ocean.depth_color_ramp at a JSON file path instead"
+            ) from exc
+        with handle:
             data = json.load(handle)
     else:
         with Path(spec).expanduser().resolve().open("r", encoding="utf-8") as handle:

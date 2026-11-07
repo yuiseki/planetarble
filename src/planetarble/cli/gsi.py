@@ -171,6 +171,7 @@ def register_gsi_fetch(subcommands: argparse._SubParsersAction) -> None:
         "gsi-fetch",
         help="Download a GSI high-resolution orthophoto clip via the XYZ tile service",
     )
+    gsi_fetch.set_defaults(handler=_handle_gsi_fetch)
     gsi_fetch.add_argument("--lat", type=float, required=True, help="Latitude of the target point")
     gsi_fetch.add_argument("--lon", type=float, required=True, help="Longitude of the target point")
     gsi_fetch.add_argument(
@@ -229,6 +230,7 @@ def register_gsi_collect(subcommands: argparse._SubParsersAction) -> None:
         "gsi-collect",
         help="Collect a GSI XYZ layer (e.g. seamlessphoto) nationwide into a zxy dir, mokuroku-driven",
     )
+    gsi_collect.set_defaults(handler=_handle_gsi_collect)
     gsi_collect.add_argument("--layer", default="seamlessphoto", help="GSI layer id (default: seamlessphoto)")
     gsi_collect.add_argument("--zoom-min", type=int, default=8)
     gsi_collect.add_argument("--zoom-max", type=int, default=16)
@@ -250,6 +252,7 @@ def register_gsi_pack(subcommands: argparse._SubParsersAction) -> None:
         "gsi-pack",
         help="Pack a z/x/y tile directory into an MBTiles archive (create or append; faster than mb-util)",
     )
+    gsi_pack.set_defaults(handler=_handle_gsi_pack)
     gsi_pack.add_argument("--tiles", type=Path, required=True, help="Source z/x/y tile directory")
     gsi_pack.add_argument("--out", type=Path, required=True, help="Destination MBTiles (created or appended)")
     gsi_pack.add_argument("--format", default="jpg", help="Tile image format stored in metadata (default: jpg)")

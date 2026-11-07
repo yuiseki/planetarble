@@ -136,6 +136,7 @@ def _handle_package(args: argparse.Namespace) -> int:
 
 def register_package(subcommands: argparse._SubParsersAction) -> None:
     package = subcommands.add_parser("package", help="Create PMTiles distribution")
+    package.set_defaults(handler=_handle_package)
     package.add_argument(
         "--config",
         type=Path,

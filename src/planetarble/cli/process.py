@@ -293,6 +293,7 @@ def _handle_process(args: argparse.Namespace) -> int:
 
 def register_process(subcommands: argparse._SubParsersAction) -> None:
     process = subcommands.add_parser("process", help="Run raster preprocessing pipeline")
+    process.set_defaults(handler=_handle_process)
     process.add_argument(
         "--config",
         type=Path,

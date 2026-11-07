@@ -71,6 +71,7 @@ def register_mpc_fetch(subcommands: argparse._SubParsersAction) -> None:
         "mpc-fetch",
         help="Download a Sentinel-2 true color clip via Microsoft Planetary Computer",
     )
+    mpc_fetch.set_defaults(handler=_handle_mpc_fetch)
     mpc_fetch.add_argument("--lat", type=float, required=True, help="Latitude of the target point")
     mpc_fetch.add_argument("--lon", type=float, required=True, help="Longitude of the target point")
     mpc_fetch.add_argument(
@@ -126,6 +127,7 @@ def register_copernicus_layers(subcommands: argparse._SubParsersAction) -> None:
         "copernicus-layers",
         help="List available Copernicus WMS layers for the configured instance",
     )
+    copernicus_layers.set_defaults(handler=_handle_copernicus_layers)
     copernicus_layers.add_argument(
         "--instance-id",
         default=None,

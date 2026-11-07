@@ -130,6 +130,7 @@ def register_build(subcommands: argparse._SubParsersAction) -> None:
         "build",
         help="Build a custom planet from an AOI overlay spec (ADR 0001)",
     )
+    build.set_defaults(handler=_handle_build)
     build.add_argument("--spec", type=Path, required=True, help="AOI overlay pipeline spec (YAML)")
     build.add_argument("--config", type=Path, default=None, help="Base pipeline config (defaults to configs/base/pipeline.yaml)")
     build.add_argument("--base-mbtiles", type=Path, required=True, help="Prebuilt global base MBTiles (the floor)")
@@ -143,6 +144,7 @@ def register_prefetch(subcommands: argparse._SubParsersAction) -> None:
         "prefetch",
         help="Download-only: warm the Sentinel-2 asset cache for a spec's AOIs (no tiling)",
     )
+    prefetch.set_defaults(handler=_handle_prefetch)
     prefetch.add_argument("--spec", type=Path, required=True, help="AOI overlay pipeline spec (YAML)")
     prefetch.add_argument("--config", type=Path, default=None, help="Base pipeline config (defaults to configs/base/pipeline.yaml)")
     prefetch.add_argument("--work-dir", type=Path, default=None, help="Scratch dir (default: output/build)")
@@ -161,6 +163,7 @@ def register_split_plan(subcommands: argparse._SubParsersAction) -> None:
         "split-plan",
         help="Split a global HLS plan into one ndjson shard per miniplanet",
     )
+    split_plan.set_defaults(handler=_handle_split_plan)
     split_plan.add_argument(
         "--config",
         type=Path,

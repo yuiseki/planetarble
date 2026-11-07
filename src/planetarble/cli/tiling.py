@@ -173,6 +173,7 @@ def register_tiling(subcommands: argparse._SubParsersAction) -> None:
         "pmtiles",
         help="Convert a raster into PMTiles via XYZ and MBTiles",
     )
+    tiling_pmtiles.set_defaults(handler=_handle_tiling_pmtiles)
     tiling_pmtiles.add_argument("--input", type=Path, required=True, help="Source raster path")
     tiling_pmtiles.add_argument(
         "--out",
@@ -247,6 +248,7 @@ def register_tiling(subcommands: argparse._SubParsersAction) -> None:
         "merge-mbtiles",
         help="Overlay tiles from one MBTiles archive onto another",
     )
+    tiling_merge.set_defaults(handler=_handle_merge_mbtiles)
     tiling_merge.add_argument("--base", type=Path, required=True, help="Base MBTiles archive")
     tiling_merge.add_argument("--overlay", type=Path, required=True, help="Overlay MBTiles archive")
     tiling_merge.add_argument("--out", type=Path, required=True, help="Output MBTiles archive")
@@ -255,6 +257,7 @@ def register_tiling(subcommands: argparse._SubParsersAction) -> None:
         "union-mbtiles",
         help="Union several MBTiles into one in a single pass (for disjoint Quadrans pieces)",
     )
+    tiling_union.set_defaults(handler=_handle_union_mbtiles)
     tiling_union.add_argument("--inputs", type=Path, nargs="+", required=True,
                               help="Input MBTiles archives (pass the LARGEST first — it becomes the copy base)")
     tiling_union.add_argument("--out", type=Path, required=True, help="Output MBTiles archive")
@@ -265,6 +268,7 @@ def register_tiling(subcommands: argparse._SubParsersAction) -> None:
         "stitch-512",
         help="Build a 512px pyramid from a 256px source (output zoom z <- source zoom z+1)",
     )
+    tiling_stitch.set_defaults(handler=_handle_stitch_512)
     tiling_stitch.add_argument("--source", type=Path, required=True, help="256px source MBTiles")
     tiling_stitch.add_argument("--out", type=Path, required=True, help="Output 512px MBTiles")
     tiling_stitch.add_argument("--format", default="jpg", help="Output tile format (default jpg)")

@@ -153,6 +153,7 @@ def _handle_acquire(args: argparse.Namespace) -> int:
 
 def register_acquire(subcommands: argparse._SubParsersAction) -> None:
     acquire = subcommands.add_parser("acquire", help="Download source datasets and emit manifest")
+    acquire.set_defaults(handler=_handle_acquire)
     acquire.add_argument(
         "--config",
         type=Path,

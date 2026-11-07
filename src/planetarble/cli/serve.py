@@ -194,6 +194,7 @@ class _RangeRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 def register_serve(subcommands: argparse._SubParsersAction) -> None:
     serve = subcommands.add_parser("serve", help="Serve PMTiles with a simple web viewer")
+    serve.set_defaults(handler=_handle_serve)
     serve.add_argument("--pmtiles", type=Path, default=None, help="Path to the PMTiles archive")
     serve.add_argument("--region", type=str, default=None, help="Region name to resolve PMTiles from distribution")
     serve.add_argument(

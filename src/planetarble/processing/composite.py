@@ -8,7 +8,7 @@ fills small gaps left by masking, as long as at least one scene saw the ground.
 
 This module is deliberately free of GDAL so the statistics can be unit tested
 directly; the GDAL wiring that warps scenes onto a common grid and streams
-blocks through here lives in ``planetarble.processing.manager``.
+blocks through here lives in ``planetarble.processing.hls_mosaic``.
 """
 
 from __future__ import annotations

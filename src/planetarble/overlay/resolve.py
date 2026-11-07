@@ -5,7 +5,7 @@ turn a declarative AOI (bbox / natural_earth / miniplanet / geojson, with
 optional buffer_km and land_only) into something a planner can clip tiles
 against. Pure selectors (bbox, miniplanet) with an optional buffer need no GDAL;
 natural_earth, geojson, and land_only resolve through the existing GDAL helpers
-in ``planetarble.acquisition.hls`` and ``planetarble.processing.manager``.
+in ``planetarble.acquisition.hls`` and ``planetarble.processing.geometry``.
 """
 
 from __future__ import annotations

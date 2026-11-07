@@ -1,14 +1,14 @@
 # ADR 0002: Split processing/manager.py and cli/main.py into modules
 
-- Status: Accepted (in progress)
+- Status: Accepted (implemented)
 - Date: 2026-11-07
 - Deciders: yuiseki
 
 ## Implementation status
 
-- Phase 1, processing: not started
-- Phase 2, cli: not started
-- Phase 3, cli dispatch via `set_defaults(handler=...)`: not started
+- Phase 1, processing (done): `processing/manager.py` went from 2,326 to 970 lines and now holds only `ProcessingManager`. Moved in this order: runner and geometry, copernicus, assets, hls_mosaic, sentinel2_mosaic. `assets` moved before the two mosaic modules because both use `_strip_query`, and Sentinel-2 also uses `_scene_cloud_cover` from `hls_mosaic`. Golden command files were unchanged at every step, and a real-GDAL smoke (BMNG compose, normalize, COG, hash reuse) passed.
+- Phase 2, cli (done): `cli/main.py` went from 2,068 to about 100 lines. Each command module defines `register_<command>(subcommands)`, called from `build_parser` in the original order, so `--help` lists subcommands as before. `tests/unit/cli/golden/parser.json` pins the parser structure, and a test checks that only `build_parser` calls `register_*`.
+- Phase 3 (done): `main()` dispatches with `args.handler(args)`; each subcommand binds its handler with `set_defaults(handler=...)`.
 
 ## Context
 
@@ -51,7 +51,7 @@ Module-level helpers move out of `processing/manager.py`; the class stays as the
 
 `overlay/resolve.py` currently imports the private `_bbox_from_geometry` and `_clip_land_to_region` from `processing.manager`. They become public names in `processing/geometry.py`.
 
-Order: runner and geometry, then copernicus, sentinel2_mosaic, hls_mosaic, assets (fewest dependants first).
+Order: runner and geometry, then copernicus, assets, hls_mosaic, sentinel2_mosaic (dependencies first).
 
 ### cli
 

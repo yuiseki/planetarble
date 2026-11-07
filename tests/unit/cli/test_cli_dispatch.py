@@ -1,5 +1,6 @@
 """Characterise the CLI surface: every subcommand parses, has --help, and
-main() routes it to the expected handler.
+main() routes it to the expected handler (bound with set_defaults(handler=...)
+by each command module's register_* function).
 
 This pins the command -> handler mapping so that splitting cli/main.py into
 modules cannot silently drop or misroute a subcommand.
@@ -105,12 +106,19 @@ def test_main_routes_to_handler(
     path: tuple[str, ...],
     handler: str,
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    patch_cli,
 ) -> None:
     calls: list[tuple[str, argparse.Namespace]] = []
     for _, name in ROUTES:
-        monkeypatch.setattr(cli, name, lambda args, _name=name: calls.append((_name, args)) or 7)
-    monkeypatch.setattr(cli, "_load_env", lambda: None)
+        patch_cli(name, lambda args, _name=name: calls.append((_name, args)) or 7)
+    patch_cli("_load_env", lambda: None)
 
     assert cli.main(_minimal_argv(path, tmp_path)) == 7
     assert [name for name, _ in calls] == [handler]
+
+
+@pytest.mark.parametrize(("path", "handler"), ROUTES, ids=[" ".join(p) for p, _ in ROUTES])
+def test_parsed_args_carry_their_handler(path: tuple[str, ...], handler: str, tmp_path: Path) -> None:
+    args = cli.build_parser().parse_args(_minimal_argv(path, tmp_path))
+    assert args.handler.__name__ == handler
+    assert args.handler.__module__.startswith("planetarble.cli.")

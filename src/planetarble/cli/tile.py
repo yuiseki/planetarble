@@ -126,6 +126,7 @@ def _handle_tile(args: argparse.Namespace) -> int:
 
 def register_tile(subcommands: argparse._SubParsersAction) -> None:
     tile = subcommands.add_parser("tile", help="Generate MBTiles output")
+    tile.set_defaults(handler=_handle_tile)
     tile.add_argument(
         "--config",
         type=Path,

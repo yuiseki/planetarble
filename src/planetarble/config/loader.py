@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
+import types
+import typing
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, Optional, TypeVar, cast
 
 from planetarble.core.models import (
     BBox,
@@ -39,6 +42,55 @@ def _normalize_miniplanet(value: Any) -> Optional[str]:
     if text.isdigit():
         return text.zfill(2)
     return text
+
+
+T = TypeVar("T")
+
+_SECTIONS = ("processing", "modis", "viirs", "copernicus", "sentinel2", "hls", "ocean", "gsi_orthophotos")
+_TOP_LEVEL_KEYS = frozenset({"data_dir", "temp_dir", "output_dir", *_SECTIONS})
+_SCALARS = (bool, int, float, str)
+
+
+def _make(cls: type[T], section: str, data: Dict[str, Any]) -> T:
+    """Build a config dataclass, naming the section if a key is unknown."""
+    valid = {f.name for f in dataclasses.fields(cls)}  # type: ignore[arg-type]
+    unknown = sorted(set(data) - valid)
+    if unknown:
+        raise ValueError(
+            f"{section}: unknown key(s): {', '.join(unknown)} (valid keys: {', '.join(sorted(valid))})"
+        )
+    return cls(**data)
+
+
+def _scalar_type(hint: Any) -> Optional[type]:
+    """bool / int / float / str for plain or Optional scalar annotations, else None."""
+    if hint in _SCALARS:
+        return hint
+    args = typing.get_args(hint)
+    if typing.get_origin(hint) in (typing.Union, types.UnionType) and len(args) == 2 and type(None) in args:
+        inner = next(a for a in args if a is not type(None))
+        return inner if inner in _SCALARS else None
+    return None
+
+
+def _check_scalar_types(section: str, obj: Any) -> None:
+    """Reject wrong-typed scalar values that YAML let through (e.g. max_zoom: twelve)."""
+    hints = typing.get_type_hints(type(obj))
+    for spec in dataclasses.fields(obj):
+        expected = _scalar_type(hints.get(spec.name))
+        value = getattr(obj, spec.name)
+        if expected is None or value is None:
+            continue
+        if expected is float:
+            ok = isinstance(value, (int, float)) and not isinstance(value, bool)
+        elif expected is int:
+            ok = isinstance(value, int) and not isinstance(value, bool)
+        else:
+            ok = isinstance(value, expected)
+        if not ok:
+            raise ValueError(
+                f"{section}.{spec.name} must be {expected.__name__}, got {value!r}"
+            )
 
 
 @dataclass
@@ -103,13 +155,19 @@ class ConfigLoader:
         raise ValueError(f"Unsupported configuration format: {suffix}")
 
     def _build_config(self, payload: Dict[str, Any]) -> PipelineConfig:
+        unknown = sorted(set(payload) - _TOP_LEVEL_KEYS)
+        if unknown:
+            raise ValueError(
+                f"unknown top-level key(s): {', '.join(unknown)} "
+                f"(valid keys: {', '.join(sorted(_TOP_LEVEL_KEYS))})"
+            )
         data_dir = Path(payload.get("data_dir", "data"))
         temp_dir = Path(payload.get("temp_dir", "tmp"))
         output_dir = Path(payload.get("output_dir", "output"))
         processing_payload = payload.get("processing") or {}
         if not isinstance(processing_payload, dict):
             raise ValueError("processing section must be a mapping")
-        processing = ProcessingConfig(**processing_payload)
+        processing = _make(ProcessingConfig, "processing", processing_payload)
 
         modis_payload = payload.get("modis") or {}
         if not isinstance(modis_payload, dict):
@@ -120,7 +178,7 @@ class ConfigLoader:
         for key in ("scale_min", "scale_max", "gamma"):
             if key in modis_data and modis_data[key] is not None:
                 modis_data[key] = float(modis_data[key])
-        modis = ModisConfig(**modis_data)
+        modis = _make(ModisConfig, "modis", modis_data)
 
         viirs_payload = payload.get("viirs") or {}
         if not isinstance(viirs_payload, dict):
@@ -131,7 +189,7 @@ class ConfigLoader:
         for key in ("scale_min", "scale_max", "gamma"):
             if key in viirs_data and viirs_data[key] is not None:
                 viirs_data[key] = float(viirs_data[key])
-        viirs = ViirsConfig(**viirs_data)
+        viirs = _make(ViirsConfig, "viirs", viirs_data)
 
         copernicus_payload = payload.get("copernicus", {})
         copernicus_data = dict(copernicus_payload)
@@ -139,7 +197,7 @@ class ConfigLoader:
         layer_configs = []
         for layer in layers_payload:
             if isinstance(layer, dict):
-                layer_configs.append(CopernicusLayerConfig(**layer))
+                layer_configs.append(_make(CopernicusLayerConfig, "copernicus.layers", layer))
             else:  # pragma: no cover - configuration guard
                 raise ValueError("copernicus.layers entries must be mappings")
         copernicus_data["layers"] = tuple(layer_configs)
@@ -167,7 +225,7 @@ class ConfigLoader:
             copernicus_data["rate_limit_min_interval_seconds"] = float(
                 copernicus_data["rate_limit_min_interval_seconds"]
             )
-        copernicus = CopernicusConfig(**copernicus_data)
+        copernicus = _make(CopernicusConfig, "copernicus", copernicus_data)
 
         sentinel2_payload = payload.get("sentinel2") or {}
         if not isinstance(sentinel2_payload, dict):
@@ -220,7 +278,7 @@ class ConfigLoader:
             )
         if region_configs:
             sentinel2_data["plan_regions"] = tuple(region_configs)
-        sentinel2 = Sentinel2Config(**sentinel2_data)
+        sentinel2 = _make(Sentinel2Config, "sentinel2", sentinel2_data)
 
         hls_payload = payload.get("hls") or {}
         if not isinstance(hls_payload, dict):
@@ -284,7 +342,7 @@ class ConfigLoader:
             )
         if region_configs:
             hls_data["plan_regions"] = tuple(region_configs)
-        hls = HLSConfig(**hls_data)
+        hls = _make(HLSConfig, "hls", hls_data)
 
         ocean_payload = payload.get("ocean") or {}
         if not isinstance(ocean_payload, dict):
@@ -293,7 +351,7 @@ class ConfigLoader:
         for key in ("hillshade_azimuth", "hillshade_altitude", "hillshade_strength", "viirs_blend_percent", "viirs_max_fraction"):
             if key in ocean_data and ocean_data[key] is not None:
                 ocean_data[key] = float(ocean_data[key])
-        ocean = OceanConfig(**ocean_data)
+        ocean = _make(OceanConfig, "ocean", ocean_data)
 
         gsi_payload = payload.get("gsi_orthophotos", {}) or {}
         gsi_data = dict(gsi_payload)
@@ -309,7 +367,18 @@ class ConfigLoader:
             gsi_data["zoom"] = int(gsi_data["zoom"])
         if "timeout_seconds" in gsi_data and gsi_data["timeout_seconds"] is not None:
             gsi_data["timeout_seconds"] = int(gsi_data["timeout_seconds"])
-        gsi_orthophotos = GSIOrthophotoConfig(**gsi_data)
+        gsi_orthophotos = _make(GSIOrthophotoConfig, "gsi_orthophotos", gsi_data)
+        for section, obj in (
+            ("processing", processing),
+            ("modis", modis),
+            ("viirs", viirs),
+            ("copernicus", copernicus),
+            ("sentinel2", sentinel2),
+            ("hls", hls),
+            ("ocean", ocean),
+            ("gsi_orthophotos", gsi_orthophotos),
+        ):
+            _check_scalar_types(section, obj)
         return PipelineConfig(
             data_dir=data_dir,
             temp_dir=temp_dir,

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from planetarble.logging import get_logger, log_step
 from typing import List, Sequence
+
+from planetarble.logging import get_logger, log_step
 
 LOGGER = get_logger(__name__)
 

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING, Dict, List, Optional, Sequence
+
 from planetarble.acquisition.mpc import append_sas_token, fetch_sas_token
 from planetarble.core.models import HLSConfig
-from typing import Dict, List, Optional, Sequence, TYPE_CHECKING
+
 from .assets import _strip_query
 from .geometry import write_geometry_geojson
 from .runner import CommandRunner

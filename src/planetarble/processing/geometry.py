@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple
 
 if TYPE_CHECKING:  # GDAL is optional at runtime; imported lazily where used
     from osgeo import ogr
@@ -38,8 +38,10 @@ def clip_land_to_region(
 
 def write_geometry_geojson(geometry: "ogr.Geometry", path: Path) -> None:
     try:
-        from osgeo import ogr  # type: ignore
-        from osgeo import osr  # type: ignore
+        from osgeo import (
+            ogr,  # type: ignore
+            osr,  # type: ignore
+        )
     except Exception as exc:  # pragma: no cover - depends on GDAL availability
         raise RuntimeError("GDAL (osgeo.ogr) is required for region clipping") from exc
     driver = ogr.GetDriverByName("GeoJSON")

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import List, Tuple
+
 from planetarble.core.models import CopernicusConfig
 from planetarble.logging import get_logger
-from typing import List, Tuple
 
 LOGGER = get_logger(__name__)
 

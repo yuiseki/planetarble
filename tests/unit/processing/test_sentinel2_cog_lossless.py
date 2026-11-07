@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from planetarble.processing.manager import _translate_sentinel2_rgb
+from planetarble.processing.sentinel2_mosaic import _translate_sentinel2_rgb
 
 
 class _Runner:

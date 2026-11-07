@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Dict, Optional
 
 from planetarble.core.models import Sentinel2Config
-from planetarble.processing.manager import _select_mosaic_scenes
+from planetarble.processing.sentinel2_mosaic import _select_mosaic_scenes
 
 
 def _scene(item_id: str, cloud: Optional[float]) -> Dict[str, object]:

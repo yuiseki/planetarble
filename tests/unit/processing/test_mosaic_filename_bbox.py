@@ -7,7 +7,7 @@ never takes effect.
 
 from __future__ import annotations
 
-from planetarble.processing.manager import _sentinel2_mosaic_filename
+from planetarble.processing.sentinel2_mosaic import _sentinel2_mosaic_filename
 
 
 def test_same_bbox_same_name() -> None:

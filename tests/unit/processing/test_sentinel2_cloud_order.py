@@ -9,10 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from planetarble.processing.manager import (
-    _write_sentinel2_visual_list,
-    _build_sentinel2_visual_vrt,
-)
+from planetarble.processing.sentinel2_mosaic import _write_sentinel2_visual_list, _build_sentinel2_visual_vrt
 
 
 class _Runner:

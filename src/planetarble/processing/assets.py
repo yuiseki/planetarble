@@ -7,11 +7,12 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from typing import Dict, List, Optional, Sequence
+from urllib.request import urlopen
+
 from planetarble.acquisition.mpc import append_sas_token, fetch_sas_token
 from planetarble.core.models import Sentinel2Config
 from planetarble.logging import get_logger, log_progress
-from typing import Dict, List, Optional, Sequence
-from urllib.request import urlopen
 
 LOGGER = get_logger(__name__)
 

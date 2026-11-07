@@ -8,7 +8,9 @@ little to catch the semi-transparent fringe Fmask labels "clear".
 
 from __future__ import annotations
 
-import numpy as np
+import pytest
+
+np = pytest.importorskip("numpy")  # provided by the system alongside GDAL
 
 from planetarble.core.models import HLSConfig
 from planetarble.processing.composite import dilate_boolean

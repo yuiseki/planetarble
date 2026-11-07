@@ -16,8 +16,19 @@ dependencies = [
   "PyYAML>=6.0",
   "requests>=2.32.0",
   "pystac>=1.10.0",
-  "pystac-client>=0.7.8"
+  "pystac-client>=0.7.8",
+  "Pillow>=10.0"
 ]
+# GDAL's Python bindings (osgeo) and numpy are deliberately not listed.
+# osgeo must match the system libgdal, and its gdal_array module is compiled
+# against the system numpy, so a newer numpy installed into the venv would
+# shadow it and break gdal_array. Create the venv with
+# `uv venv --python /usr/bin/python3 --system-site-packages` so both come from
+# the OS packages (python3-gdal pulls in python3-numpy). Collection-only hosts
+# need neither.
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
 
 [project.scripts]
 planetarble = "planetarble.cli.main:main"

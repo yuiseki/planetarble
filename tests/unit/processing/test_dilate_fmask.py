@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import pytest
+
+np = pytest.importorskip("numpy")  # provided by the system alongside GDAL
 
 
 def test_dilate_fmask_buffers_cloud_bits(tmp_path: Path) -> None:

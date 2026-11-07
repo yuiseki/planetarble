@@ -12,13 +12,29 @@ Planetarble は、完全にオープンな地球規模のラスター地図タ�
 
 アポロ 17 号が撮影した「The Blue Marble」の写真は、地球が青と白の繊細な渦を持つ美しい惑星であることを世界に示しました。Planetarble はその精神を受け継ぎ、NASA の Blue Marble Next Generation 画像を活用し、完全にオープンなデータから構築された地球全体のビューを提供します。
 
+## ローカル環境の構築（uv）
+
+Python の依存は [uv](https://docs.astral.sh/uv/) で管理し、`uv.lock` で版を固定しています。ただし GDAL の Python バインディング（`osgeo`）と numpy は OS のパッケージから使います。バインディングはシステムの libgdal と版をそろえる必要があり、`gdal_array` はシステムの numpy に合わせてビルドされているためです。venv はシステムの Python で、system site-packages が見える状態で作ります。
+
+```bash
+sudo apt install gdal-bin python3-gdal   # GDAL の CLI とバインディング（python3-numpy も入る）
+uv venv --python /usr/bin/python3 --system-site-packages
+uv sync                                  # プロジェクトの依存と dev グループ（pytest）
+uv run pytest
+uv run planetarble --help
+```
+
+地理院タイルの収集だけをするホストでは GDAL も numpy も不要で、`uv sync` だけで動きます（`docs/operations/collection-node.md` を参照）。その場合 GDAL と numpy を使うテストはスキップされます。
+
+conda の環境が有効になっていると、`GDAL_DATA`、`GDAL_DRIVER_PATH`、`PROJ_DATA` がシステムの GDAL に conda のプラグインとデータを読ませてしまい、GDAL を使うテストが失敗します。先に conda を無効にするか、`env -u GDAL_DATA -u GDAL_DRIVER_PATH -u PROJ_DATA uv run pytest` のように外してください。
+
 ## クイックスタート
 
 ```bash
-# 編集可能モードでのインストール（Python 3.10 以上が必要）
-pip install -e .
+# 「ローカル環境の構築（uv）」の手順で venv を作ってから有効にする
+source .venv/bin/activate
 
-# グローバルインストールができない場合のフォールバック（リポジトリを直接利用）
+# venv を使わない場合のフォールバック（リポジトリを直接利用）
 PYTHONPATH=src python -m planetarble.cli.main --help
 
 # ソースデータセットをダウンロードし、出力ディレクトリに MANIFEST.json を生成

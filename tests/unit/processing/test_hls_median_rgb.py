@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import pytest
+
+np = pytest.importorskip("numpy")  # provided by the system alongside GDAL
 
 from planetarble.processing.manager import _build_hls_median_rgb, _use_median_strategy
 

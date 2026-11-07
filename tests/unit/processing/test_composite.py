@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-import numpy as np
+import pytest
+
+np = pytest.importorskip("numpy")  # provided by the system alongside GDAL
 
 from planetarble.processing.composite import median_composite
 

@@ -66,13 +66,29 @@ docker run --rm -v "$PWD/workspace:/workspace" planetarble acquire --config /opt
 
 Mount a host directory at `/workspace` to keep downloaded data and generated tiles between runs.
 
+## Local setup (uv)
+
+Python dependencies are managed with [uv](https://docs.astral.sh/uv/) and pinned in `uv.lock`. GDAL's Python bindings (`osgeo`) and numpy come from the OS packages instead, because the bindings must match the system libgdal and `gdal_array` is compiled against the system numpy. Create the venv on the system Python with access to system site-packages:
+
+```bash
+sudo apt install gdal-bin python3-gdal   # GDAL CLI + bindings (pulls in python3-numpy)
+uv venv --python /usr/bin/python3 --system-site-packages
+uv sync                                  # project deps + dev group (pytest)
+uv run pytest
+uv run planetarble --help
+```
+
+Hosts that only collect GSI tiles need neither GDAL nor numpy; plain `uv sync` is enough (see `docs/operations/collection-node.md`), and the GDAL/numpy tests are skipped there.
+
+If a conda environment is active, its `GDAL_DATA`, `GDAL_DRIVER_PATH`, and `PROJ_DATA` point the system GDAL at conda's plugins and data, and GDAL-backed tests fail. Deactivate conda first, or unset them: `env -u GDAL_DATA -u GDAL_DRIVER_PATH -u PROJ_DATA uv run pytest`.
+
 ## Quickstart
 
 ```bash
-# Install in editable mode (requires Python 3.10+)
-pip install -e .
+# Set up the venv as described in "Local setup (uv)", then activate it
+source .venv/bin/activate
 
-# Fallback when a global install is not possible (relies on current repo checkout)
+# Fallback without the venv (relies on current repo checkout)
 PYTHONPATH=src python -m planetarble.cli.main --help
 
 # Generate the HLS land plan (writes data/plans/hls_z10_plan.ndjson)

@@ -18,8 +18,7 @@ cannot be merged, so we keep everything in **MBTiles** until the final convert.
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 git clone https://github.com/yuiseki/planetarble && cd planetarble
-uv venv --python 3.13
-uv pip install -e .          # installs deps from pyproject (pinned in uv.lock)
+uv sync --python 3.13        # creates .venv and installs the versions pinned in uv.lock
 
 uv run planetarble gsi-collect --help   # sanity check
 ```

@@ -29,6 +29,7 @@ Ground resolution at the equator for 256 px tiles is `156543.03 / 2^z` m/px. For
 | global | [VIIRS VNP09GA](global/viirs.md) | `viirs` | 500 m / 1 km | z8 | NASA open |
 | worldwide (scattered) | [OpenAerialMap](global/openaerialmap.md) | `openaerialmap` | varies, sub-metre | z22 (per item) | CC BY 4.0 |
 | Japan | [GSI orthophotos](japan/gsi-orthophotos.md) | `gsi_orthophotos` | 0.2 to 0.4 m | z18 | PDL 1.0 (CC BY compatible) |
+| United States | [NAIP](united-states/naip.md) | `naip` | 0.3 to 1 m | z18 | public domain |
 
 ## Elevation, bathymetry and vectors
 
@@ -43,7 +44,7 @@ Ground resolution at the equator for 256 px tiles is `156543.03 / 2^z` m/px. For
 | Dataset | Why not |
 |---|---|
 | Maxar Open Data (disaster imagery) | CC BY-NC 4.0: no commercial redistribution |
-| NAIP on AWS (`s3://naip-*`) | requester pays; the same imagery is free on Microsoft Planetary Computer |
+| NAIP on AWS (`s3://naip-*`) | requester pays; planetarble reads the free Planetary Computer copy (`naip`) instead |
 | JAXA ALOS AVNIR-2 ORI (Japan, 10 m, 2006 to 2011) | download needs an Earthdata login; JAXA terms require prior contact for commercial use |
 
 ## Which sources serve which zoom
@@ -54,6 +55,6 @@ Ground resolution at the equator for 256 px tiles is `156543.03 / 2^z` m/px. For
 | z8 | BMNG 500 m, MODIS, (VIIRS), ETOPO/GEBCO shading |
 | z11 to z12 | HLS v2, Landsat C2 L2 (land only) |
 | z14 | Sentinel-2 L2A, Copernicus WMS, ESA WorldCover composites (global, no login) |
-| z18 and above | GSI (Japan), OpenAerialMap (where imagery exists) |
+| z18 and above | GSI (Japan), NAIP (US), OpenAerialMap (where imagery exists) |
 
 The intended composition is staged: global coverage at low zoom (BMNG/HLS plus ETOPO ocean), with region-limited sources overlaid at high zoom (see ADR 0001 and ADR 0003).

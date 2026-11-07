@@ -10,7 +10,7 @@
 - Step 1, attribution (done): SourceInfo.attribution (a template filled from source_options), overlay `attribution:` override, credits collected by build_planet and written to the planet metadata
 - Step 2, shared COG warp (done): `overlay/cogwarp.py`
 - Step 3, `esa-worldcover` (done): verified over Tokyo; sea tiles (404) are skipped at planning
-- Step 4, `naip`: not started
+- Step 4, `naip` (done): verified over San Francisco Civic Center (2022, 0.6 m)
 - Step 5, `nz-imagery`: not started
 - Step 6, generic `cog`: not started
 

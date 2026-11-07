@@ -64,6 +64,13 @@ SOURCE_REGISTRY: Dict[str, SourceInfo] = {
         ),
         attribution_defaults=(("year", "2021"),),
     ),
+    "naip": SourceInfo(
+        "naip",
+        18,
+        resolution_varies=True,
+        note="USDA NAIP aerial imagery via Planetary Computer, 0.3 to 1m, contiguous US",
+        attribution="NAIP imagery courtesy of USDA Farm Service Agency",
+    ),
 }
 
 

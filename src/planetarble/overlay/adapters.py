@@ -224,6 +224,85 @@ class ESAWorldCoverAdapter(BaseSourceAdapter):
         return output
 
 
+class NAIPAdapter(BaseSourceAdapter):
+    """USDA NAIP aerial imagery from Microsoft Planetary Computer (ADR 0003 step 4).
+
+    Contiguous US, 0.3 to 1 m, one COG per quarter quad and acquisition. The
+    STAC search returns every year that covers the AOI; for each quarter quad
+    only the newest acquisition is kept (or those of ``year`` if given), and
+    the hrefs are signed with an anonymous SAS token.
+    """
+
+    name = "naip"
+    _STAC = "https://planetarycomputer.microsoft.com/api/stac/v1/search"
+
+    def __init__(
+        self,
+        year: Optional[int] = None,
+        *,
+        search: Optional[Callable[[Dict[str, Any]], List[Dict[str, Any]]]] = None,
+        sas_token: Optional[Callable[[], str]] = None,
+        run: Optional[Callable[[List[str]], Any]] = None,
+    ) -> None:
+        self._year = int(year) if year is not None else None
+        self._search = search or self._stac_search
+        self._sas_token = sas_token or (lambda: _mpc_sas_token("naip"))
+        self._run = run or _run_checked
+
+    def plan(self, aoi: Any, zoom_range: Tuple[int, int]) -> List[str]:
+        from planetarble.acquisition.mpc import append_sas_token
+
+        bbox = [float(v) for v in (getattr(aoi, "bbox", None) or aoi)]
+        body: Dict[str, Any] = {"collections": ["naip"], "bbox": bbox, "limit": 200}
+        if self._year is not None:
+            body["datetime"] = f"{self._year}-01-01T00:00:00Z/{self._year}-12-31T23:59:59Z"
+        newest: Dict[str, Dict[str, Any]] = {}
+        for item in self._search(body):
+            key = _naip_quarter_quad(item["id"])
+            if key not in newest or item["properties"]["datetime"] > newest[key]["properties"]["datetime"]:
+                newest[key] = item
+        if not newest:
+            raise ValueError(f"no NAIP imagery covers bbox {tuple(bbox)} (contiguous US only)")
+        token = self._sas_token()
+        return [append_sas_token(newest[k]["assets"]["image"]["href"], token) for k in sorted(newest)]
+
+    def build_raster(self, plan: Any, workspace: object, *, aoi_bbox: Any = None) -> Path:
+        from .cogwarp import cog_warp_commands
+
+        output = Path(str(workspace))
+        for command in cog_warp_commands(list(plan), aoi_bbox=tuple(aoi_bbox), output_path=output):
+            self._run(command)
+        return output
+
+    def _stac_search(self, body: Dict[str, Any]) -> List[Dict[str, Any]]:
+        import requests
+
+        items: List[Dict[str, Any]] = []
+        url: Optional[str] = self._STAC
+        payload: Optional[Dict[str, Any]] = body
+        while url:
+            response = requests.post(url, json=payload, timeout=60)
+            response.raise_for_status()
+            page = response.json()
+            items.extend(page.get("features", []))
+            nxt = next((link for link in page.get("links", []) if link.get("rel") == "next"), None)
+            url = nxt.get("href") if nxt else None
+            payload = nxt.get("body", payload) if nxt else None
+        return items
+
+
+def _naip_quarter_quad(item_id: str) -> str:
+    """'ca_m_3712213_se_10_060_20220518' -> '3712213_se' (stable across years)."""
+    parts = item_id.split("_")
+    return "_".join(parts[2:4]) if len(parts) >= 4 else item_id
+
+
+def _mpc_sas_token(collection: str) -> str:
+    from planetarble.acquisition.mpc import fetch_sas_token
+
+    return fetch_sas_token(collection, timeout=60)
+
+
 def _http_exists(url: str) -> bool:
     import requests
 
@@ -252,6 +331,7 @@ _ADAPTERS: Dict[str, Type[BaseSourceAdapter]] = {
         ViirsAdapter,
         OpenAerialMapAdapter,
         ESAWorldCoverAdapter,
+        NAIPAdapter,
     )
 }
 

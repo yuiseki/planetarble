@@ -29,6 +29,7 @@ planetarble が取り込めるデータソースは、1 データセットにつ
 | 全球 | [VIIRS VNP09GA](global/viirs.md) | `viirs` | 500 m / 1 km | z8 | NASA のオープンデータ |
 | 世界各地 (点在) | [OpenAerialMap](global/openaerialmap.md) | `openaerialmap` | 画像ごと、1 m 未満が多い | z22 (画像ごと) | CC BY 4.0 |
 | 日本 | [地理院の写真](japan/gsi-orthophotos.md) | `gsi_orthophotos` | 0.2〜0.4 m | z18 | 公共データ利用規約 1.0 (CC BY 互換) |
+| 米国 | [NAIP](united-states/naip.md) | `naip` | 0.3〜1 m | z18 | パブリックドメイン |
 
 ## 標高、水深、ベクタ
 
@@ -43,7 +44,7 @@ planetarble が取り込めるデータソースは、1 データセットにつ
 | データセット | 理由 |
 |---|---|
 | Maxar Open Data (災害時の画像) | CC BY-NC 4.0 で、商用を含む再配布ができない |
-| AWS の NAIP (`s3://naip-*`) | Requester Pays。同じ画像を Microsoft Planetary Computer で無償で取れる |
+| AWS の NAIP (`s3://naip-*`) | Requester Pays。代わりに Planetary Computer の無償の複製 (`naip`) を読む |
 | JAXA ALOS AVNIR-2 ORI (日本、10 m、2006〜2011 年) | ダウンロードに Earthdata のログインが要る。JAXA の利用条件では商用利用に事前連絡が要る |
 
 ## ズームごとに使えるソース
@@ -54,6 +55,6 @@ planetarble が取り込めるデータソースは、1 データセットにつ
 | z8 | BMNG 500 m、MODIS、(VIIRS)、ETOPO/GEBCO の陰影 |
 | z11〜z12 | HLS v2、Landsat C2 L2 (陸域のみ) |
 | z14 | Sentinel-2 L2A、Copernicus WMS、ESA WorldCover の合成 (全球、ログイン不要) |
-| z18 以上 | 地理院 (日本)、OpenAerialMap (画像がある場所) |
+| z18 以上 | 地理院 (日本)、NAIP (米国)、OpenAerialMap (画像がある場所) |
 
 低いズームで全球を覆い (BMNG/HLS と ETOPO の海)、高いズームで地域限定のソースを重ねる、段階的な構成を想定しています (ADR 0001 と ADR 0003)。

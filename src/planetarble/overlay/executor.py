@@ -79,6 +79,8 @@ class DefaultPlanetExecutor:
             return self._build_sentinel2_cog(overlay, resolved)
         if overlay.source == "esa-worldcover":
             return self._build_esa_worldcover_cog(overlay, resolved)
+        if overlay.source == "naip":
+            return self._build_naip_cog(overlay, resolved)
         raise NotImplementedError(f"overlay source not wired in executor: {overlay.source}")
 
     def _build_oam_cog(self, overlay: Overlay, resolved) -> Path:
@@ -98,6 +100,13 @@ class DefaultPlanetExecutor:
         adapter = ESAWorldCoverAdapter(**dict(overlay.source_options or {}))
         urls = adapter.plan(resolved, (overlay.min_zoom, overlay.max_zoom))
         return adapter.build_raster(urls, self._work / f"{overlay.name}_esa_worldcover.tif", aoi_bbox=resolved.bbox)
+
+    def _build_naip_cog(self, overlay: Overlay, resolved) -> Path:
+        from .adapters import NAIPAdapter
+
+        adapter = NAIPAdapter(**dict(overlay.source_options or {}))
+        urls = adapter.plan(resolved, (overlay.min_zoom, overlay.max_zoom))
+        return adapter.build_raster(urls, self._work / f"{overlay.name}_naip.tif", aoi_bbox=resolved.bbox)
 
     def _build_hls_cog(self, overlay: Overlay, resolved) -> Path:
         from planetarble.acquisition.hls import (

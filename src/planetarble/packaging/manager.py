@@ -5,11 +5,10 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from planetarble.core.models import TileMetadata
+from planetarble.core.models import TileMetadata, utc_now
 from planetarble.logging import get_logger, log_step
 
 from .base import PackagingManager as PackagingProtocol
@@ -62,7 +61,7 @@ class PackagingManager(PackagingProtocol):
             "format": metadata.format.lower(),
             "scheme": metadata.scheme,
             "tiles": [f"pmtiles://{pmtiles_path.name}"],
-            "created_at": datetime.utcnow().isoformat() + "Z",
+            "created_at": utc_now().isoformat() + "Z",
         }
         log_step(LOGGER, phase="package", step="write TileJSON metadata", extra={"path": str(tilejson_path)})
         if not self._dry_run:

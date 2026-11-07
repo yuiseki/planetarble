@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
+
+
+def utc_now() -> datetime:
+    """Current UTC time as a naive datetime (what datetime.utcnow() returned)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 
 # (min_lon, min_lat, max_lon, max_lat) in EPSG:4326.
 BBox = Tuple[float, float, float, float]
@@ -27,7 +33,7 @@ class AssetManifest:
 
     sources: Dict[str, AssetSource] = field(default_factory=dict)
     generation_params: Dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utc_now)
     version: str = "0.0.1"
 
 

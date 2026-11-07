@@ -1,0 +1,13 @@
+[
+  [
+    "generate MBTiles pyramid via gdal2mbtiles",
+    [
+      "gdal2mbtiles",
+      "--format=jpg",
+      "--min-resolution=0",
+      "--max-resolution=3",
+      "<tmp>/mosaic_cog.tif",
+      "<tmp>/out.mbtiles"
+    ]
+  ]
+]

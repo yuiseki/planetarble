@@ -36,6 +36,12 @@ dev = [
   "types-PyYAML==6.0.12.20260906",
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Deprecations raised from planetarble code fail the suite, so removals in
+# newer Pythons (e.g. datetime.utcnow) surface in CI rather than in a run.
+filterwarnings = ["error::DeprecationWarning:planetarble.*"]
+
 [tool.mypy]
 # Gradual typing: default (non-strict) checks over src/. GDAL, numpy, PIL and
 # pyvips are optional system/runtime dependencies without bundled stubs.

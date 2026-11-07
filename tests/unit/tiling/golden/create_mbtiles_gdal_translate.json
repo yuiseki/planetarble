@@ -1,0 +1,64 @@
+[
+  [
+    "reproject raster to EPSG:3857",
+    [
+      "gdalwarp",
+      "-t_srs",
+      "EPSG:3857",
+      "-r",
+      "bilinear",
+      "-multi",
+      "-tr",
+      "19567.87924100512",
+      "19567.87924100512",
+      "-dstalpha",
+      "-overwrite",
+      "-of",
+      "VRT",
+      "<tmp>/mosaic_cog.tif",
+      "<tmp>/tmp/mosaic_cog_3857.vrt"
+    ]
+  ],
+  [
+    "generate MBTiles pyramid via gdal_translate",
+    [
+      "gdal_translate",
+      "--config",
+      "GDAL_NUM_THREADS",
+      "ALL_CPUS",
+      "--config",
+      "GDAL_CACHEMAX",
+      "2048",
+      "-of",
+      "MBTILES",
+      "-co",
+      "BLOCKSIZE=512",
+      "-co",
+      "TILING_SCHEME=GoogleMapsCompatible",
+      "-co",
+      "TILE_FORMAT=WEBP",
+      "-co",
+      "QUALITY=82",
+      "-co",
+      "MINZOOM=0",
+      "-co",
+      "MAXZOOM=3",
+      "-co",
+      "ZOOM_LEVEL_STRATEGY=LOWER",
+      "<tmp>/tmp/mosaic_cog_3857.vrt",
+      "<tmp>/output/tiling/planet_2024_3z.mbtiles"
+    ]
+  ],
+  [
+    "build MBTiles overviews",
+    [
+      "gdaladdo",
+      "-r",
+      "cubic",
+      "<tmp>/output/tiling/planet_2024_3z.mbtiles",
+      "2",
+      "4",
+      "8"
+    ]
+  ]
+]

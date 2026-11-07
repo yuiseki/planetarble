@@ -6,7 +6,7 @@ import math
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, Optional, Tuple
 from urllib.parse import urlsplit, urlunsplit
 
 import requests

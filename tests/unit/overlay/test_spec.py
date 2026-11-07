@@ -6,7 +6,6 @@ import pytest
 
 from planetarble.overlay import (
     AOI,
-    Overlay,
     PipelineSpec,
     parse_pipeline_spec,
 )

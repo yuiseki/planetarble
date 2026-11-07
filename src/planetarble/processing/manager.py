@@ -12,7 +12,10 @@ import time
 import zipfile
 from urllib.request import urlopen
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Sequence, Tuple
+
+if TYPE_CHECKING:  # GDAL is optional at runtime; imported lazily where used
+    from osgeo import ogr
 
 from planetarble.core.models import (
     CopernicusConfig,

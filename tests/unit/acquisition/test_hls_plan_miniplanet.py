@@ -57,8 +57,6 @@ def test_task_miniplanet_id_recomputes_when_untagged() -> None:
 
 
 def test_split_plan_by_miniplanet(tmp_path: Path) -> None:
-    config = HLSConfig(target_zoom=10, land_buffer_km=0.0)
-    planner = HLSMosaicPlanner(config)
     plan_path = tmp_path / "hls_z10_plan.ndjson"
     # Write a small synthetic plan spanning two distinct miniplanets.
     tiles = [(10, 909, 403), (10, 160, 395), (10, 909, 404)]

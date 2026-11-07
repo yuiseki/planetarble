@@ -9,7 +9,10 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Tuple
+
+if TYPE_CHECKING:  # GDAL is optional at runtime; imported lazily where used
+    from osgeo import ogr
 
 from pystac import Item
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from planetarble.core.models import HLSPlanRegion, ProcessingConfig
 from planetarble.tiling.mbtiles import composite_overzoom, merge_mbtiles

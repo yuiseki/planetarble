@@ -13,7 +13,7 @@ import sqlite3
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, Optional, Sequence
 
 from planetarble.acquisition import (
     AcquisitionManager,
@@ -26,10 +26,9 @@ from planetarble.acquisition import (
     fetch_true_color_tile,
     get_available_layers,
     split_plan_by_miniplanet,
-    verify_copernicus_connection,
 )
 from planetarble.config import PipelineConfig, load_config
-from planetarble.core.models import CopernicusLayerConfig, ProcessingConfig, TileMetadata
+from planetarble.core.models import CopernicusLayerConfig, GSIOrthophotoConfig, ProcessingConfig, TileMetadata
 from planetarble.logging import configure_logging, get_logger, log_skip
 from planetarble.packaging import PackagingManager
 from planetarble.processing import ProcessingManager
@@ -1726,7 +1725,9 @@ def _handle_serve(args: argparse.Namespace) -> int:
     if args.region:
         try:
             from planetarble.acquisition.hls import load_region_geometry
-            from osgeo import ogr  # type: ignore
+            # Imported only to probe that GDAL is available; the except branch
+            # falls back to no centre.
+            from osgeo import ogr  # type: ignore  # noqa: F401
         except Exception:
             center = None
         else:
@@ -1865,7 +1866,7 @@ class _RangeRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 def _handle_copernicus_layers(args: argparse.Namespace) -> int:
-    from planetarble.acquisition import CopernicusAccessError, CopernicusAuthError, get_available_layers
+    from planetarble.acquisition import CopernicusAccessError, CopernicusAuthError
 
     try:
         layers = get_available_layers(

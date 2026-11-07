@@ -7,10 +7,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 import time
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from planetarble.acquisition.hls import (
-    HLSMosaicTask,
     HLSScene,
     HLSSTACClient,
     iter_plan,

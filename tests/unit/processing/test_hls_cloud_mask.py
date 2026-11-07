@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from planetarble.processing.manager import _mask_band_command, _qa_mask_value
 

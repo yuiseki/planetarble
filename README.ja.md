@@ -115,4 +115,6 @@ planetarble tile --config configs/base/pipeline.yaml --quality 95 --tile-format 
 
 ## 参考
 
+対応しているデータソースの解像度、最大ズーム、ライセンス、出典表記は [docs/sources/](docs/sources/README.ja.md) にまとめています。
+
 詳細な手順や追加情報は英語版の `README.md` を参照してください。

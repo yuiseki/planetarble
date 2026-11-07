@@ -1,6 +1,6 @@
 """Validation for AOI overlay pipeline specs (ADR 0001).
 
-Keeps SOURCE.md as the single source of truth for resolution limits: a spec may
+Keeps docs/sources/ as the single source of truth for resolution limits: a spec may
 not request a zoom above a source's advertised ceiling, so configs cannot
 silently oversample.
 """

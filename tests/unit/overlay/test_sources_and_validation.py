@@ -23,7 +23,7 @@ def _spec(overlays):
 def test_registry_contains_known_sources() -> None:
     for name in ("bmng", "hls", "sentinel2", "copernicus", "gsi_orthophotos", "openaerialmap"):
         assert name in SOURCE_REGISTRY
-    # ceilings reflect SOURCE.md
+    # ceilings reflect docs/sources/
     assert SOURCE_REGISTRY["gsi_orthophotos"].native_max_zoom == 18
     assert SOURCE_REGISTRY["hls"].native_max_zoom == 12
     assert SOURCE_REGISTRY["sentinel2"].native_max_zoom == 14

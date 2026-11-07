@@ -4,13 +4,12 @@ This describes the repository as it is. Keep it in sync when modules move.
 
 Repository root
 - README.md / README.ja.md — overview, local setup (uv), quickstart, imagery options
-- SOURCE.md / SOURCE.ja.md — the source matrix (resolution and licence per imagery source)
 - AGENTS.md — rules for coding agents working in this repository
 - pyproject.toml / uv.lock — packaging, pinned dependencies, ruff and mypy settings
 - Dockerfile — GDAL + go-pmtiles + mb-util runtime image with the CLI
 - Makefile — regional HLS batch targets (Kanto, Chubu, Kinki)
 - configs/ — pipeline configurations
-- docs/ — this file, architecture decisions (adr/), operational notes (operations/) and the original spec (history/)
+- docs/ — this file, data sources (sources/{area}/{dataset}.md), architecture decisions (adr/), operational notes (operations/) and the original spec (history/)
 - src/planetarble/ — the Python package and `planetarble` CLI
 - tests/unit/ — pytest suite (no network; GDAL / numpy tests skip when absent)
 - tools/ — one-off generators (e.g. gen_miniplanets.py)

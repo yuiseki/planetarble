@@ -2,7 +2,7 @@
 
 Each imagery source planetarble can read is described by a ``SourceInfo`` in
 ``SOURCE_REGISTRY`` (its advertised Web Mercator zoom ceiling, kept in sync with
-SOURCE.md) and, eventually, backed by a concrete ``SourceAdapter``. Step 1 ships
+docs/sources/) and, eventually, backed by a concrete ``SourceAdapter``. Step 1 ships
 the registry and protocol so the declarative pipeline spec can be parsed and
 validated; the concrete adapters are wired in later steps without changing the
 orchestrator.
@@ -24,7 +24,7 @@ class SourceInfo:
     note: str = ""
 
 
-# Zoom ceilings mirror SOURCE.md ("Max zoom"); these are the data-justified
+# Zoom ceilings mirror the max_zoom of each docs/sources/ page (tested); these are the data-justified
 # maxima used to reject silent oversampling, independent of operational choices
 # (e.g. HLS is computed z12 but often served at z11).
 SOURCE_REGISTRY: Dict[str, SourceInfo] = {

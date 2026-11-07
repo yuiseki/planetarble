@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import List, Tuple
 
@@ -71,6 +70,3 @@ def _compression_for_format(fmt: str) -> str:
         return "JPEG"
     return "DEFLATE"
 
-
-def _slugify(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_") or "layer"

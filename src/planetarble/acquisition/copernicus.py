@@ -338,7 +338,7 @@ def _download_layer_tiles(
     timeout: int,
     rate_limiter: Optional["_RateLimiter"] = None,
 ) -> Dict[str, object]:
-    slug = _slugify(layer_config.output or layer_config.name)
+    slug = copernicus_layer_slug(layer_config)
     layer_dir = destination / slug
     tiles_written = 0
     tiles_skipped = 0
@@ -609,3 +609,13 @@ def _format_bbox(minx: float, miny: float, maxx: float, maxy: float) -> str:
 def _slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
     return slug or "layer"
+
+
+def copernicus_layer_slug(layer: CopernicusLayerConfig) -> str:
+    """Directory / file-name slug of a Copernicus layer.
+
+    Acquisition writes a layer's tiles under ``tiles/<slug>``; processing and
+    the CLI read them back and name the COG ``copernicus_<slug>_cog.tif``. All
+    three must use this one function so the names cannot drift apart.
+    """
+    return _slugify(layer.output or layer.name)

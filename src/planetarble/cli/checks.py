@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import sqlite3
 import subprocess
 from pathlib import Path
 from typing import Iterable, Optional, Sequence
 
+from planetarble.acquisition.copernicus import copernicus_layer_slug
 from planetarble.config import PipelineConfig
 from planetarble.core.models import CopernicusLayerConfig, GSIOrthophotoConfig
 
@@ -31,7 +31,7 @@ def _resolve_copernicus_cog(processing_dir: Path, layers: Iterable[CopernicusLay
     seen: set[Path] = set()
 
     for layer in layers or []:
-        slug = _slugify(layer.output or layer.name)
+        slug = copernicus_layer_slug(layer)
         candidate = processing_dir / f"copernicus_{slug}_cog.tif"
         if candidate.exists() and candidate not in seen:
             ordered.append(candidate)
@@ -44,9 +44,6 @@ def _resolve_copernicus_cog(processing_dir: Path, layers: Iterable[CopernicusLay
 
     return ordered
 
-
-def _slugify(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_") or "layer"
 
 
 def _resolve_hls_plan_path(cfg: PipelineConfig, plan_region: Optional[str]) -> Path:

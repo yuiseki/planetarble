@@ -9,6 +9,7 @@ import zipfile
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
+from planetarble.acquisition.copernicus import copernicus_layer_slug
 from planetarble.acquisition.hls import (
     _geom_intersects_bbox,
     load_land_geometry,
@@ -40,7 +41,6 @@ from .base import DataProcessor
 from .copernicus import (
     _collect_copernicus_tiles,
     _compression_for_format,
-    _slugify,
 )
 from .geometry import (
     _tile_bounds,
@@ -704,7 +704,7 @@ class ProcessingManager(DataProcessor):
 
         outputs: List[Path] = []
         for layer_config in config.layers:
-            slug = _slugify(layer_config.output or layer_config.name)
+            slug = copernicus_layer_slug(layer_config)
             layer_dir = tiles_root / slug
             if not layer_dir.exists():
                 LOGGER.warning("copernicus layer tiles missing", extra={"layer": layer_config.name, "path": str(layer_dir)})
@@ -734,7 +734,7 @@ class ProcessingManager(DataProcessor):
         if not tile_records:
             raise FileNotFoundError(f"No tiles found under {layer_dir}")
 
-        slug = _slugify(layer_config.output or layer_config.name)
+        slug = copernicus_layer_slug(layer_config)
         vrt_dir = self._temp_dir / "copernicus_vrts" / slug
         vrt_dir.mkdir(parents=True, exist_ok=True)
 

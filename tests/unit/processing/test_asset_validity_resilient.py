@@ -29,7 +29,7 @@ def _make_tiled_tif(path: Path, gdal) -> None:
 def test_valid_tif_is_valid(tmp_path: Path) -> None:
     gdal = pytest.importorskip("osgeo.gdal")
     gdal.UseExceptions()
-    from planetarble.processing.manager import _is_valid_sentinel2_asset, _is_valid_hls_asset
+    from planetarble.processing.assets import _is_valid_sentinel2_asset, _is_valid_hls_asset
 
     p = tmp_path / "ok.tif"
     _make_tiled_tif(p, gdal)
@@ -40,9 +40,7 @@ def test_valid_tif_is_valid(tmp_path: Path) -> None:
 def test_garbage_is_invalid_not_raise(tmp_path: Path) -> None:
     gdal = pytest.importorskip("osgeo.gdal")
     gdal.UseExceptions()  # mirror the build: Open on junk raises rather than None
-    from planetarble.processing.manager import (
-        _is_valid_sentinel2_asset, _is_valid_hls_asset, _is_valid_raster,
-    )
+    from planetarble.processing.assets import _is_valid_sentinel2_asset, _is_valid_hls_asset, _is_valid_raster
 
     p = tmp_path / "bad.tif"
     p.write_bytes(b"not a tiff at all" * 1000)
@@ -55,7 +53,7 @@ def test_garbage_is_invalid_not_raise(tmp_path: Path) -> None:
 def test_truncated_tif_is_invalid_not_raise(tmp_path: Path) -> None:
     gdal = pytest.importorskip("osgeo.gdal")
     gdal.UseExceptions()
-    from planetarble.processing.manager import _is_valid_sentinel2_asset
+    from planetarble.processing.assets import _is_valid_sentinel2_asset
 
     p = tmp_path / "trunc.tif"
     _make_tiled_tif(p, gdal)

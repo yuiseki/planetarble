@@ -25,6 +25,7 @@ from planetarble.core.models import (
     Sentinel2Config,
     ViirsConfig,
 )
+from planetarble.logging import get_logger
 
 try:
     import yaml
@@ -49,6 +50,16 @@ T = TypeVar("T")
 _SECTIONS = ("processing", "modis", "viirs", "copernicus", "sentinel2", "hls", "ocean", "gsi_orthophotos")
 _TOP_LEVEL_KEYS = frozenset({"data_dir", "temp_dir", "output_dir", *_SECTIONS})
 _SCALARS = (bool, int, float, str)
+
+# Keys still accepted so existing configs keep loading, but read by nothing.
+# Setting one logs a warning instead of silently doing nothing.
+_INERT_KEYS = {
+    "processing": ("natural_earth_scale", "color_enhancement", "hillshade_opacity"),
+    "hls": ("max_scene_age_days", "robust_median_window", "concurrency"),
+    "ocean": ("hillshade_strength", "tone_mapping", "viirs_blend_percent", "viirs_max_fraction"),
+}
+
+LOGGER = get_logger(__name__)
 
 
 def _make(cls: type[T], section: str, data: Dict[str, Any]) -> T:
@@ -155,6 +166,12 @@ class ConfigLoader:
         raise ValueError(f"Unsupported configuration format: {suffix}")
 
     def _build_config(self, payload: Dict[str, Any]) -> PipelineConfig:
+        for section, keys in _INERT_KEYS.items():
+            section_payload = payload.get(section)
+            if isinstance(section_payload, dict):
+                for key in keys:
+                    if key in section_payload:
+                        LOGGER.warning("%s.%s has no effect and can be removed from the config", section, key)
         unknown = sorted(set(payload) - _TOP_LEVEL_KEYS)
         if unknown:
             raise ValueError(

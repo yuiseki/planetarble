@@ -65,3 +65,19 @@ def test_int_is_accepted_for_float_and_none_for_optional(tmp_path: Path) -> None
     cfg = _load(tmp_path, "hls:\n  max_cloud: 50\n  plan_region: null\n")
     assert cfg.hls.max_cloud == 50
     assert cfg.hls.plan_region is None
+
+
+def test_inert_keys_load_with_a_warning(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("WARNING", logger="planetarble.config.loader"):
+        cfg = _load(tmp_path, "processing:\n  color_enhancement: 1.2\nocean:\n  tone_mapping: flat\n")
+    assert cfg.processing.color_enhancement == 1.2
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("processing.color_enhancement has no effect" in m for m in messages)
+    assert any("ocean.tone_mapping has no effect" in m for m in messages)
+
+
+@pytest.mark.parametrize("path", SHIPPED, ids=lambda p: p.name)
+def test_shipped_configs_set_no_inert_keys(path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("WARNING", logger="planetarble.config.loader"):
+        load_config(path)
+    assert [r.getMessage() for r in caplog.records] == []

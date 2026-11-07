@@ -5,9 +5,6 @@ output_dir: output
 processing:
   bmng_resolution: "500m"
   gebco_year: 2024
-  natural_earth_scale: "10m"
-  color_enhancement: 1.0
-  hillshade_opacity: 0.12
   min_zoom: 0
   max_zoom: 18
   resampling: "lanczos"
@@ -33,16 +30,13 @@ hls:
   land_buffer_km: 20.0
   max_cloud: 80.0
   fallback_max_cloud: 90.0
-  max_scene_age_days: 3650
   qa_mask_flags:
     - "cloud"
     - "cloud_shadow"
     - "snow"
   mosaic_strategy: "best_pixel"
-  robust_median_window: 5
   target_zoom: 10
   tile_size: 256
-  concurrency: 6
   request_timeout_seconds: 90
   max_retries: 6
   backoff_factor: 2.0
@@ -213,10 +207,6 @@ ocean:
   apply_hillshade: true
   hillshade_azimuth: 315.0
   hillshade_altitude: 45.0
-  hillshade_strength: 0.45
-  tone_mapping: "lambertian"
-  viirs_blend_percent: 0.0
-  viirs_max_fraction: 0.05
 modis:
   enabled: false
   tiles: []

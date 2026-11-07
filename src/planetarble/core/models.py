@@ -37,9 +37,9 @@ class ProcessingConfig:
 
     bmng_resolution: str = "500m"
     gebco_year: int = 2024
-    natural_earth_scale: str = "10m"
-    color_enhancement: float = 1.05
-    hillshade_opacity: float = 0.15
+    natural_earth_scale: str = "10m"  # inert: accepted, not used
+    color_enhancement: float = 1.05  # inert: accepted, not used
+    hillshade_opacity: float = 0.15  # inert: accepted, not used
     min_zoom: int = 0
     max_zoom: int = 10
     resampling: str = "cubic"
@@ -201,9 +201,9 @@ class HLSConfig:
     # Grow the cloud mask by this many pixels to catch the semi-transparent
     # fringe Fmask labels "clear"; the median fills the holes from other scenes.
     cloud_mask_dilation: int = 1
-    max_scene_age_days: int = 365
+    max_scene_age_days: int = 365  # inert: accepted, not used
     mosaic_strategy: str = "best_pixel"
-    robust_median_window: int = 5
+    robust_median_window: int = 5  # inert: accepted, not used
     # Depth of the per-tile temporal stack fed to the median composite. The old
     # hard cap of 3 left the median unable to outvote persistent building
     # shadows; a deeper, sun-angle-diverse stack is what actually cleans the
@@ -213,7 +213,7 @@ class HLSConfig:
     scene_search_limit: int = 100
     target_zoom: int = 10
     tile_size: int = 256
-    concurrency: int = 4
+    concurrency: int = 4  # inert: accepted, not used
     request_timeout_seconds: int = 60
     max_retries: int = 5
     backoff_factor: float = 1.8
@@ -261,10 +261,10 @@ class OceanConfig:
     apply_hillshade: bool = True
     hillshade_azimuth: float = 315.0
     hillshade_altitude: float = 45.0
-    hillshade_strength: float = 0.45
-    tone_mapping: str = "lambertian"
-    viirs_blend_percent: float = 0.0
-    viirs_max_fraction: float = 0.05
+    hillshade_strength: float = 0.45  # inert: accepted, not used
+    tone_mapping: str = "lambertian"  # inert: accepted, not used
+    viirs_blend_percent: float = 0.0  # inert: accepted, not used
+    viirs_max_fraction: float = 0.05  # inert: accepted, not used
 
 
 @dataclass

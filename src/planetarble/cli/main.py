@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 import argparse
-import json
-import http.server
 import functools
+import http.server
 import os
 import re
 import shutil
-import sqlite3
-import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Sequence
+from typing import Dict, Iterable, Optional
 
 from planetarble.acquisition import (
     AcquisitionManager,
@@ -27,13 +24,29 @@ from planetarble.acquisition import (
     get_available_layers,
     split_plan_by_miniplanet,
 )
-from planetarble.config import PipelineConfig, load_config
-from planetarble.core.models import CopernicusLayerConfig, GSIOrthophotoConfig, ProcessingConfig, TileMetadata
+from planetarble.config import load_config
+from planetarble.core.models import ProcessingConfig, TileMetadata
 from planetarble.logging import configure_logging, get_logger, log_skip
 from planetarble.packaging import PackagingManager
 from planetarble.processing import ProcessingManager
 from planetarble.tiling import PmtilesTilingManager, TilingManager
 from planetarble.tiling.mbtiles import merge_mbtiles, union_mbtiles
+
+from .checks import (
+    _is_valid_hls_scene_manifest,
+    _is_valid_mbtiles,
+    _is_valid_pmtiles,
+    _is_valid_raster,
+    _is_valid_sentinel2_scene_manifest,
+    _is_valid_tilejson,
+    _read_mbtiles_metadata,
+    _resolve_config_path,
+    _resolve_copernicus_cog,
+    _resolve_gsi_tile_template,
+    _resolve_hls_plan_path,
+    _resolve_hls_scene_manifest_path,
+    _resolve_sentinel2_scene_manifest_path,
+)
 
 LOGGER = get_logger(__name__)
 
@@ -581,41 +594,6 @@ def main(argv: Iterable[str] | None = None) -> int:
     return 1
 
 
-def _resolve_config_path(path: Path | None) -> Path:
-    if path is not None:
-        resolved = path.resolve()
-        if not resolved.exists():
-            raise SystemExit(f"Configuration file not found: {resolved}")
-        return resolved
-    default_cfg = Path("configs/base/pipeline.yaml")
-    if default_cfg.exists():
-        return default_cfg.resolve()
-    raise SystemExit("No configuration file found; supply --config or create configs/base/pipeline.yaml")
-
-
-def _resolve_copernicus_cog(processing_dir: Path, layers: Iterable[CopernicusLayerConfig]) -> list[Path]:
-    ordered: list[Path] = []
-    seen: set[Path] = set()
-
-    for layer in layers or []:
-        slug = _slugify(layer.output or layer.name)
-        candidate = processing_dir / f"copernicus_{slug}_cog.tif"
-        if candidate.exists() and candidate not in seen:
-            ordered.append(candidate)
-            seen.add(candidate)
-
-    for candidate in sorted(processing_dir.glob("copernicus_*_cog.tif")):
-        if candidate not in seen:
-            ordered.append(candidate)
-            seen.add(candidate)
-
-    return ordered
-
-
-def _slugify(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_") or "layer"
-
-
 def _handle_build(args: argparse.Namespace) -> int:
     import yaml
 
@@ -650,7 +628,11 @@ def _handle_prefetch(args: argparse.Namespace) -> int:
 
     from planetarble.overlay import parse_pipeline_spec
     from planetarble.overlay.executor import DefaultPlanetExecutor
-    from planetarble.prefetch import PrefetchPacing, prefetch_planet, prefetch_wait_seconds
+    from planetarble.prefetch import (
+        PrefetchPacing,
+        prefetch_planet,
+        prefetch_wait_seconds,
+    )
 
     cfg = load_config(_resolve_config_path(args.config))
     spec = parse_pipeline_spec(yaml.safe_load(args.spec.read_text(encoding="utf-8")))
@@ -724,187 +706,6 @@ def _handle_split_plan(args: argparse.Namespace) -> int:
     for key in sorted(shards):
         print(f"  {key}: {shards[key]}")
     return 0
-
-
-def _resolve_hls_plan_path(cfg: PipelineConfig, plan_region: Optional[str]) -> Path:
-    region = plan_region or cfg.hls.plan_region
-    if region:
-        return cfg.data_dir / "plans" / f"hls_z{cfg.hls.target_zoom}_plan_{region}.ndjson"
-    return cfg.data_dir / "plans" / f"hls_z{cfg.hls.target_zoom}_plan.ndjson"
-
-
-def _resolve_hls_scene_manifest_path(cfg: PipelineConfig, plan_region: Optional[str]) -> Path:
-    region = plan_region or cfg.hls.plan_region
-    filename = "hls_scene_manifest.json" if not region else f"hls_scene_manifest_{region}.json"
-    return (cfg.output_dir / "processing" / filename).resolve()
-
-
-def _resolve_sentinel2_scene_manifest_path(cfg: PipelineConfig, plan_region: Optional[str]) -> Path:
-    region = plan_region or cfg.sentinel2.plan_region
-    filename = (
-        "sentinel2_scene_manifest.json"
-        if not region
-        else f"sentinel2_scene_manifest_{region}.json"
-    )
-    return (cfg.output_dir / "processing" / filename).resolve()
-
-
-def _is_valid_hls_scene_manifest(path: Path) -> bool:
-    if not path.exists() or path.stat().st_size == 0:
-        return False
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return False
-    scenes = data.get("scenes")
-    summary = data.get("summary")
-    if not isinstance(scenes, list) or not scenes:
-        return False
-    if not isinstance(summary, dict):
-        return False
-    return True
-
-
-def _is_valid_sentinel2_scene_manifest(path: Path, *, required_assets: Optional[Sequence[str]] = None) -> bool:
-    if not path.exists() or path.stat().st_size == 0:
-        return False
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return False
-    scenes = data.get("scenes")
-    summary = data.get("summary")
-    if not isinstance(scenes, list) or not scenes:
-        return False
-    if not isinstance(summary, dict):
-        return False
-    if required_assets:
-        asset_set = {asset.lower() for asset in required_assets if asset}
-        if asset_set:
-            matched = False
-            for scene in scenes:
-                assets = scene.get("assets") if isinstance(scene, dict) else None
-                if not isinstance(assets, dict):
-                    continue
-                available = {str(name).lower() for name in assets.keys()}
-                if asset_set.issubset(available):
-                    matched = True
-                    break
-            if not matched:
-                return False
-    return True
-
-
-def _is_valid_raster(path: Path) -> bool:
-    if not path.exists() or path.stat().st_size == 0:
-        return False
-    try:
-        from osgeo import gdal  # type: ignore
-    except Exception:
-        return True
-    try:
-        gdal.UseExceptions()
-    except AttributeError:
-        pass
-    dataset = gdal.Open(str(path), gdal.GA_ReadOnly)
-    if dataset is None:
-        return False
-    if dataset.RasterXSize <= 0 or dataset.RasterYSize <= 0:
-        return False
-    return dataset.RasterCount > 0
-
-
-def _is_valid_mbtiles(path: Path) -> bool:
-    if not path.exists() or path.stat().st_size == 0:
-        return False
-    try:
-        conn = sqlite3.connect(str(path), timeout=1)
-    except sqlite3.Error:
-        return False
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='tiles'")
-        if cur.fetchone() is None:
-            return False
-        cur.execute("SELECT COUNT(*) FROM tiles")
-        count = cur.fetchone()[0]
-        return count > 0
-    finally:
-        conn.close()
-
-
-def _read_mbtiles_metadata(path: Path) -> dict[str, object]:
-    if not path.exists() or path.stat().st_size == 0:
-        return {}
-    try:
-        conn = sqlite3.connect(str(path), timeout=1)
-    except sqlite3.Error:
-        return {}
-    try:
-        cur = conn.cursor()
-        meta_exists = cur.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='metadata'"
-        ).fetchone()
-        metadata: dict[str, object] = {}
-        if meta_exists:
-            for key, value in cur.execute("SELECT name, value FROM metadata"):
-                metadata[str(key)] = value
-        min_zoom = metadata.get("minzoom")
-        max_zoom = metadata.get("maxzoom")
-        if min_zoom is None or max_zoom is None:
-            row = cur.execute("SELECT MIN(zoom_level), MAX(zoom_level) FROM tiles").fetchone()
-            if row:
-                if min_zoom is None:
-                    min_zoom = row[0]
-                if max_zoom is None:
-                    max_zoom = row[1]
-        if min_zoom is not None:
-            metadata["minzoom"] = int(min_zoom)
-        if max_zoom is not None:
-            metadata["maxzoom"] = int(max_zoom)
-        bounds = metadata.get("bounds")
-        if isinstance(bounds, str):
-            parts = [p.strip() for p in bounds.split(",")]
-            if len(parts) == 4:
-                try:
-                    metadata["bounds"] = [float(part) for part in parts]
-                except ValueError:
-                    pass
-        center = metadata.get("center")
-        if isinstance(center, str):
-            parts = [p.strip() for p in center.split(",")]
-            if len(parts) == 3:
-                try:
-                    metadata["center"] = [float(parts[0]), float(parts[1]), int(float(parts[2]))]
-                except ValueError:
-                    pass
-        return metadata
-    finally:
-        conn.close()
-
-
-def _is_valid_pmtiles(path: Path) -> bool:
-    if not path.exists() or path.stat().st_size == 0:
-        return False
-    pmtiles_cli = shutil.which("pmtiles")
-    if pmtiles_cli is None:
-        return True
-    try:
-        subprocess.run([pmtiles_cli, "verify", str(path)], check=True, capture_output=True)
-    except subprocess.CalledProcessError:
-        return False
-    return True
-
-
-def _is_valid_tilejson(path: Path) -> bool:
-    if not path.exists() or path.stat().st_size == 0:
-        return False
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return False
-    required = ("tilejson", "tiles", "minzoom", "maxzoom", "bounds")
-    return all(key in data for key in required)
 
 
 def _handle_acquire(args: argparse.Namespace) -> int:
@@ -1415,18 +1216,6 @@ def _handle_tile(args: argparse.Namespace) -> int:
     return 0
 
 
-def _resolve_gsi_tile_template(config: GSIOrthophotoConfig) -> str:
-    template = config.tile_template
-    if template:
-        return template
-    product = (config.product or "seamlessphoto").lower()
-    if product == "seamlessphoto":
-        return "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"
-    if product == "orthophoto":
-        return "https://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg"
-    raise SystemExit(f"Unsupported gsi_orthophotos.product value: {config.product}")
-
-
 def _handle_tiling_pmtiles(args: argparse.Namespace) -> int:
     source_path = args.input.resolve()
     if not source_path.exists():
@@ -1724,10 +1513,11 @@ def _handle_serve(args: argparse.Namespace) -> int:
     center = None
     if args.region:
         try:
-            from planetarble.acquisition.hls import load_region_geometry
             # Imported only to probe that GDAL is available; the except branch
             # falls back to no centre.
             from osgeo import ogr  # type: ignore  # noqa: F401
+
+            from planetarble.acquisition.hls import load_region_geometry
         except Exception:
             center = None
         else:
@@ -1919,7 +1709,10 @@ def _handle_gsi_collect(args: argparse.Namespace) -> int:
     import time
 
     from planetarble.acquisition.mokuroku import (
-        fetch_mokuroku, iter_mokuroku_lines, mokuroku_url, read_mokuroku_gz,
+        fetch_mokuroku,
+        iter_mokuroku_lines,
+        mokuroku_url,
+        read_mokuroku_gz,
     )
     from planetarble.acquisition.tiles import download_xyz_tiles
 

@@ -10,7 +10,7 @@ from planetarble.core.models import HLSConfig, HLSPlanRegion, NaturalEarthRegion
 cli_main = importlib.import_module("planetarble.cli.main")
 
 
-def test_acquire_plan_region_invokes_region_planner(
+def test_acquire_plan_region_invokes_region_planner(patch_cli, 
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_path = tmp_path / "pipeline.yaml"
@@ -57,8 +57,8 @@ def test_acquire_plan_region_invokes_region_planner(
         def generate_manifest(self, generation_params=None, version="1.0"):  # type: ignore[no-untyped-def]
             called["manifest"] = generation_params or {}
 
-    monkeypatch.setattr(cli_main, "AcquisitionManager", StubManager)
-    monkeypatch.setattr(cli_main, "load_config", lambda _: cfg)
+    patch_cli("AcquisitionManager", StubManager)
+    patch_cli("load_config", lambda _: cfg)
 
     exit_code = cli_main.main(["acquire", "--config", str(config_path), "--plan-region", "tokyo_land"])
 
@@ -67,7 +67,7 @@ def test_acquire_plan_region_invokes_region_planner(
     assert called["build_hls_plans"]["selected_region"] == "tokyo_land"
 
 
-def test_process_plan_region_uses_region_plan_paths(
+def test_process_plan_region_uses_region_plan_paths(patch_cli, 
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_path = tmp_path / "pipeline.yaml"
@@ -104,8 +104,8 @@ def test_process_plan_region_uses_region_plan_paths(
             called["build_hls_mosaic"] = True
             return None
 
-    monkeypatch.setattr(cli_main, "ProcessingManager", StubProcessor)
-    monkeypatch.setattr(cli_main, "load_config", lambda _: cfg)
+    patch_cli("ProcessingManager", StubProcessor)
+    patch_cli("load_config", lambda _: cfg)
 
     exit_code = cli_main.main(["process", "--config", str(config_path), "--plan-region", "tokyo_land"])
 

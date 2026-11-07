@@ -7,7 +7,7 @@ import pytest
 cli_main = importlib.import_module("planetarble.cli.main")
 
 
-def test_pmtiles_cli_invokes_manager(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_pmtiles_cli_invokes_manager(patch_cli, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     source = tmp_path / "raster.tif"
     source.touch()
     out_dir = tmp_path / "out"
@@ -47,7 +47,7 @@ def test_pmtiles_cli_invokes_manager(monkeypatch: pytest.MonkeyPatch, tmp_path: 
             called["show_header"] = str(pmtiles_path)
             return {"tile_type": "jpg"}
 
-    monkeypatch.setattr(cli_main, "PmtilesTilingManager", StubManager)
+    patch_cli("PmtilesTilingManager", StubManager)
 
     exit_code = cli_main.main(
         [

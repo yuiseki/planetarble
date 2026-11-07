@@ -16,7 +16,10 @@ from typing import Callable
 from unittest.mock import MagicMock, call, create_autospec
 
 import pytest
+from conftest import cli_attr
 
+from planetarble import acquisition
+from planetarble.acquisition import CopernicusCredentialsMissing
 from planetarble.config import PipelineConfig
 from planetarble.core.models import (
     CopernicusConfig,
@@ -42,22 +45,22 @@ def _cfg(tmp_path: Path, tile_source: str, **sections: object) -> PipelineConfig
 
 
 @pytest.fixture
-def use_cfg(monkeypatch: pytest.MonkeyPatch) -> Callable[[PipelineConfig], None]:
+def use_cfg(patch_cli) -> Callable[[PipelineConfig], None]:
     def _use(cfg: PipelineConfig) -> None:
-        monkeypatch.setattr(cli, "_load_env", lambda: None)
-        monkeypatch.setattr(cli, "_resolve_config_path", lambda path: Path("pipeline.yaml"))
-        monkeypatch.setattr(cli, "load_config", lambda path: cfg)
+        patch_cli("_load_env", lambda: None)
+        patch_cli("_resolve_config_path", lambda path: Path("pipeline.yaml"))
+        patch_cli("load_config", lambda path: cfg)
 
     return _use
 
 
 @pytest.fixture
-def fake(monkeypatch: pytest.MonkeyPatch) -> Callable[[str], MagicMock]:
-    """Replace a class imported into cli.main with an autospec; return the class mock."""
+def fake(patch_cli) -> Callable[[str], MagicMock]:
+    """Replace a class used by the CLI with an autospec; return the class mock."""
 
     def _fake(name: str) -> MagicMock:
-        cls = create_autospec(getattr(cli, name))
-        monkeypatch.setattr(cli, name, cls)
+        cls = create_autospec(cli_attr(name))
+        patch_cli(name, cls)
         return cls
 
     return _fake
@@ -110,7 +113,7 @@ def test_acquire_legacy_optional_sources_failing_do_not_abort(tmp_path, use_cfg,
     acq.download_modis_mcd43a4.side_effect = RuntimeError("modis down")
     acq.download_viirs_corrected_reflectance.side_effect = RuntimeError("viirs down")
     acq.check_copernicus_connection.side_effect = RuntimeError("no creds")
-    acq.download_copernicus_tiles.side_effect = cli.CopernicusCredentialsMissing("no creds")
+    acq.download_copernicus_tiles.side_effect = CopernicusCredentialsMissing("no creds")
 
     assert cli.main(["acquire", "--bmng-resolution", "2km", "--force", "--no-aria2"]) == 0
 
@@ -208,14 +211,14 @@ def test_process_hls_requires_plan(tmp_path, use_cfg, fake) -> None:
         cli.main(["process"])
 
 
-def test_process_hls_builds_manifest_then_mosaic(tmp_path, use_cfg, fake, monkeypatch) -> None:
+def test_process_hls_builds_manifest_then_mosaic(patch_cli, tmp_path, use_cfg, fake, monkeypatch) -> None:
     cfg = _cfg(tmp_path, "hls")
     use_cfg(cfg)
     plan = _touch(cfg.data_dir / "plans" / "hls_z10_plan_tokyo.ndjson")
     manifest = (cfg.output_dir / "processing" / "hls_scene_manifest_tokyo.json").resolve()
     proc = fake("ProcessingManager").return_value
     proc.prepare_hls_scene_manifest.return_value = manifest
-    monkeypatch.setattr(cli, "_is_valid_raster", lambda path: False)
+    patch_cli("_is_valid_raster", lambda path: False)
 
     assert cli.main(["process", "--plan-region", "tokyo"]) == 0
 
@@ -225,7 +228,7 @@ def test_process_hls_builds_manifest_then_mosaic(tmp_path, use_cfg, fake, monkey
     ]
 
 
-def test_process_hls_skips_valid_outputs(tmp_path, use_cfg, fake, monkeypatch) -> None:
+def test_process_hls_skips_valid_outputs(patch_cli, tmp_path, use_cfg, fake, monkeypatch) -> None:
     cfg = _cfg(tmp_path, "hls")
     use_cfg(cfg)
     _touch(cfg.data_dir / "plans" / "hls_z10_plan_tokyo.ndjson")
@@ -234,20 +237,20 @@ def test_process_hls_skips_valid_outputs(tmp_path, use_cfg, fake, monkeypatch) -
         json.dumps({"scenes": [{"id": "a"}], "summary": {}}),
     )
     proc = fake("ProcessingManager").return_value
-    monkeypatch.setattr(cli, "_is_valid_raster", lambda path: True)
+    patch_cli("_is_valid_raster", lambda path: True)
 
     assert cli.main(["process", "--plan-region", "tokyo"]) == 0
     assert proc.method_calls == []
 
 
-def test_process_hls_ocean_renders_when_outputs_missing(tmp_path, use_cfg, fake, monkeypatch) -> None:
+def test_process_hls_ocean_renders_when_outputs_missing(patch_cli, tmp_path, use_cfg, fake, monkeypatch) -> None:
     cfg = _cfg(tmp_path, "hls", ocean=OceanConfig(enabled=True))
     use_cfg(cfg)
     _touch(cfg.data_dir / "plans" / "hls_z10_plan.ndjson")
     etopo = _touch(cfg.data_dir / "etopo" / "ETOPO_2022_15s_bed.tif").resolve()
     proc = fake("ProcessingManager").return_value
     proc.render_ocean.return_value = {}
-    monkeypatch.setattr(cli, "_is_valid_raster", lambda path: False)
+    patch_cli("_is_valid_raster", lambda path: False)
 
     assert cli.main(["process"]) == 0
     assert _names(proc) == ["prepare_hls_scene_manifest", "render_ocean"]
@@ -261,13 +264,13 @@ def test_process_sentinel2_disabled_is_an_error(tmp_path, use_cfg, fake) -> None
         cli.main(["process"])
 
 
-def test_process_sentinel2_builds_manifest_then_mosaic(tmp_path, use_cfg, fake, monkeypatch) -> None:
+def test_process_sentinel2_builds_manifest_then_mosaic(patch_cli, tmp_path, use_cfg, fake, monkeypatch) -> None:
     cfg = _cfg(tmp_path, "sentinel2", sentinel2=Sentinel2Config(enabled=True))
     use_cfg(cfg)
     manifest = (cfg.output_dir / "processing" / "sentinel2_scene_manifest.json").resolve()
     proc = fake("ProcessingManager").return_value
     proc.prepare_sentinel2_scene_manifest.return_value = manifest
-    monkeypatch.setattr(cli, "_is_valid_raster", lambda path: False)
+    patch_cli("_is_valid_raster", lambda path: False)
 
     assert cli.main(["process", "--force"]) == 0
 
@@ -343,13 +346,13 @@ def test_tile_hls_requires_region(tmp_path, use_cfg, fake) -> None:
         cli.main(["tile"])
 
 
-def test_tile_hls_applies_overrides_and_tiles_region_mosaic(tmp_path, use_cfg, fake, monkeypatch) -> None:
+def test_tile_hls_applies_overrides_and_tiles_region_mosaic(patch_cli, tmp_path, use_cfg, fake, monkeypatch) -> None:
     cfg = _cfg(tmp_path, "hls")
     use_cfg(cfg)
     _touch(cfg.output_dir / "processing" / "x_normalized_cog.tif")
     mosaic = _touch(cfg.output_dir / "processing" / "hls_mosaic_tokyo_cog.tif").resolve()
     cls = fake("TilingManager")
-    monkeypatch.setattr(cli, "_is_valid_mbtiles", lambda path: False)
+    patch_cli("_is_valid_mbtiles", lambda path: False)
 
     argv = ["tile", "--plan-region", "tokyo", "--min-zoom", "3", "--max-zoom", "11",
             "--tile-format", "WEBP", "--quality", "80", "--dry-run"]
@@ -363,13 +366,13 @@ def test_tile_hls_applies_overrides_and_tiles_region_mosaic(tmp_path, use_cfg, f
     ]
 
 
-def test_tile_bmng_uses_first_normalized_cog(tmp_path, use_cfg, fake, monkeypatch) -> None:
+def test_tile_bmng_uses_first_normalized_cog(patch_cli, tmp_path, use_cfg, fake, monkeypatch) -> None:
     cfg = _cfg(tmp_path, "bmng")
     use_cfg(cfg)
     first = _touch(cfg.output_dir / "processing" / "a_normalized_cog.tif")
     _touch(cfg.output_dir / "processing" / "b_normalized_cog.tif")
     tiler = fake("TilingManager").return_value
-    monkeypatch.setattr(cli, "_is_valid_mbtiles", lambda path: False)
+    patch_cli("_is_valid_mbtiles", lambda path: False)
 
     assert cli.main(["tile"]) == 0
     assert tiler.method_calls == [
@@ -379,12 +382,12 @@ def test_tile_bmng_uses_first_normalized_cog(tmp_path, use_cfg, fake, monkeypatc
     ]
 
 
-def test_tile_skips_valid_mbtiles(tmp_path, use_cfg, fake, monkeypatch) -> None:
+def test_tile_skips_valid_mbtiles(patch_cli, tmp_path, use_cfg, fake, monkeypatch) -> None:
     cfg = _cfg(tmp_path, "bmng")
     use_cfg(cfg)
     _touch(cfg.output_dir / "processing" / "a_normalized_cog.tif")
     tiler = fake("TilingManager").return_value
-    monkeypatch.setattr(cli, "_is_valid_mbtiles", lambda path: True)
+    patch_cli("_is_valid_mbtiles", lambda path: True)
 
     assert cli.main(["tile"]) == 0
     assert tiler.method_calls == []
@@ -420,15 +423,15 @@ def test_tile_without_processing_dir_is_an_error(tmp_path, use_cfg, fake) -> Non
 # --------------------------------------------------------------------- package
 
 
-def test_package_converts_and_writes_distribution(tmp_path, use_cfg, fake, monkeypatch) -> None:
+def test_package_converts_and_writes_distribution(patch_cli, tmp_path, use_cfg, fake, monkeypatch) -> None:
     cfg = _cfg(tmp_path, "bmng")
     use_cfg(cfg)
     tiling = (cfg.output_dir / "tiling").resolve()
     mbtiles = _touch(tiling / "planet_2024_10z.mbtiles")
     cls = fake("PackagingManager")
     pkg = cls.return_value
-    monkeypatch.setattr(cli, "_is_valid_pmtiles", lambda path: False)
-    monkeypatch.setattr(cli, "_read_mbtiles_metadata", lambda path: {})
+    patch_cli("_is_valid_pmtiles", lambda path: False)
+    patch_cli("_read_mbtiles_metadata", lambda path: {})
 
     assert cli.main(["package"]) == 0
 
@@ -462,13 +465,13 @@ def test_package_converts_and_writes_distribution(tmp_path, use_cfg, fake, monke
         ("gsi_orthophotos", "GSI Seamless Orthophoto"),
     ],
 )
-def test_package_labels_follow_tile_source(tmp_path, use_cfg, fake, monkeypatch, tile_source, label) -> None:
+def test_package_labels_follow_tile_source(patch_cli, tmp_path, use_cfg, fake, monkeypatch, tile_source, label) -> None:
     cfg = _cfg(tmp_path, tile_source)
     use_cfg(cfg)
     _touch(cfg.output_dir / "tiling" / "planet_2024_10z.mbtiles")
     pkg = fake("PackagingManager").return_value
-    monkeypatch.setattr(cli, "_is_valid_pmtiles", lambda path: False)
-    monkeypatch.setattr(cli, "_read_mbtiles_metadata", lambda path: {"bounds": [1.0, 2.0, 3.0, 4.0]})
+    patch_cli("_is_valid_pmtiles", lambda path: False)
+    patch_cli("_read_mbtiles_metadata", lambda path: {"bounds": [1.0, 2.0, 3.0, 4.0]})
 
     assert cli.main(["package"]) == 0
     meta = pkg.generate_tilejson.call_args.args[1]
@@ -476,13 +479,13 @@ def test_package_labels_follow_tile_source(tmp_path, use_cfg, fake, monkeypatch,
     assert meta.bounds == (1.0, 2.0, 3.0, 4.0)
 
 
-def test_package_skips_when_outputs_valid(tmp_path, use_cfg, fake, monkeypatch) -> None:
+def test_package_skips_when_outputs_valid(patch_cli, tmp_path, use_cfg, fake, monkeypatch) -> None:
     cfg = _cfg(tmp_path, "bmng")
     use_cfg(cfg)
     _touch(cfg.output_dir / "tiling" / "planet_2024_10z.mbtiles")
     pkg = fake("PackagingManager")
-    monkeypatch.setattr(cli, "_is_valid_pmtiles", lambda path: True)
-    monkeypatch.setattr(cli, "_is_valid_tilejson", lambda path: True)
+    patch_cli("_is_valid_pmtiles", lambda path: True)
+    patch_cli("_is_valid_tilejson", lambda path: True)
 
     assert cli.main(["package"]) == 0
     assert not pkg.called
@@ -500,18 +503,18 @@ def test_package_without_mbtiles_is_an_error(tmp_path, use_cfg, fake) -> None:
 # ------------------------------------------------------- thin wrappers / tools
 
 
-def test_merge_mbtiles_delegates(tmp_path, monkeypatch) -> None:
+def test_merge_mbtiles_delegates(patch_cli, tmp_path, monkeypatch) -> None:
     merge = MagicMock(return_value=tmp_path / "out.mbtiles")
-    monkeypatch.setattr(cli, "merge_mbtiles", merge)
+    patch_cli("merge_mbtiles", merge)
     argv = ["tiling", "merge-mbtiles", "--base", str(tmp_path / "b"), "--overlay", str(tmp_path / "o"),
             "--out", str(tmp_path / "out.mbtiles")]
     assert cli.main(argv) == 0
     assert merge.call_args == call(tmp_path / "b", tmp_path / "o", destination=tmp_path / "out.mbtiles")
 
 
-def test_union_mbtiles_delegates(tmp_path, monkeypatch) -> None:
+def test_union_mbtiles_delegates(patch_cli, tmp_path, monkeypatch) -> None:
     union = MagicMock()
-    monkeypatch.setattr(cli, "union_mbtiles", union)
+    patch_cli("union_mbtiles", union)
     argv = ["tiling", "union-mbtiles", "--inputs", str(tmp_path / "a"), str(tmp_path / "b"),
             "--out", str(tmp_path / "u.mbtiles"), "--chunk-size", "5"]
     assert cli.main(argv) == 0
@@ -549,8 +552,8 @@ def test_gsi_pack_delegates(tmp_path, monkeypatch) -> None:
     ("gsi-fetch", "fetch_gsi_ortho_clip", "GSIError"),
     ("mpc-fetch", "fetch_true_color_tile", "MPCError"),
 ])
-def test_fetch_commands_return_1_on_source_error(monkeypatch, command, func, error) -> None:
-    monkeypatch.setattr(cli, func, MagicMock(side_effect=getattr(cli, error)("down")))
+def test_fetch_commands_return_1_on_source_error(patch_cli, command, func, error) -> None:
+    patch_cli(func, MagicMock(side_effect=getattr(acquisition, error)("down")))
     assert cli.main([command, "--lat", "35", "--lon", "139"]) == 1
 
 
@@ -558,9 +561,9 @@ def test_fetch_commands_return_1_on_source_error(monkeypatch, command, func, err
     ("gsi-fetch", "fetch_gsi_ortho_clip"),
     ("mpc-fetch", "fetch_true_color_tile"),
 ])
-def test_fetch_commands_pass_coordinates(monkeypatch, command, func) -> None:
+def test_fetch_commands_pass_coordinates(patch_cli, command, func) -> None:
     fetch = MagicMock(return_value={"ok": True})
-    monkeypatch.setattr(cli, func, fetch)
+    patch_cli(func, fetch)
     assert cli.main([command, "--lat", "35.5", "--lon", "139.5", "--dry-run"]) == 0
     kwargs = fetch.call_args.kwargs
     assert (kwargs["lat"], kwargs["lon"], kwargs["dry_run"]) == (35.5, 139.5, True)

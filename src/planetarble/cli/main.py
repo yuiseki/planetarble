@@ -18,9 +18,8 @@ from planetarble.acquisition import (
     split_plan_by_miniplanet,
 )
 from planetarble.config import load_config
-from planetarble.core.models import ProcessingConfig, TileMetadata
-from planetarble.logging import configure_logging, get_logger, log_skip
-from planetarble.packaging import PackagingManager
+from planetarble.core.models import ProcessingConfig
+from planetarble.logging import configure_logging, get_logger
 from planetarble.tiling import PmtilesTilingManager
 from planetarble.tiling.mbtiles import merge_mbtiles, union_mbtiles
 
@@ -29,11 +28,12 @@ from .acquire import (
     register_acquire,
 )
 from .checks import (
-    _is_valid_pmtiles,
-    _is_valid_tilejson,
-    _read_mbtiles_metadata,
     _resolve_config_path,
     _resolve_hls_plan_path,
+)
+from .package import (
+    _handle_package,
+    register_package,
 )
 from .process import (
     _handle_process,
@@ -380,35 +380,7 @@ def build_parser() -> argparse.ArgumentParser:
     gsi_pack.add_argument("--bounds", default=None, help="metadata bounds 'minlon,minlat,maxlon,maxlat'")
     gsi_pack.add_argument("--batch-size", type=int, default=10000, help="Insert batch size (default: 10000)")
 
-    package = subcommands.add_parser("package", help="Create PMTiles distribution")
-    package.add_argument(
-        "--config",
-        type=Path,
-        default=None,
-        help="Path to pipeline configuration file (YAML or JSON)",
-    )
-    package.add_argument(
-        "--pmtiles-name",
-        type=str,
-        default=None,
-        help="Filename for the PMTiles archive (defaults to planet_<year>_<max_zoom_level>z.pmtiles)",
-    )
-    package.add_argument(
-        "--input",
-        type=Path,
-        default=None,
-        help="Path to an MBTiles archive to package (defaults to the latest tiling output)",
-    )
-    package.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print packaging commands without executing",
-    )
-    package.add_argument(
-        "--force",
-        action="store_true",
-        help="Regenerate PMTiles even if output exists",
-    )
+    register_package(subcommands)
 
     register_serve(subcommands)
 
@@ -740,120 +712,6 @@ def _handle_stitch_512(args: argparse.Namespace) -> int:
         extra={"source": str(source), "output": str(out),
                "seconds": round(time.monotonic() - start, 1)},
     )
-    return 0
-
-
-def _handle_package(args: argparse.Namespace) -> int:
-    config_path = _resolve_config_path(args.config)
-    cfg = load_config(config_path)
-
-    tiling_dir = (cfg.output_dir / "tiling").resolve()
-    if not tiling_dir.exists():
-        raise SystemExit(f"Tiling directory not found: {tiling_dir}")
-    if args.input is not None:
-        mbtiles_path = args.input.resolve()
-        if not mbtiles_path.exists():
-            raise SystemExit(f"MBTiles archive not found: {mbtiles_path}")
-    else:
-        mbtiles_candidates = sorted(
-            tiling_dir.glob(f"planet_{cfg.processing.gebco_year}_{cfg.processing.max_zoom}z.mbtiles")
-        )
-        if not mbtiles_candidates:
-            raise SystemExit("No MBTiles archive found; run the tile stage first")
-        mbtiles_path = mbtiles_candidates[0]
-
-    pmtiles_name = args.pmtiles_name or f"planet_{cfg.processing.gebco_year}_{cfg.processing.max_zoom}z.pmtiles"
-    pmtiles_destination = tiling_dir / pmtiles_name
-    tilejson_destination = pmtiles_destination.with_suffix(".tilejson.json")
-    if _is_valid_pmtiles(pmtiles_destination) and _is_valid_tilejson(tilejson_destination) and not args.force:
-        log_skip(
-            LOGGER,
-            phase="package",
-            reason="valid PMTiles and TileJSON",
-            extra={"pmtiles": str(pmtiles_destination), "tilejson": str(tilejson_destination)},
-        )
-        return 0
-
-    packaging = PackagingManager(dry_run=args.dry_run)
-    pmtiles_path = packaging.convert_to_pmtiles(mbtiles_path, destination=pmtiles_destination)
-
-    tile_source = (cfg.processing.tile_source or cfg.modis.tile_source or "bmng").lower()
-
-    if tile_source == "modis":
-        imagery_label = f"MODIS MCD43A4 ({cfg.modis.doy or 'unknown date'})"
-        imagery_attribution = "Imagery: NASA MODIS MCD43A4 (LP DAAC)."
-    elif tile_source == "viirs":
-        product = cfg.viirs.product or "VNP09GA"
-        imagery_label = f"VIIRS Corrected Reflectance ({product} {cfg.viirs.date or 'daily'})"
-        imagery_attribution = "Imagery: NASA VIIRS Corrected Reflectance (LP DAAC)."
-    elif tile_source == "copernicus":
-        imagery_label = "Copernicus Sentinel-2 Level-2A"
-        imagery_attribution = "Imagery: Copernicus Sentinel-2 (European Space Agency)."
-    elif tile_source == "sentinel2":
-        imagery_label = "Sentinel-2 L2A (Microsoft Planetary Computer)"
-        imagery_attribution = "Imagery: Copernicus Sentinel-2 (European Space Agency)."
-    elif tile_source == "gsi_orthophotos":
-        imagery_label = "GSI Seamless Orthophoto"
-        imagery_attribution = "Imagery: Geospatial Information Authority of Japan (GSI) Seamless Orthophotography."
-    else:
-        imagery_label = "NASA Blue Marble Next Generation (2004)"
-        imagery_attribution = "Imagery: NASA Blue Marble (2004)."
-
-    mbtiles_meta = _read_mbtiles_metadata(mbtiles_path)
-    bounds = tuple(mbtiles_meta.get("bounds") or (-180.0, -85.0511, 180.0, 85.0511))
-    center = tuple(mbtiles_meta.get("center") or (0.0, 0.0, 2))
-    minzoom = int(mbtiles_meta.get("minzoom") or 0)
-    maxzoom = int(mbtiles_meta.get("maxzoom") or cfg.processing.max_zoom)
-    tile_format = str(mbtiles_meta.get("format") or cfg.processing.tile_format)
-
-    metadata = TileMetadata(
-        name=f"Planetarble {cfg.processing.gebco_year}",
-        description=f"Global basemap composed from {imagery_label} and GEBCO bathymetry.",
-        version=str(cfg.processing.gebco_year),
-        bounds=bounds,
-        center=center,
-        minzoom=minzoom,
-        maxzoom=maxzoom,
-        attribution=(
-            f"{imagery_attribution} Bathymetry: GEBCO 2024. Masks: Natural Earth 10m."
-        ),
-        format=tile_format,
-    )
-    tilejson_path = packaging.generate_tilejson(pmtiles_path, metadata)
-
-    manifest_path = (cfg.output_dir / "MANIFEST.json").resolve()
-    imagery_line = {
-        "modis": "- MODIS MCD43A4 BRDF-Corrected Reflectance (NASA LP DAAC).",
-        "viirs": "- VIIRS Corrected Reflectance (VNP09GA, NASA LP DAAC).",
-        "copernicus": "- Copernicus Sentinel-2 Level-2A (European Space Agency).",
-        "sentinel2": "- Copernicus Sentinel-2 Level-2A via Microsoft Planetary Computer.",
-        "gsi_orthophotos": "- Geospatial Information Authority of Japan Seamless Orthophotography.",
-    }.get(tile_source, "- NASA Blue Marble Next Generation (2004).")
-
-    license_text = (
-        "Planetarble Distribution\n\n"
-        "Data Sources:\n"
-        f"{imagery_line}\n"
-        "- GEBCO 2024 Global Bathymetry Grid.\n"
-        "- Natural Earth 1:10m land/ocean/coastline layers.\n\n"
-        "Attribution:\n"
-        f"{imagery_attribution} Bathymetry courtesy of GEBCO Compilation Group. "
-        "Natural Earth data is in the public domain."
-    )
-    package_dir = packaging.create_distribution_package(
-        pmtiles_path,
-        tilejson_path=tilejson_path,
-        manifest_path=manifest_path,
-        license_text=license_text,
-        destination=cfg.output_dir / "distribution",
-    )
-
-    LOGGER.info("packaging outputs", extra={
-        "mbtiles": str(mbtiles_path),
-        "pmtiles": str(pmtiles_path),
-        "tilejson": str(tilejson_path),
-        "distribution": str(package_dir),
-    })
     return 0
 
 

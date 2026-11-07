@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Protocol
+from typing import Any, List, Mapping, Optional, Protocol, Tuple
 
 from .resolve import resolve_aoi
 from .sources import SOURCE_REGISTRY
@@ -53,10 +53,10 @@ class BuildResult:
 def planet_attribution(spec: PipelineSpec) -> str:
     """Credits of the base and every overlay, in build order, without duplicates."""
     credits: List[str] = []
-    entries = [(spec.base.source, None)] + [(o.source, o.attribution) for o in spec.overlays]
-    for source, override in entries:
+    entries: List[Tuple[str, Optional[str], Mapping[str, Any]]] = [(spec.base.source, None, {})] + [(o.source, o.attribution, o.source_options) for o in spec.overlays]
+    for source, override, options in entries:
         info = SOURCE_REGISTRY.get(source)
-        credit = override or (info.attribution if info else "")
+        credit = override or (info.credit(options) if info else "")
         if credit and credit not in credits:
             credits.append(credit)
     return "; ".join(credits)

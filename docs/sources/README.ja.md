@@ -24,6 +24,7 @@ planetarble が取り込めるデータソースは、1 データセットにつ
 | 全球 | [Landsat C2 L2](global/landsat-c2-l2.md) | `landsat-c2-l2` | 30 m | z12 | パブリックドメイン |
 | 全球 | [Sentinel-2 L2A](global/sentinel2.md) | `sentinel2` | 10 m | z14 | Copernicus のオープンデータ |
 | 全球 | [Copernicus WMS](global/copernicus.md) | `copernicus` | 10 m | z14 | Copernicus のオープンデータ (アカウントが必要) |
+| 全球 | [ESA WorldCover の S2 合成](global/esa-worldcover.md) | `esa-worldcover` | 10 m (2020 年、2021 年) | z14 | CC BY 4.0 |
 | 全球 | [MODIS MCD43A4](global/modis.md) | `modis` | 500 m | z8 | NASA のオープンデータ |
 | 全球 | [VIIRS VNP09GA](global/viirs.md) | `viirs` | 500 m / 1 km | z8 | NASA のオープンデータ |
 | 世界各地 (点在) | [OpenAerialMap](global/openaerialmap.md) | `openaerialmap` | 画像ごと、1 m 未満が多い | z22 (画像ごと) | CC BY 4.0 |
@@ -52,7 +53,7 @@ planetarble が取り込めるデータソースは、1 データセットにつ
 | z6 | BMNG 2 km |
 | z8 | BMNG 500 m、MODIS、(VIIRS)、ETOPO/GEBCO の陰影 |
 | z11〜z12 | HLS v2、Landsat C2 L2 (陸域のみ) |
-| z14 | Sentinel-2 L2A、Copernicus WMS |
+| z14 | Sentinel-2 L2A、Copernicus WMS、ESA WorldCover の合成 (全球、ログイン不要) |
 | z18 以上 | 地理院 (日本)、OpenAerialMap (画像がある場所) |
 
 低いズームで全球を覆い (BMNG/HLS と ETOPO の海)、高いズームで地域限定のソースを重ねる、段階的な構成を想定しています (ADR 0001 と ADR 0003)。

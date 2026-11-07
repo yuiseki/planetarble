@@ -103,3 +103,14 @@ def test_overlay_attribution_overrides_the_default_and_duplicates_collapse() -> 
     assert ex.attribution == (
         "Image courtesy NASA Earth Observatory; HLS v2.0 (NASA/USGS); Imagery: HOTOSM via OpenAerialMap (CC BY 4.0)"
     )
+
+
+def test_attribution_templates_take_the_overlay_options() -> None:
+    spec = dict(SPEC)
+    spec["overlays"] = [{
+        "name": "wc", "source": "esa-worldcover", "aoi": {"bbox": [139.0, 35.0, 139.2, 35.2]},
+        "max_zoom": 14, "source_options": {"year": 2020},
+    }]
+    ex = _RecordingExecutor()
+    build_planet(parse_pipeline_spec(spec), ex, data_dir=Path("data"))
+    assert "© ESA WorldCover project 2020 / Contains modified Copernicus Sentinel data (2020)" in ex.attribution

@@ -10,6 +10,7 @@ declare the contract and raise ``NotImplementedError`` for now.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 
 from .sources import SOURCE_REGISTRY
@@ -155,6 +156,90 @@ class OpenAerialMapAdapter(BaseSourceAdapter):
         return output_path
 
 
+class ESAWorldCoverAdapter(BaseSourceAdapter):
+    """ESA WorldCover Sentinel-2 RGBNIR annual composites (ADR 0003 step 3).
+
+    1 x 1 degree COG tiles on a public S3 bucket, named by their south-west
+    corner, UInt16 reflectance x 10000 with 0 as nodata. Tiles over open sea
+    do not exist, so planning keeps only the tiles that answer.
+    """
+
+    name = "esa-worldcover"
+    _BASE = "https://esa-worldcover-s2.s3.amazonaws.com/rgbnir"
+    _VERSIONS = {2020: "v100", 2021: "v200"}
+
+    def __init__(
+        self,
+        year: int = 2021,
+        *,
+        stretch_max: float = 2000.0,
+        gamma: float = 0.7,
+        exists: Optional[Callable[[str], bool]] = None,
+        run: Optional[Callable[[List[str]], Any]] = None,
+    ) -> None:
+        year = int(year)
+        if year not in self._VERSIONS:
+            raise ValueError(f"esa-worldcover year must be 2020 or 2021, got {year}")
+        self._year = year
+        self._stretch_max = float(stretch_max)
+        self._gamma = float(gamma)
+        self._exists = exists or _http_exists
+        self._run = run or _run_checked
+
+    def tile_urls(self, bbox: Tuple[float, float, float, float]) -> List[str]:
+        import math
+
+        min_lon, min_lat, max_lon, max_lat = bbox
+        eps = 1e-9
+        urls = []
+        for lat in range(math.floor(min_lat), math.floor(max_lat - eps) + 1):
+            for lon in range(math.floor(min_lon), math.floor(max_lon - eps) + 1):
+                lat_part = f"{'N' if lat >= 0 else 'S'}{abs(lat):02d}"
+                tile = f"{lat_part}{'E' if lon >= 0 else 'W'}{abs(lon):03d}"
+                version = self._VERSIONS[self._year]
+                urls.append(
+                    f"{self._BASE}/{self._year}/{lat_part}/"
+                    f"ESA_WorldCover_10m_{self._year}_{version}_{tile}_S2RGBNIR.tif"
+                )
+        return urls
+
+    def plan(self, aoi: Any, zoom_range: Tuple[int, int]) -> List[str]:
+        bbox = tuple(getattr(aoi, "bbox", None) or aoi)
+        urls = [u for u in self.tile_urls(bbox) if self._exists(u)]
+        if not urls:
+            raise ValueError(f"no ESA WorldCover tile covers bbox {bbox} (open sea?)")
+        return urls
+
+    def build_raster(self, plan: Any, workspace: object, *, aoi_bbox: Any = None) -> Path:
+        from pathlib import Path
+
+        from .cogwarp import Stretch, cog_warp_commands
+
+        output = Path(str(workspace))
+        stretch = Stretch(0, self._stretch_max, self._gamma)
+        for command in cog_warp_commands(
+            list(plan), aoi_bbox=tuple(aoi_bbox), output_path=output, stretch=stretch, src_nodata=0
+        ):
+            self._run(command)
+        return output
+
+
+def _http_exists(url: str) -> bool:
+    import requests
+
+    response = requests.head(url, timeout=30, allow_redirects=True)
+    if response.status_code in (403, 404):
+        return False
+    response.raise_for_status()
+    return True
+
+
+def _run_checked(command: List[str]) -> None:
+    import subprocess
+
+    subprocess.run(command, check=True)
+
+
 _ADAPTERS: Dict[str, Type[BaseSourceAdapter]] = {
     cls.name: cls
     for cls in (
@@ -166,6 +251,7 @@ _ADAPTERS: Dict[str, Type[BaseSourceAdapter]] = {
         ModisAdapter,
         ViirsAdapter,
         OpenAerialMapAdapter,
+        ESAWorldCoverAdapter,
     )
 }
 

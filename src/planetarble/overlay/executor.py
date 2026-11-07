@@ -77,6 +77,8 @@ class DefaultPlanetExecutor:
             return self._build_hls_cog(overlay, resolved)
         if overlay.source == "sentinel2":
             return self._build_sentinel2_cog(overlay, resolved)
+        if overlay.source == "esa-worldcover":
+            return self._build_esa_worldcover_cog(overlay, resolved)
         raise NotImplementedError(f"overlay source not wired in executor: {overlay.source}")
 
     def _build_oam_cog(self, overlay: Overlay, resolved) -> Path:
@@ -89,6 +91,13 @@ class DefaultPlanetExecutor:
         cog = self._work / f"{overlay.name}_oam_cog.tif"
         adapter.build_raster(plan, cog, cache_dir=self._data_dir / "cache" / "oam", aoi_bbox=resolved.bbox)
         return cog
+
+    def _build_esa_worldcover_cog(self, overlay: Overlay, resolved) -> Path:
+        from .adapters import ESAWorldCoverAdapter
+
+        adapter = ESAWorldCoverAdapter(**dict(overlay.source_options or {}))
+        urls = adapter.plan(resolved, (overlay.min_zoom, overlay.max_zoom))
+        return adapter.build_raster(urls, self._work / f"{overlay.name}_esa_worldcover.tif", aoi_bbox=resolved.bbox)
 
     def _build_hls_cog(self, overlay: Overlay, resolved) -> Path:
         from planetarble.acquisition.hls import (
@@ -226,7 +235,7 @@ class DefaultPlanetExecutor:
         )
         return manager.pack_mbtiles(
             zxy, source_path=alpha, tile_format=fmt, min_zoom=min_zoom, max_zoom=overlay.max_zoom,
-            name=overlay.name, attribution=overlay.attribution or SOURCE_REGISTRY[overlay.source].attribution,
+            name=overlay.name, attribution=overlay.attribution or SOURCE_REGISTRY[overlay.source].credit(overlay.source_options),
         )
 
     # --- compose ----------------------------------------------------------

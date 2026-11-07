@@ -10,8 +10,9 @@ orchestrator.
 
 from __future__ import annotations
 
+import string
 from dataclasses import dataclass
-from typing import Dict, List, Protocol, runtime_checkable
+from typing import Any, Dict, List, Mapping, Protocol, Tuple, runtime_checkable
 
 
 @dataclass(frozen=True)
@@ -22,7 +23,20 @@ class SourceInfo:
     native_max_zoom: int
     resolution_varies: bool = False
     note: str = ""
+    # Credit line; may contain {placeholders} filled from the overlay's
+    # source_options, falling back to attribution_defaults.
     attribution: str = ""
+    attribution_defaults: Tuple[Tuple[str, str], ...] = ()
+
+    def credit(self, options: Mapping[str, Any]) -> str:
+        values = dict(self.attribution_defaults)
+        values.update({k: str(v) for k, v in options.items()})
+        return string.Formatter().vformat(self.attribution, (), _KeepMissing(values))
+
+
+class _KeepMissing(dict):
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
 
 
 # Zoom ceilings mirror the max_zoom of each docs/sources/ page (tested); these are the data-justified
@@ -40,6 +54,16 @@ SOURCE_REGISTRY: Dict[str, SourceInfo] = {
     "openaerialmap": SourceInfo(
         "openaerialmap", 22, resolution_varies=True, note="OAM orthophotos, sub-meter, varies per scene"
     , attribution="OpenAerialMap contributors (CC BY 4.0)"),
+    "esa-worldcover": SourceInfo(
+        "esa-worldcover",
+        14,
+        note="ESA WorldCover Sentinel-2 RGBNIR annual median composite, 10m, 2020 or 2021",
+        attribution=(
+            "© ESA WorldCover project {year} / Contains modified Copernicus Sentinel data ({year}) "
+            "processed by ESA WorldCover consortium"
+        ),
+        attribution_defaults=(("year", "2021"),),
+    ),
 }
 
 

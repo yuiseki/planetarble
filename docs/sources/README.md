@@ -24,6 +24,7 @@ Ground resolution at the equator for 256 px tiles is `156543.03 / 2^z` m/px. For
 | global | [Landsat C2 L2](global/landsat-c2-l2.md) | `landsat-c2-l2` | 30 m | z12 | public domain |
 | global | [Sentinel-2 L2A](global/sentinel2.md) | `sentinel2` | 10 m | z14 | Copernicus open |
 | global | [Copernicus WMS](global/copernicus.md) | `copernicus` | 10 m | z14 | Copernicus open (account) |
+| global | [ESA WorldCover S2 composite](global/esa-worldcover.md) | `esa-worldcover` | 10 m (2020, 2021) | z14 | CC BY 4.0 |
 | global | [MODIS MCD43A4](global/modis.md) | `modis` | 500 m | z8 | NASA open |
 | global | [VIIRS VNP09GA](global/viirs.md) | `viirs` | 500 m / 1 km | z8 | NASA open |
 | worldwide (scattered) | [OpenAerialMap](global/openaerialmap.md) | `openaerialmap` | varies, sub-metre | z22 (per item) | CC BY 4.0 |
@@ -52,7 +53,7 @@ Ground resolution at the equator for 256 px tiles is `156543.03 / 2^z` m/px. For
 | z6 | BMNG 2 km |
 | z8 | BMNG 500 m, MODIS, (VIIRS), ETOPO/GEBCO shading |
 | z11 to z12 | HLS v2, Landsat C2 L2 (land only) |
-| z14 | Sentinel-2 L2A, Copernicus WMS |
+| z14 | Sentinel-2 L2A, Copernicus WMS, ESA WorldCover composites (global, no login) |
 | z18 and above | GSI (Japan), OpenAerialMap (where imagery exists) |
 
 The intended composition is staged: global coverage at low zoom (BMNG/HLS plus ETOPO ocean), with region-limited sources overlaid at high zoom (see ADR 0001 and ADR 0003).

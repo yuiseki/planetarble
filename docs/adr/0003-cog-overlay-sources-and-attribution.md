@@ -7,9 +7,9 @@
 ## Implementation status
 
 - Step 0, source documentation (done): SOURCE.md / SOURCE.ja.md split into one page per dataset under `docs/sources/{area}/{dataset}.md` with machine-readable front matter; a test checks every registry source has a page with the same zoom ceiling
-- Step 1, attribution: not started
-- Step 2, shared COG warp: not started
-- Step 3, `esa-worldcover`: not started
+- Step 1, attribution (done): SourceInfo.attribution (a template filled from source_options), overlay `attribution:` override, credits collected by build_planet and written to the planet metadata
+- Step 2, shared COG warp (done): `overlay/cogwarp.py`
+- Step 3, `esa-worldcover` (done): verified over Tokyo; sea tiles (404) are skipped at planning
 - Step 4, `naip`: not started
 - Step 5, `nz-imagery`: not started
 - Step 6, generic `cog`: not started

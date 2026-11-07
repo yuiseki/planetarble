@@ -57,3 +57,36 @@ def test_parser_structure_matches_golden() -> None:
         GOLDEN.write_text(json.dumps(actual, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     assert GOLDEN.exists(), f"golden file missing: {GOLDEN} (run with PLANETARBLE_UPDATE_GOLDEN=1)"
     assert actual == json.loads(GOLDEN.read_text(encoding="utf-8"))
+
+
+def test_register_functions_are_only_called_from_build_parser() -> None:
+    """Each command module defines register_*; only cli/main.py calls them.
+
+    Guards against a subcommand's registration being nested inside another
+    command's register function (the parser would look identical).
+    """
+    import ast
+
+    cli_dir = Path(cli.__file__).parent
+    defined: set[str] = set()
+    for py in sorted(cli_dir.glob("*.py")):
+        tree = ast.parse(py.read_text(encoding="utf-8"))
+        defined |= {
+            n.name for n in tree.body if isinstance(n, ast.FunctionDef) and n.name.startswith("register_")
+        }
+        if py.name == "main.py":
+            continue
+        calls = [
+            n.func.id for n in ast.walk(tree)
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id.startswith("register_")
+        ]
+        assert calls == [], f"{py.name} calls {calls}"
+
+    main_tree = ast.parse((cli_dir / "main.py").read_text(encoding="utf-8"))
+    build = next(n for n in main_tree.body if isinstance(n, ast.FunctionDef) and n.name == "build_parser")
+    called = [
+        n.func.id for n in ast.walk(build)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id.startswith("register_")
+    ]
+    assert sorted(called) == sorted(defined)
+    assert len(called) == len(set(called))

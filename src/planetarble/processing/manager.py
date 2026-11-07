@@ -28,7 +28,7 @@ from planetarble.core.models import (
     Sentinel2Config,
     ViirsConfig,
 )
-from planetarble.logging import get_logger, log_progress, log_step, log_skip
+from planetarble.logging import get_logger, log_progress, log_skip
 
 from .base import DataProcessor
 from .hls import HLSSceneManifestBuilder
@@ -36,31 +36,18 @@ from .ocean import OceanRenderer
 from planetarble.acquisition.hls import load_land_geometry, load_region_geometry, _geom_intersects_bbox
 from planetarble.acquisition.mpc import append_sas_token, fetch_sas_token
 from planetarble.acquisition.sentinel_2 import Sentinel2SceneManifestBuilder
+from .runner import (
+    CommandRunner,
+    _cog_command,
+)
+from .geometry import (
+    bbox_from_geometry,
+    clip_land_to_region,
+    write_geometry_geojson,
+    _tile_bounds,
+)
 
 LOGGER = get_logger(__name__)
-
-ORIGIN_SHIFT = 20037508.342789244
-
-
-class CommandExecutionError(RuntimeError):
-    """Raised when an external processing command fails."""
-
-
-class CommandRunner:
-    """Execute external commands with optional dry-run support."""
-
-    def __init__(self, *, dry_run: bool = False) -> None:
-        self._dry_run = dry_run
-
-    def run(self, command: Sequence[str], *, description: str) -> None:
-        log_step(LOGGER, phase="process", step=description, command=list(command))
-        if self._dry_run:
-            return
-        try:
-            subprocess.run(command, check=True)
-        except subprocess.CalledProcessError as exc:  # pragma: no cover - requires GDAL runtime
-            raise CommandExecutionError(f"Command failed: {' '.join(command)}") from exc
-
 
 class ProcessingManager(DataProcessor):
     """Implement data processing steps using GDAL tooling."""
@@ -232,16 +219,16 @@ class ProcessingManager(DataProcessor):
             elif region.natural_earth:
                 region_geometry = load_region_geometry(region, data_dir=self._data_dir)
                 if region_geometry is not None:
-                    region_bbox = _bbox_from_geometry(region_geometry)
+                    region_bbox = bbox_from_geometry(region_geometry)
             if region.land_only:
                 land_geometry = load_land_geometry(
                     land_mask_path=self._hls.land_mask_path,
                     data_dir=self._data_dir,
                     region_geometry=region_geometry,
                 )
-                land_geometry = _clip_land_to_region(land_geometry, region_geometry)
+                land_geometry = clip_land_to_region(land_geometry, region_geometry)
                 region_geometry = land_geometry
-                region_bbox = _bbox_from_geometry(land_geometry)
+                region_bbox = bbox_from_geometry(land_geometry)
         builder = Sentinel2SceneManifestBuilder(
             self._sentinel2,
             cache_dir=self._data_dir / "cache" / "sentinel2",
@@ -346,16 +333,16 @@ class ProcessingManager(DataProcessor):
             elif region.natural_earth:
                 region_geometry = load_region_geometry(region, data_dir=self._data_dir)
                 if region_geometry is not None:
-                    region_bbox = _bbox_from_geometry(region_geometry)
+                    region_bbox = bbox_from_geometry(region_geometry)
             if region.land_only:
                 land_geometry = load_land_geometry(
                     land_mask_path=self._hls.land_mask_path,
                     data_dir=self._data_dir,
                     region_geometry=region_geometry,
                 )
-                land_geometry = _clip_land_to_region(land_geometry, region_geometry)
+                land_geometry = clip_land_to_region(land_geometry, region_geometry)
                 region_geometry = land_geometry
-                region_bbox = _bbox_from_geometry(land_geometry)
+                region_bbox = bbox_from_geometry(land_geometry)
         scenes = _load_sentinel2_scene_manifest(scene_manifest_path)
         if not scenes:
             raise ValueError(f"No Sentinel-2 scenes found in {scene_manifest_path}")
@@ -1821,7 +1808,7 @@ def _translate_hls_rgb(
     translate_input = rgb_vrt
     if region_geometry is not None:
         cutline = output_path.with_suffix(".geojson")
-        _write_geometry_geojson(region_geometry, cutline)
+        write_geometry_geojson(region_geometry, cutline)
         cropped = output_path.with_suffix(".cropped.tif")
         if cropped.exists():
             cropped.unlink()
@@ -1872,33 +1859,6 @@ def _translate_hls_rgb(
     ])
     runner.run(command, description="convert HLS RGB mosaic to GeoTIFF")
     return output_path
-
-
-def _cog_command(
-    raster_path: Path,
-    output: Path,
-    *,
-    compress: str = "DEFLATE",
-    gdal_translate: str = "gdal_translate",
-) -> List[str]:
-    """gdal_translate command to produce a Cloud Optimized GeoTIFF.
-
-    Uses a lossless compressor so the source nodata=0 (Fmask-masked cloud holes
-    over the HLS mosaic) survives exactly and the tiler can turn those holes
-    transparent. A lossy JPEG COG both drops the nodata mask (opaque black holes
-    over the BMNG floor) and adds 8x8 block artefacts over high-contrast urban
-    scenes, which is the bulk of the "dirty" look. The COG here is an
-    intermediate; final tiles are re-encoded to WebP at tiling time.
-    """
-    return [
-        gdal_translate,
-        "-of",
-        "COG",
-        "-co",
-        f"COMPRESS={compress}",
-        str(raster_path),
-        str(output),
-    ]
 
 
 def _load_sentinel2_scene_manifest(path: Path) -> List[Dict[str, object]]:
@@ -2101,7 +2061,7 @@ def _translate_sentinel2_rgb(
     translate_input = rgb_vrt
     if region_geometry is not None:
         cutline = output_path.with_suffix(".geojson")
-        _write_geometry_geojson(region_geometry, cutline)
+        write_geometry_geojson(region_geometry, cutline)
         cropped = output_path.with_suffix(".cropped.tif")
         if cropped.exists():
             cropped.unlink()
@@ -2171,50 +2131,6 @@ def _translate_sentinel2_rgb(
     return output_path
 
 
-def _bbox_from_geometry(geometry: "ogr.Geometry") -> Tuple[float, float, float, float]:
-    minx, maxx, miny, maxy = geometry.GetEnvelope()
-    return (float(minx), float(miny), float(maxx), float(maxy))
-
-
-def _clip_land_to_region(
-    land_geometry: "ogr.Geometry",
-    region_geometry: Optional["ogr.Geometry"],
-) -> "ogr.Geometry":
-    """Clip land features to the plan region before deriving a search bbox.
-
-    ne_10m_land features that merely intersect a small region are returned
-    whole (continent sized), so their raw envelope would inflate the STAC
-    search bbox to near-global coverage.
-    """
-    if region_geometry is None:
-        return land_geometry
-    clipped = land_geometry.Intersection(region_geometry)
-    if clipped is None or clipped.IsEmpty():
-        return land_geometry
-    return clipped
-
-
-def _write_geometry_geojson(geometry: "ogr.Geometry", path: Path) -> None:
-    try:
-        from osgeo import ogr  # type: ignore
-        from osgeo import osr  # type: ignore
-    except Exception as exc:  # pragma: no cover - depends on GDAL availability
-        raise RuntimeError("GDAL (osgeo.ogr) is required for region clipping") from exc
-    driver = ogr.GetDriverByName("GeoJSON")
-    if driver is None:
-        raise RuntimeError("GeoJSON driver not available in GDAL")
-    if path.exists():
-        path.unlink()
-    dataset = driver.CreateDataSource(str(path))
-    srs = osr.SpatialReference()
-    srs.ImportFromEPSG(4326)
-    layer = dataset.CreateLayer("region", srs=srs, geom_type=ogr.wkbMultiPolygon)
-    feature = ogr.Feature(layer.GetLayerDefn())
-    feature.SetGeometry(geometry)
-    layer.CreateFeature(feature)
-    feature = None
-    dataset = None
-
 def _collect_copernicus_tiles(
     layer_dir: Path,
     config: CopernicusConfig,
@@ -2277,50 +2193,3 @@ def _compression_for_format(fmt: str) -> str:
 
 def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_") or "layer"
-
-
-def _tile_bounds(x: int, y: int, zoom: int) -> Tuple[float, float, float, float]:
-    n = 2**zoom
-    tile_size = (ORIGIN_SHIFT * 2) / n
-    minx = -ORIGIN_SHIFT + x * tile_size
-    maxx = minx + tile_size
-    maxy = ORIGIN_SHIFT - y * tile_size
-    miny = maxy - tile_size
-    return minx, miny, maxx, maxy
-
-
-def _tile_range(bbox: Tuple[float, float, float, float], zoom: int) -> Tuple[int, int, int, int]:
-    min_lon, min_lat, max_lon, max_lat = bbox
-    min_lon = max(-180.0, min(180.0, min_lon))
-    max_lon = max(-180.0, min(180.0, max_lon))
-    min_lat = max(-85.05112878, min(85.05112878, min_lat))
-    max_lat = max(-85.05112878, min(85.05112878, max_lat))
-    if max_lon < min_lon:
-        min_lon, max_lon = max_lon, min_lon
-    if max_lat < min_lat:
-        min_lat, max_lat = max_lat, min_lat
-
-    epsilon = 1e-9
-    x_min = int(math.floor(_lon_to_tile(min_lon, zoom)))
-    x_max = int(math.floor(_lon_to_tile(max_lon - epsilon, zoom)))
-    y_min = int(math.floor(_lat_to_tile(max_lat - epsilon, zoom)))
-    y_max = int(math.floor(_lat_to_tile(min_lat, zoom)))
-
-    n = 2**zoom
-    x_min = max(0, min(x_min, n - 1))
-    x_max = max(0, min(x_max, n - 1))
-    y_min = max(0, min(y_min, n - 1))
-    y_max = max(0, min(y_max, n - 1))
-    return x_min, x_max, y_min, y_max
-
-
-def _lon_to_tile(lon: float, zoom: int) -> float:
-    n = 2**zoom
-    return (lon + 180.0) / 360.0 * n
-
-
-def _lat_to_tile(lat: float, zoom: int) -> float:
-    lat = max(-85.05112878, min(85.05112878, lat))
-    lat_rad = math.radians(lat)
-    n = 2**zoom
-    return (1 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2 * n

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from planetarble.processing.manager import _cog_command
+from planetarble.processing.runner import _cog_command
 
 
 def test_cog_command_is_lossless(tmp_path: Path) -> None:

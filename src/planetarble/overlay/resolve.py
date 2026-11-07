@@ -81,7 +81,7 @@ def resolve_aoi(
         load_region_geometry,
     )
     from planetarble.core.models import HLSPlanRegion, NaturalEarthRegion
-    from planetarble.processing.manager import _bbox_from_geometry, _clip_land_to_region
+    from planetarble.processing.geometry import bbox_from_geometry, clip_land_to_region
 
     if aoi.natural_earth is not None:
         region = HLSPlanRegion(
@@ -113,9 +113,9 @@ def resolve_aoi(
             data_dir=data_dir,
             region_geometry=geometry,
         )
-        geometry = _clip_land_to_region(land, geometry)
+        geometry = clip_land_to_region(land, geometry)
 
-    return ResolvedAOI(bbox=_bbox_from_geometry(geometry), geometry=geometry)
+    return ResolvedAOI(bbox=bbox_from_geometry(geometry), geometry=geometry)
 
 
 def _load_geojson_geometry(path: Path) -> object:

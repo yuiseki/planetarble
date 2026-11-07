@@ -23,35 +23,35 @@ def test_clip_land_to_region_bounds_search_bbox() -> None:
     # Antarctic granules for a Tokyo plan region). Land geometry must be
     # clipped to the region before deriving the bbox.
     pytest.importorskip("osgeo")
-    from planetarble.processing.manager import _bbox_from_geometry, _clip_land_to_region
+    from planetarble.processing.geometry import bbox_from_geometry, clip_land_to_region
 
     land = _box(60.0, -10.0, 180.0, 80.0)        # continent-sized land feature
     region = _box(139.55, 35.50, 139.92, 35.82)  # tokyo_bbox plan region
 
-    clipped = _clip_land_to_region(land, region)
+    clipped = clip_land_to_region(land, region)
 
-    assert _bbox_from_geometry(clipped) == pytest.approx((139.55, 35.50, 139.92, 35.82))
+    assert bbox_from_geometry(clipped) == pytest.approx((139.55, 35.50, 139.92, 35.82))
 
 
 def test_clip_land_to_region_without_region_returns_land() -> None:
     pytest.importorskip("osgeo")
-    from planetarble.processing.manager import _bbox_from_geometry, _clip_land_to_region
+    from planetarble.processing.geometry import bbox_from_geometry, clip_land_to_region
 
     land = _box(0.0, 0.0, 10.0, 10.0)
 
-    clipped = _clip_land_to_region(land, None)
+    clipped = clip_land_to_region(land, None)
 
-    assert _bbox_from_geometry(clipped) == pytest.approx((0.0, 0.0, 10.0, 10.0))
+    assert bbox_from_geometry(clipped) == pytest.approx((0.0, 0.0, 10.0, 10.0))
 
 
 def test_clip_land_to_region_disjoint_falls_back_to_land() -> None:
     # A region that misses land entirely must not produce an empty geometry.
     pytest.importorskip("osgeo")
-    from planetarble.processing.manager import _bbox_from_geometry, _clip_land_to_region
+    from planetarble.processing.geometry import bbox_from_geometry, clip_land_to_region
 
     land = _box(0.0, 0.0, 10.0, 10.0)
     region = _box(120.0, 30.0, 121.0, 31.0)
 
-    clipped = _clip_land_to_region(land, region)
+    clipped = clip_land_to_region(land, region)
 
-    assert _bbox_from_geometry(clipped) == pytest.approx((0.0, 0.0, 10.0, 10.0))
+    assert bbox_from_geometry(clipped) == pytest.approx((0.0, 0.0, 10.0, 10.0))

@@ -7,7 +7,7 @@ name = "planetarble"
 version = "0.1.0"
 description = "Reproducible pipeline for generating global PMTiles from open data sources."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "CC0-1.0" }
 authors = [
   { name = "Planetarble Contributors" }
@@ -17,7 +17,7 @@ dependencies = [
   "requests>=2.32.0",
   "pystac>=1.10.0",
   "pystac-client>=0.7.8",
-  "Pillow>=10.0"
+  "Pillow>=13.0"
 ]
 # GDAL's Python bindings (osgeo) and numpy are deliberately not listed.
 # osgeo must match the system libgdal, and its gdal_array module is compiled

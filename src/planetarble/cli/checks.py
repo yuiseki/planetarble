@@ -118,24 +118,6 @@ def _is_valid_sentinel2_scene_manifest(path: Path, *, required_assets: Optional[
     return True
 
 
-def _is_valid_raster(path: Path) -> bool:
-    if not path.exists() or path.stat().st_size == 0:
-        return False
-    try:
-        from osgeo import gdal  # type: ignore
-    except Exception:
-        return True
-    try:
-        gdal.UseExceptions()
-    except AttributeError:
-        pass
-    dataset = gdal.Open(str(path), gdal.GA_ReadOnly)
-    if dataset is None:
-        return False
-    if dataset.RasterXSize <= 0 or dataset.RasterYSize <= 0:
-        return False
-    return dataset.RasterCount > 0
-
 
 def _is_valid_mbtiles(path: Path) -> bool:
     if not path.exists() or path.stat().st_size == 0:

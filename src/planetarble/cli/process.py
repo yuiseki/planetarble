@@ -10,10 +10,10 @@ from planetarble.acquisition import GSIError, fetch_gsi_ortho_clip
 from planetarble.config import load_config
 from planetarble.logging import get_logger, log_skip
 from planetarble.processing import ProcessingManager
+from planetarble.processing.assets import _is_valid_raster
 
 from .checks import (
     _is_valid_hls_scene_manifest,
-    _is_valid_raster,
     _is_valid_sentinel2_scene_manifest,
     _resolve_config_path,
     _resolve_gsi_tile_template,

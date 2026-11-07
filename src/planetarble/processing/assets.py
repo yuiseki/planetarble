@@ -508,6 +508,13 @@ def _is_valid_sentinel2_asset(path: Path) -> bool:
 
 
 def _is_valid_raster(path: Path) -> bool:
+    """Whether ``path`` is a readable raster with at least one band.
+
+    Used to decide whether an existing output can be reused. A truncated or
+    corrupt file must count as invalid so it is rebuilt, and must not raise
+    whether or not GDAL exceptions are enabled. Without GDAL installed the
+    file is trusted if it exists and is non-empty.
+    """
     if not path.exists() or path.stat().st_size == 0:
         return False
     try:
@@ -519,6 +526,8 @@ def _is_valid_raster(path: Path) -> bool:
         dataset = gdal.Open(str(path), gdal.GA_ReadOnly)
         if dataset is None:
             return False
-        return dataset.GetRasterBand(1) is not None
+        if dataset.RasterXSize <= 0 or dataset.RasterYSize <= 0:
+            return False
+        return dataset.RasterCount > 0 and dataset.GetRasterBand(1) is not None
     except Exception:
         return False

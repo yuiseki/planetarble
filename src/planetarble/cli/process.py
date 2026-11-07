@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from planetarble.acquisition import GSIError, fetch_gsi_ortho_clip
-from planetarble.config import load_config
+from planetarble.config import PipelineConfig, load_config
 from planetarble.logging import get_logger, log_skip
 from planetarble.processing import ProcessingManager
 from planetarble.processing.assets import _is_valid_raster
@@ -156,29 +156,7 @@ def _handle_process(args: argparse.Namespace) -> int:
     if tile_source == "gsi_orthophotos":
         if not cfg.gsi_orthophotos.enabled:
             raise SystemExit("GSI processing requested but gsi_orthophotos.enabled is false")
-        gsi_output = (cfg.output_dir / "processing" / f"{cfg.gsi_orthophotos.output_basename}.tif").resolve()
-        product_slug = "seamlessphoto" if cfg.gsi_orthophotos.product == "seamlessphoto" else "orthophoto"
-        gsi_cache_root = cfg.data_dir / "cache" / f"gsi_{product_slug}"
-        if not args.dry_run:
-            gsi_cache_root.mkdir(parents=True, exist_ok=True)
-        LOGGER.info("gsi tile cache", extra={"path": str(gsi_cache_root)})
-        try:
-            gsi_summary = fetch_gsi_ortho_clip(
-                lat=cfg.gsi_orthophotos.lat,
-                lon=cfg.gsi_orthophotos.lon,
-                width_m=cfg.gsi_orthophotos.width_m,
-                height_m=cfg.gsi_orthophotos.height_m,
-                bbox=cfg.gsi_orthophotos.bbox,
-                zoom=cfg.gsi_orthophotos.zoom,
-                tile_template=_resolve_gsi_tile_template(cfg.gsi_orthophotos),
-                cache_dir=gsi_cache_root,
-                rate_limit_seconds=cfg.gsi_orthophotos.rate_limit_seconds,
-                output_path=gsi_output,
-                timeout=cfg.gsi_orthophotos.timeout_seconds,
-                dry_run=args.dry_run,
-            )
-        except GSIError as exc:
-            raise SystemExit(f"Failed to fetch GSI orthophotos: {exc}") from exc
+        gsi_summary, gsi_output = _fetch_gsi_clip(cfg, dry_run=args.dry_run)
         LOGGER.info(
             "GSI preprocessing complete",
             extra={"output": gsi_summary.get("output") if gsi_summary else str(gsi_output)},
@@ -250,29 +228,7 @@ def _handle_process(args: argparse.Namespace) -> int:
     gsi_summary: dict[str, object] | None = None
     gsi_cog_path: Path | None = None
     if cfg.gsi_orthophotos.enabled:
-        gsi_output = (cfg.output_dir / "processing" / f"{cfg.gsi_orthophotos.output_basename}.tif").resolve()
-        product_slug = "seamlessphoto" if cfg.gsi_orthophotos.product == "seamlessphoto" else "orthophoto"
-        gsi_cache_root = cfg.data_dir / "cache" / f"gsi_{product_slug}"
-        if not args.dry_run:
-            gsi_cache_root.mkdir(parents=True, exist_ok=True)
-        LOGGER.info("gsi tile cache", extra={"path": str(gsi_cache_root)})
-        try:
-            gsi_summary = fetch_gsi_ortho_clip(
-                lat=cfg.gsi_orthophotos.lat,
-                lon=cfg.gsi_orthophotos.lon,
-                width_m=cfg.gsi_orthophotos.width_m,
-                height_m=cfg.gsi_orthophotos.height_m,
-                bbox=cfg.gsi_orthophotos.bbox,
-                zoom=cfg.gsi_orthophotos.zoom,
-                tile_template=_resolve_gsi_tile_template(cfg.gsi_orthophotos),
-                cache_dir=gsi_cache_root,
-                rate_limit_seconds=cfg.gsi_orthophotos.rate_limit_seconds,
-                output_path=gsi_output,
-                timeout=cfg.gsi_orthophotos.timeout_seconds,
-                dry_run=args.dry_run,
-            )
-        except GSIError as exc:
-            raise SystemExit(f"Failed to fetch GSI orthophotos: {exc}") from exc
+        gsi_summary, gsi_output = _fetch_gsi_clip(cfg, dry_run=args.dry_run)
         gsi_output_str = gsi_summary.get("output") if gsi_summary else str(gsi_output)
         gsi_cog_path = Path(gsi_output_str)
 
@@ -289,6 +245,35 @@ def _handle_process(args: argparse.Namespace) -> int:
         "gsi_summary": gsi_summary,
     })
     return 0
+
+
+def _fetch_gsi_clip(cfg: PipelineConfig, *, dry_run: bool) -> tuple[dict | None, Path]:
+    """Fetch the configured GSI orthophoto clip; return (summary, output path)."""
+    gsi = cfg.gsi_orthophotos
+    gsi_output = (cfg.output_dir / "processing" / f"{gsi.output_basename}.tif").resolve()
+    product_slug = "seamlessphoto" if gsi.product == "seamlessphoto" else "orthophoto"
+    gsi_cache_root = cfg.data_dir / "cache" / f"gsi_{product_slug}"
+    if not dry_run:
+        gsi_cache_root.mkdir(parents=True, exist_ok=True)
+    LOGGER.info("gsi tile cache", extra={"path": str(gsi_cache_root)})
+    try:
+        summary = fetch_gsi_ortho_clip(
+            lat=gsi.lat,
+            lon=gsi.lon,
+            width_m=gsi.width_m,
+            height_m=gsi.height_m,
+            bbox=gsi.bbox,
+            zoom=gsi.zoom,
+            tile_template=_resolve_gsi_tile_template(gsi),
+            cache_dir=gsi_cache_root,
+            rate_limit_seconds=gsi.rate_limit_seconds,
+            output_path=gsi_output,
+            timeout=gsi.timeout_seconds,
+            dry_run=dry_run,
+        )
+    except GSIError as exc:
+        raise SystemExit(f"Failed to fetch GSI orthophotos: {exc}") from exc
+    return summary, gsi_output
 
 
 def register_process(subcommands: argparse._SubParsersAction) -> None:

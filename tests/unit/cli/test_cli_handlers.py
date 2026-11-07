@@ -23,6 +23,7 @@ from planetarble.acquisition import CopernicusCredentialsMissing
 from planetarble.config import PipelineConfig
 from planetarble.core.models import (
     CopernicusConfig,
+    GSIOrthophotoConfig,
     HLSConfig,
     HLSPlanRegion,
     OceanConfig,
@@ -600,3 +601,95 @@ def test_build_wires_spec_executor_and_orchestrator(tmp_path, use_cfg, monkeypat
     assert executor_cls.call_args.kwargs["work_dir"] == (cfg.output_dir / "build").resolve()
     assert build_planet.call_args == call(spec, executor_cls.return_value, data_dir=cfg.data_dir, strict=False)
     assert "built planet" in capsys.readouterr().out
+
+
+# ------------------------------------------------------------- process / GSI
+
+
+def _gsi_expected_kwargs(cfg: PipelineConfig, *, dry_run: bool) -> dict:
+    gsi = cfg.gsi_orthophotos
+    return {
+        "lat": gsi.lat,
+        "lon": gsi.lon,
+        "width_m": gsi.width_m,
+        "height_m": gsi.height_m,
+        "bbox": gsi.bbox,
+        "zoom": gsi.zoom,
+        "tile_template": gsi.tile_template,
+        "cache_dir": cfg.data_dir / "cache" / "gsi_seamlessphoto",
+        "rate_limit_seconds": gsi.rate_limit_seconds,
+        "output_path": (cfg.output_dir / "processing" / "gsi_orthophotos.tif").resolve(),
+        "timeout": gsi.timeout_seconds,
+        "dry_run": dry_run,
+    }
+
+
+def test_process_gsi_disabled_is_an_error(tmp_path, use_cfg, fake) -> None:
+    use_cfg(_cfg(tmp_path, "gsi_orthophotos"))
+    fake("ProcessingManager")
+    with pytest.raises(SystemExit, match="gsi_orthophotos.enabled is false"):
+        cli.main(["process"])
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_process_gsi_fetches_the_clip(tmp_path, use_cfg, fake, patch_cli, dry_run) -> None:
+    cfg = _cfg(tmp_path, "gsi_orthophotos", gsi_orthophotos=GSIOrthophotoConfig(enabled=True))
+    use_cfg(cfg)
+    proc = fake("ProcessingManager").return_value
+    fetch = MagicMock(return_value={"output": "x.tif"})
+    patch_cli("fetch_gsi_ortho_clip", fetch)
+
+    assert cli.main(["process", *(["--dry-run"] if dry_run else [])]) == 0
+
+    assert fetch.call_args == call(**_gsi_expected_kwargs(cfg, dry_run=dry_run))
+    assert (cfg.data_dir / "cache" / "gsi_seamlessphoto").exists() is (not dry_run)
+    assert proc.method_calls == []
+
+
+def test_process_gsi_fetch_error_exits(tmp_path, use_cfg, fake, patch_cli) -> None:
+    use_cfg(_cfg(tmp_path, "gsi_orthophotos", gsi_orthophotos=GSIOrthophotoConfig(enabled=True)))
+    fake("ProcessingManager")
+    patch_cli("fetch_gsi_ortho_clip", MagicMock(side_effect=acquisition.GSIError("blocked")))
+    with pytest.raises(SystemExit, match="Failed to fetch GSI orthophotos: blocked"):
+        cli.main(["process"])
+
+
+def test_process_gsi_orthophoto_product_uses_its_cache_and_template(tmp_path, use_cfg, fake, patch_cli) -> None:
+    gsi = GSIOrthophotoConfig(enabled=True, product="orthophoto", tile_template="")
+    cfg = _cfg(tmp_path, "gsi_orthophotos", gsi_orthophotos=gsi)
+    use_cfg(cfg)
+    fake("ProcessingManager")
+    fetch = MagicMock(return_value=None)
+    patch_cli("fetch_gsi_ortho_clip", fetch)
+
+    assert cli.main(["process"]) == 0
+    kwargs = fetch.call_args.kwargs
+    assert kwargs["cache_dir"] == cfg.data_dir / "cache" / "gsi_orthophoto"
+    assert kwargs["tile_template"] == "https://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg"
+
+
+def test_process_legacy_bmng_also_fetches_gsi_when_enabled(tmp_path, use_cfg, fake, patch_cli) -> None:
+    cfg = _cfg(tmp_path, "bmng", gsi_orthophotos=GSIOrthophotoConfig(enabled=True))
+    use_cfg(cfg)
+    _touch(cfg.data_dir / "bmng" / "500m" / "A1.tif")
+    _touch(cfg.data_dir / "gebco" / "GEBCO_2024_CF.nc")
+    (cfg.data_dir / "natural_earth").mkdir(parents=True)
+    proc = fake("ProcessingManager").return_value
+    fetch = MagicMock(return_value={"output": "x.tif"})
+    patch_cli("fetch_gsi_ortho_clip", fetch)
+
+    assert cli.main(["process"]) == 0
+    assert _names(proc)[-1] == "create_cog"
+    assert fetch.call_args == call(**_gsi_expected_kwargs(cfg, dry_run=False))
+
+
+def test_process_legacy_bmng_gsi_error_exits(tmp_path, use_cfg, fake, patch_cli) -> None:
+    cfg = _cfg(tmp_path, "bmng", gsi_orthophotos=GSIOrthophotoConfig(enabled=True))
+    use_cfg(cfg)
+    _touch(cfg.data_dir / "bmng" / "500m" / "A1.tif")
+    _touch(cfg.data_dir / "gebco" / "GEBCO_2024_CF.nc")
+    (cfg.data_dir / "natural_earth").mkdir(parents=True)
+    fake("ProcessingManager")
+    patch_cli("fetch_gsi_ortho_clip", MagicMock(side_effect=acquisition.GSIError("blocked")))
+    with pytest.raises(SystemExit, match="Failed to fetch GSI orthophotos"):
+        cli.main(["process"])

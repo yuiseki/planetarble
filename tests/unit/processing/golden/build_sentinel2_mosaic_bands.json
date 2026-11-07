@@ -1,0 +1,94 @@
+[
+  [
+    "mosaic Sentinel-2 blue band",
+    [
+      "gdalbuildvrt",
+      "-allow_projection_difference",
+      "-resolution",
+      "highest",
+      "-input_file_list",
+      "<tmp>/tmp/sentinel2_blue_sources.txt",
+      "<tmp>/tmp/sentinel2_blue_mosaic.vrt"
+    ]
+  ],
+  [
+    "mosaic Sentinel-2 green band",
+    [
+      "gdalbuildvrt",
+      "-allow_projection_difference",
+      "-resolution",
+      "highest",
+      "-input_file_list",
+      "<tmp>/tmp/sentinel2_green_sources.txt",
+      "<tmp>/tmp/sentinel2_green_mosaic.vrt"
+    ]
+  ],
+  [
+    "mosaic Sentinel-2 red band",
+    [
+      "gdalbuildvrt",
+      "-allow_projection_difference",
+      "-resolution",
+      "highest",
+      "-input_file_list",
+      "<tmp>/tmp/sentinel2_red_sources.txt",
+      "<tmp>/tmp/sentinel2_red_mosaic.vrt"
+    ]
+  ],
+  [
+    "combine Sentinel-2 bands into RGB VRT",
+    [
+      "gdalbuildvrt",
+      "-separate",
+      "<tmp>/tmp/sentinel2_rgb.vrt",
+      "<tmp>/tmp/sentinel2_red_mosaic.vrt",
+      "<tmp>/tmp/sentinel2_green_mosaic.vrt",
+      "<tmp>/tmp/sentinel2_blue_mosaic.vrt"
+    ]
+  ],
+  [
+    "crop Sentinel-2 mosaic to bbox",
+    [
+      "gdalwarp",
+      "-te_srs",
+      "EPSG:4326",
+      "-te",
+      "139.76",
+      "35.7",
+      "139.805",
+      "35.735",
+      "-overwrite",
+      "-of",
+      "GTiff",
+      "<tmp>/tmp/sentinel2_rgb.vrt",
+      "<tmp>/output/processing/sentinel2_mosaic_d19574ab_cog.cropped.tif"
+    ]
+  ],
+  [
+    "convert Sentinel-2 mosaic to COG",
+    [
+      "gdal_translate",
+      "-of",
+      "COG",
+      "-co",
+      "COMPRESS=DEFLATE",
+      "-co",
+      "BLOCKSIZE=512",
+      "-co",
+      "NUM_THREADS=ALL_CPUS",
+      "-co",
+      "PHOTOMETRIC=RGB",
+      "-a_nodata",
+      "0",
+      "-ot",
+      "Byte",
+      "-scale",
+      "0",
+      "10000",
+      "0",
+      "255",
+      "<tmp>/output/processing/sentinel2_mosaic_d19574ab_cog.cropped.tif",
+      "<tmp>/output/processing/sentinel2_mosaic_d19574ab_cog.tif"
+    ]
+  ]
+]

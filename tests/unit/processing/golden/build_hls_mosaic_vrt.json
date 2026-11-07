@@ -1,0 +1,94 @@
+[
+  [
+    "mosaic HLS blue band",
+    [
+      "gdalbuildvrt",
+      "-allow_projection_difference",
+      "-srcnodata",
+      "0",
+      "-vrtnodata",
+      "0",
+      "-input_file_list",
+      "<tmp>/tmp/hls_blue_sources.txt",
+      "<tmp>/tmp/hls_blue_mosaic.vrt"
+    ]
+  ],
+  [
+    "mosaic HLS green band",
+    [
+      "gdalbuildvrt",
+      "-allow_projection_difference",
+      "-srcnodata",
+      "0",
+      "-vrtnodata",
+      "0",
+      "-input_file_list",
+      "<tmp>/tmp/hls_green_sources.txt",
+      "<tmp>/tmp/hls_green_mosaic.vrt"
+    ]
+  ],
+  [
+    "mosaic HLS red band",
+    [
+      "gdalbuildvrt",
+      "-allow_projection_difference",
+      "-srcnodata",
+      "0",
+      "-vrtnodata",
+      "0",
+      "-input_file_list",
+      "<tmp>/tmp/hls_red_sources.txt",
+      "<tmp>/tmp/hls_red_mosaic.vrt"
+    ]
+  ],
+  [
+    "combine HLS bands into RGB VRT",
+    [
+      "gdalbuildvrt",
+      "-separate",
+      "<tmp>/tmp/hls_rgb.vrt",
+      "<tmp>/tmp/hls_red_mosaic.vrt",
+      "<tmp>/tmp/hls_green_mosaic.vrt",
+      "<tmp>/tmp/hls_blue_mosaic.vrt"
+    ]
+  ],
+  [
+    "convert HLS RGB mosaic to GeoTIFF",
+    [
+      "gdal_translate",
+      "-of",
+      "GTiff",
+      "-co",
+      "TILED=YES",
+      "-co",
+      "COMPRESS=DEFLATE",
+      "-co",
+      "PHOTOMETRIC=RGB",
+      "-ot",
+      "Byte",
+      "-scale",
+      "0",
+      "3000",
+      "0",
+      "255",
+      "-exponent",
+      "0.8",
+      "-a_nodata",
+      "0",
+      "<tmp>/tmp/hls_rgb.vrt",
+      "<tmp>/output/processing/hls_mosaic.tif"
+    ]
+  ],
+  [
+    "create Cloud Optimized GeoTIFF",
+    [
+      "gdal_translate",
+      "-of",
+      "COG",
+      "-co",
+      "COMPRESS=DEFLATE",
+      "<tmp>/output/processing/hls_mosaic.tif",
+      "<tmp>/output/processing/hls_mosaic_cog.tif"
+    ]
+  ]
+]

@@ -1,0 +1,20 @@
+[
+  [
+    "blend base and overlay rasters",
+    [
+      "gdal_calc.py",
+      "-A",
+      "<tmp>/base.tif",
+      "-B",
+      "<tmp>/over.tif",
+      "--A_band=1",
+      "--B_band=1",
+      "--calc",
+      "A*(1-1.0)+B*(1.0)",
+      "--format",
+      "GTiff",
+      "--outfile",
+      "<tmp>/output/processing/base_blended.tif"
+    ]
+  ]
+]

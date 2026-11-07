@@ -1,0 +1,65 @@
+[
+  [
+    "georeference copernicus tile",
+    [
+      "gdal_translate",
+      "-of",
+      "VRT",
+      "-a_srs",
+      "EPSG:3857",
+      "-a_ullr",
+      "15556463.996599074",
+      "4258459.719823739",
+      "15558909.9815042",
+      "4256013.734918613",
+      "<tmp>/data/copernicus/tiles/true_color/14/14552/6451.jpg",
+      "<tmp>/tmp/copernicus_vrts/true_color/14_14552_6451.vrt"
+    ]
+  ],
+  [
+    "georeference copernicus tile",
+    [
+      "gdal_translate",
+      "-of",
+      "VRT",
+      "-a_srs",
+      "EPSG:3857",
+      "-a_ullr",
+      "15556463.996599074",
+      "4256013.734918613",
+      "15558909.9815042",
+      "4253567.750013487",
+      "<tmp>/data/copernicus/tiles/true_color/14/14552/6452.jpg",
+      "<tmp>/tmp/copernicus_vrts/true_color/14_14552_6452.vrt"
+    ]
+  ],
+  [
+    "build Copernicus mosaic VRT",
+    [
+      "gdalbuildvrt",
+      "-resolution",
+      "highest",
+      "-input_file_list",
+      "<tmp>/tmp/copernicus_vrts/true_color/inputs.txt",
+      "<tmp>/tmp/copernicus_true_color_mosaic.vrt"
+    ]
+  ],
+  [
+    "convert Copernicus mosaic to COG",
+    [
+      "gdal_translate",
+      "-of",
+      "COG",
+      "-co",
+      "COMPRESS=JPEG",
+      "-co",
+      "BLOCKSIZE=512",
+      "-co",
+      "NUM_THREADS=ALL_CPUS",
+      "<tmp>/tmp/copernicus_true_color_mosaic.vrt",
+      "<tmp>/output/processing/copernicus_true_color_cog.tif",
+      "-co",
+      "QUALITY=90"
+    ]
+  ]
+]

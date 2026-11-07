@@ -1,0 +1,16 @@
+[
+  [
+    "generate GEBCO hillshade",
+    [
+      "gdaldem",
+      "hillshade",
+      "-az",
+      "315",
+      "-alt",
+      "45",
+      "-compute_edges",
+      "<tmp>/GEBCO_2024_CF.nc",
+      "<tmp>/output/processing/GEBCO_2024_CF_hillshade.tif"
+    ]
+  ]
+]

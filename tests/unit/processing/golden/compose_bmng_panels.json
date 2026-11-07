@@ -1,0 +1,23 @@
+[
+  [
+    "assemble BMNG panels into VRT",
+    [
+      "gdalbuildvrt",
+      "-input_file_list",
+      "<tmp>/tmp/bmng_panels.txt",
+      "<tmp>/tmp/bmng_panels.vrt"
+    ]
+  ],
+  [
+    "convert BMNG VRT mosaic to GeoTIFF",
+    [
+      "gdal_translate",
+      "<tmp>/tmp/bmng_panels.vrt",
+      "<tmp>/output/processing/bmng_mosaic.tif",
+      "-co",
+      "TILED=YES",
+      "-co",
+      "COMPRESS=DEFLATE"
+    ]
+  ]
+]

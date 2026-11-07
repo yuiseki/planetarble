@@ -1,0 +1,14 @@
+[
+  [
+    "create Cloud Optimized GeoTIFF",
+    [
+      "gdal_translate",
+      "-of",
+      "COG",
+      "-co",
+      "COMPRESS=DEFLATE",
+      "<tmp>/mosaic.tif",
+      "<tmp>/output/processing/mosaic_cog.tif"
+    ]
+  ]
+]

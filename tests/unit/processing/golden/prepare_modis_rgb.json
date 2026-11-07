@@ -1,0 +1,79 @@
+[
+  [
+    "mosaic MODIS red band",
+    [
+      "gdalbuildvrt",
+      "-input_file_list",
+      "<tmp>/tmp/modis_red_tiles.txt",
+      "<tmp>/tmp/modis_red_mosaic.vrt"
+    ]
+  ],
+  [
+    "mosaic MODIS green band",
+    [
+      "gdalbuildvrt",
+      "-input_file_list",
+      "<tmp>/tmp/modis_green_tiles.txt",
+      "<tmp>/tmp/modis_green_mosaic.vrt"
+    ]
+  ],
+  [
+    "mosaic MODIS blue band",
+    [
+      "gdalbuildvrt",
+      "-input_file_list",
+      "<tmp>/tmp/modis_blue_tiles.txt",
+      "<tmp>/tmp/modis_blue_mosaic.vrt"
+    ]
+  ],
+  [
+    "combine MODIS bands into RGB VRT",
+    [
+      "gdalbuildvrt",
+      "-separate",
+      "<tmp>/tmp/modis_rgb.vrt",
+      "<tmp>/tmp/modis_red_mosaic.vrt",
+      "<tmp>/tmp/modis_green_mosaic.vrt",
+      "<tmp>/tmp/modis_blue_mosaic.vrt"
+    ]
+  ],
+  [
+    "convert MODIS RGB mosaic to GeoTIFF",
+    [
+      "gdal_translate",
+      "-of",
+      "GTiff",
+      "-co",
+      "TILED=YES",
+      "-co",
+      "COMPRESS=DEFLATE",
+      "-co",
+      "PHOTOMETRIC=RGB",
+      "-ot",
+      "Byte",
+      "-scale",
+      "0.0",
+      "4000.0",
+      "0",
+      "255",
+      "-exponent",
+      "0.9",
+      "-a_nodata",
+      "0",
+      "<tmp>/tmp/modis_rgb.vrt",
+      "<tmp>/output/processing/modis_2024100_rgb.tif"
+    ]
+  ],
+  [
+    "create Cloud Optimized GeoTIFF",
+    [
+      "gdal_translate",
+      "-of",
+      "COG",
+      "-co",
+      "COMPRESS=DEFLATE",
+      "<tmp>/output/processing/modis_2024100_rgb.tif",
+      "<tmp>/output/processing/modis_2024100_rgb_cog.tif"
+    ]
+  ]
+]

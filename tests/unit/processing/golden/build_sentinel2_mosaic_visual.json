@@ -1,0 +1,56 @@
+[
+  [
+    "mosaic Sentinel-2 visual assets",
+    [
+      "gdalbuildvrt",
+      "-allow_projection_difference",
+      "-resolution",
+      "highest",
+      "-srcnodata",
+      "0",
+      "-vrtnodata",
+      "0",
+      "-input_file_list",
+      "<tmp>/tmp/sentinel2_visual_sources.txt",
+      "<tmp>/tmp/sentinel2_visual_mosaic.vrt"
+    ]
+  ],
+  [
+    "crop Sentinel-2 mosaic to bbox",
+    [
+      "gdalwarp",
+      "-te_srs",
+      "EPSG:4326",
+      "-te",
+      "139.76",
+      "35.7",
+      "139.805",
+      "35.735",
+      "-overwrite",
+      "-of",
+      "GTiff",
+      "<tmp>/tmp/sentinel2_visual_mosaic.vrt",
+      "<tmp>/output/processing/sentinel2_mosaic_d19574ab_cog.cropped.tif"
+    ]
+  ],
+  [
+    "convert Sentinel-2 mosaic to COG",
+    [
+      "gdal_translate",
+      "-of",
+      "COG",
+      "-co",
+      "COMPRESS=DEFLATE",
+      "-co",
+      "BLOCKSIZE=512",
+      "-co",
+      "NUM_THREADS=ALL_CPUS",
+      "-co",
+      "PHOTOMETRIC=RGB",
+      "-a_nodata",
+      "0",
+      "<tmp>/output/processing/sentinel2_mosaic_d19574ab_cog.cropped.tif",
+      "<tmp>/output/processing/sentinel2_mosaic_d19574ab_cog.tif"
+    ]
+  ]
+]

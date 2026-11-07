@@ -1,6 +1,6 @@
 # ADR 0003: COG overlay sources beyond Japan, and attribution in built planets
 
-- Status: Accepted (in progress)
+- Status: Accepted (implemented)
 - Date: 2026-11-07
 - Deciders: yuiseki
 
@@ -12,7 +12,7 @@
 - Step 3, `esa-worldcover` (done): verified over Tokyo; sea tiles (404) are skipped at planning
 - Step 4, `naip` (done): verified over San Francisco Civic Center (2022, 0.6 m)
 - Step 5, `nz-imagery` (done): verified over central Wellington (2025 urban survey, 7.5 cm); credits decided while building (survey and licensor) flow into the planet attribution
-- Step 6, generic `cog`: not started
+- Step 6, generic `cog` (done): verified on Banff National Park 2025 (15 cm) and Vermont 2022 (30 cm); `configs/overlays/world-cities-example.yaml` combines all four sources. Attribution was checked through `pmtiles convert` / `pmtiles show`. Kentucky and Colorado imagery are listed as candidates in docs/sources/README.md (no index to plan from yet)
 
 ## Context
 

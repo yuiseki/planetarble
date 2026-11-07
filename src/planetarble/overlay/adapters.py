@@ -420,6 +420,55 @@ class NZImageryAdapter(BaseSourceAdapter):
             return list(pool.map(one, zip(urls, checksums, strict=True)))
 
 
+class CogAdapter(BaseSourceAdapter):
+    """Any openly licensed COG(s) named by URL (ADR 0003 step 6).
+
+    For imagery without a searchable index, such as statewide or park-wide
+    mosaics. The spec supplies the URLs, the credit (validated as required),
+    and optionally the bands, a 16-bit stretch and a nodata value.
+    """
+
+    name = "cog"
+
+    def __init__(
+        self,
+        urls: Optional[List[str]] = None,
+        *,
+        bands: Optional[List[int]] = None,
+        stretch: Optional[Dict[str, float]] = None,
+        nodata: Optional[float] = None,
+        run: Optional[Callable[[List[str]], Any]] = None,
+    ) -> None:
+        if not urls:
+            raise ValueError("source: cog needs source_options.urls (one or more COG URLs)")
+        self._urls = [str(u) for u in urls]
+        self._bands = tuple(int(b) for b in (bands or (1, 2, 3)))
+        self._stretch = stretch
+        self._nodata = nodata
+        self._run = run or _run_checked
+
+    def plan(self, aoi: Any, zoom_range: Tuple[int, int]) -> List[str]:
+        return list(self._urls)
+
+    def build_raster(self, plan: Any, workspace: object, *, aoi_bbox: Any = None) -> Path:
+        from .cogwarp import Stretch, cog_warp_commands
+
+        output = Path(str(workspace))
+        stretch = None
+        if self._stretch:
+            stretch = Stretch(
+                float(self._stretch.get("low", 0)),
+                float(self._stretch["high"]),
+                float(self._stretch.get("gamma", 1.0)),
+            )
+        for command in cog_warp_commands(
+            list(plan), aoi_bbox=tuple(aoi_bbox), output_path=output,
+            bands=self._bands, stretch=stretch, src_nodata=self._nodata,
+        ):
+            self._run(command)
+        return output
+
+
 def _bbox_intersects(a: Any, b: Any) -> bool:
     return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
 
@@ -475,6 +524,7 @@ _ADAPTERS: Dict[str, Type[BaseSourceAdapter]] = {
         ESAWorldCoverAdapter,
         NAIPAdapter,
         NZImageryAdapter,
+        CogAdapter,
     )
 }
 

@@ -25,9 +25,13 @@ def test_factory_rejects_unknown_source() -> None:
         get_adapter("nope")
 
 
+# adapters that cannot be built without configuration
+REQUIRED_KWARGS = {"cog": {"urls": ["https://example.invalid/a.tif"]}}
+
+
 def test_adapter_sources_match_factory() -> None:
     for name in adapter_sources():
-        assert get_adapter(name).name == name
+        assert get_adapter(name, **REQUIRED_KWARGS.get(name, {})).name == name
 
 
 def test_constant_adapters_report_registry_ceiling() -> None:

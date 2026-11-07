@@ -25,7 +25,9 @@ BY_ID = {fm["id"]: (p, fm) for p, fm in PAGES.items()}
 
 @pytest.mark.parametrize("path", list(PAGES), ids=lambda p: f"{p.parent.name}/{p.name}")
 def test_page_has_required_fields(path: Path) -> None:
-    missing = [k for k in REQUIRED if PAGES[path].get(k) in (None, "")]
+    fm = PAGES[path]
+    # attribution may be empty only for a source whose credit is set per overlay
+    missing = [k for k in REQUIRED if k not in fm or (fm[k] in (None, "") and k != "attribution")]
     assert missing == [], f"{path}: missing {missing}"
 
 

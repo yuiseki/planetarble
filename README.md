@@ -140,7 +140,7 @@ The default configuration keeps plan and manifest artefacts under `data/`, scrat
 
 ## Imagery Options
 
-See [docs/sources/](docs/sources/README.md) for every supported source with its native resolution, maximum Web Mercator zoom, licence and attribution (日本語: [docs/sources/README.ja.md](docs/sources/README.ja.md)).
+Outside Japan, overlays can use login-free 10 m ESA WorldCover composites anywhere on land, NAIP aerial imagery in the US, LINZ imagery in New Zealand, OpenAerialMap, or any openly licensed COG by URL; see `configs/overlays/world-cities-example.yaml` and ADR 0003. The credits of every source used are written into the built PMTiles. See [docs/sources/](docs/sources/README.md) for every supported source with its native resolution, maximum Web Mercator zoom, licence and attribution (日本語: [docs/sources/README.ja.md](docs/sources/README.ja.md)).
 
 - **HLS v2 (default)** — `processing.tile_source: hls` activates the new global workflow. `planetarble acquire` writes an `hls_z10_plan.ndjson`; `planetarble process` expands it into `output/processing/hls_scene_manifest.json` with MPC-signed URLs for the required `B02/B03/B04` COGs and QA masks. Seasonal windows default to April–October for the northern hemisphere and October–April for the southern hemisphere. Default collections use `hls2-s30` and `hls2-l30`.
 - **Landsat Collection 2 Level-2 SR fallback** — listed in `hls.fallback_collections`. When the primary HLS collections cannot clear clouds, the manifest builder records low-cloud Landsat scenes that align with the same tile footprints and QA masks.

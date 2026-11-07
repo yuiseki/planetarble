@@ -78,6 +78,9 @@ SOURCE_REGISTRY: Dict[str, SourceInfo] = {
         note="New Zealand aerial and satellite imagery from LINZ, 0.05 to 10m, per survey",
         attribution="Imagery: Toitū Te Whenua Land Information New Zealand and the survey licensors (CC BY 4.0)",
     ),
+    # Generic: COG URLs given in the spec. No default credit; the overlay
+    # must state one (validated). The ceiling is only an upper guard.
+    "cog": SourceInfo("cog", 22, resolution_varies=True, note="any openly licensed COG(s) named by URL"),
 }
 
 

@@ -24,13 +24,16 @@ planetarble が取り込めるデータソースは、1 データセットにつ
 | 全球 | [Landsat C2 L2](global/landsat-c2-l2.md) | `landsat-c2-l2` | 30 m | z12 | パブリックドメイン |
 | 全球 | [Sentinel-2 L2A](global/sentinel2.md) | `sentinel2` | 10 m | z14 | Copernicus のオープンデータ |
 | 全球 | [Copernicus WMS](global/copernicus.md) | `copernicus` | 10 m | z14 | Copernicus のオープンデータ (アカウントが必要) |
+| どこでも | [汎用の COG](global/cog.md) | `cog` | COG による | 重ね合わせごとに指定 | COG による (出典の記載が必須) |
 | 全球 | [ESA WorldCover の S2 合成](global/esa-worldcover.md) | `esa-worldcover` | 10 m (2020 年、2021 年) | z14 | CC BY 4.0 |
 | 全球 | [MODIS MCD43A4](global/modis.md) | `modis` | 500 m | z8 | NASA のオープンデータ |
 | 全球 | [VIIRS VNP09GA](global/viirs.md) | `viirs` | 500 m / 1 km | z8 | NASA のオープンデータ |
 | 世界各地 (点在) | [OpenAerialMap](global/openaerialmap.md) | `openaerialmap` | 画像ごと、1 m 未満が多い | z22 (画像ごと) | CC BY 4.0 |
 | 日本 | [地理院の写真](japan/gsi-orthophotos.md) | `gsi_orthophotos` | 0.2〜0.4 m | z18 | 公共データ利用規約 1.0 (CC BY 互換) |
 | 米国 | [NAIP](united-states/naip.md) | `naip` | 0.3〜1 m | z18 | パブリックドメイン |
+| 米国 (Vermont) | [VCGI のオルソ画像](united-states/vermont-orthoimagery.md) | `cog` で | 0.15 / 0.3 m | z19 | パブリックドメイン (出典表記つき) |
 | ニュージーランド | [LINZ の画像](new-zealand/nz-imagery.md) | `nz-imagery` | 0.05〜10 m | z21 | CC BY 4.0 (調査ごと) |
+| カナダ (Banff) | [Banff 国立公園 2025](canada/banff-national-park.md) | `cog` で | 0.15 m | z20 | カナダ政府オープンライセンス |
 
 ## 標高、水深、ベクタ
 
@@ -39,6 +42,14 @@ planetarble が取り込めるデータソースは、1 データセットにつ
 | 全球 | [NOAA ETOPO 2022](global/etopo.md) | 海の色と陰影 (`ocean`) | CC0 1.0 |
 | 全球 | [GEBCO 2024](global/gebco.md) | 旧 BMNG の陰影 | パブリックドメイン |
 | 全球 | [Natural Earth 1:10m](global/natural-earth.md) | 陸海のマスク、地域の絞り込み | パブリックドメイン |
+
+## まだ組み込んでいない候補
+
+| データセット | 状況 |
+|---|---|
+| Kentucky の KyFromAbove のオルソ画像 (`s3://kyfromabove/imagery/orthos/`、パブリックドメイン、出典表記つき) | フェーズごとのタイル群で、計画するには図郭の索引を読む必要がある |
+| Colorado の公開画像 (`s3://colorado-public-imagery`、CC0) | プロジェクトごとにフォルダの構成がまちまち |
+| Digital Earth Africa / Pacific の GeoMAD (Sentinel-2 の年次合成、CC BY 4.0) | ESA WorldCover の地域版の代わり |
 
 ## 検討して採用しなかったもの
 

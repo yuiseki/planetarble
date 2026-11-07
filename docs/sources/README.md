@@ -24,13 +24,16 @@ Ground resolution at the equator for 256 px tiles is `156543.03 / 2^z` m/px. For
 | global | [Landsat C2 L2](global/landsat-c2-l2.md) | `landsat-c2-l2` | 30 m | z12 | public domain |
 | global | [Sentinel-2 L2A](global/sentinel2.md) | `sentinel2` | 10 m | z14 | Copernicus open |
 | global | [Copernicus WMS](global/copernicus.md) | `copernicus` | 10 m | z14 | Copernicus open (account) |
+| any | [Generic COG](global/cog.md) | `cog` | that of the COGs | set per overlay | that of the COGs (credit required) |
 | global | [ESA WorldCover S2 composite](global/esa-worldcover.md) | `esa-worldcover` | 10 m (2020, 2021) | z14 | CC BY 4.0 |
 | global | [MODIS MCD43A4](global/modis.md) | `modis` | 500 m | z8 | NASA open |
 | global | [VIIRS VNP09GA](global/viirs.md) | `viirs` | 500 m / 1 km | z8 | NASA open |
 | worldwide (scattered) | [OpenAerialMap](global/openaerialmap.md) | `openaerialmap` | varies, sub-metre | z22 (per item) | CC BY 4.0 |
 | Japan | [GSI orthophotos](japan/gsi-orthophotos.md) | `gsi_orthophotos` | 0.2 to 0.4 m | z18 | PDL 1.0 (CC BY compatible) |
 | United States | [NAIP](united-states/naip.md) | `naip` | 0.3 to 1 m | z18 | public domain |
+| United States (Vermont) | [VCGI orthoimagery](united-states/vermont-orthoimagery.md) | via `cog` | 0.15 / 0.3 m | z19 | public domain with attribution |
 | New Zealand | [LINZ imagery](new-zealand/nz-imagery.md) | `nz-imagery` | 0.05 to 10 m | z21 | CC BY 4.0 (per survey) |
+| Canada (Banff) | [Banff National Park 2025](canada/banff-national-park.md) | via `cog` | 0.15 m | z20 | Open Government Licence - Canada |
 
 ## Elevation, bathymetry and vectors
 
@@ -39,6 +42,14 @@ Ground resolution at the equator for 256 px tiles is `156543.03 / 2^z` m/px. For
 | global | [NOAA ETOPO 2022](global/etopo.md) | ocean colour and hillshade (`ocean`) | CC0 1.0 |
 | global | [GEBCO 2024](global/gebco.md) | legacy BMNG hillshade | public domain |
 | global | [Natural Earth 1:10m](global/natural-earth.md) | land/ocean masks, region filters | public domain |
+
+## Candidates not wired yet
+
+| Dataset | Status |
+|---|---|
+| Kentucky KyFromAbove orthoimagery (`s3://kyfromabove/imagery/orthos/`, public domain with attribution) | tiled by phase; needs its tile-grid index before it can be planned |
+| Colorado public imagery (`s3://colorado-public-imagery`, CC0) | mixed folder layout per project |
+| Digital Earth Africa / Pacific GeoMAD (Sentinel-2 annual composites, CC BY 4.0) | regional alternatives to ESA WorldCover |
 
 ## Considered and not adopted
 

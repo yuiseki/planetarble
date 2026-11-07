@@ -104,3 +104,17 @@ def test_japan_prefetch_spec_parses_and_validates() -> None:
         assert o.aoi.land_only is True
         assert o.source_options["mosaic_max_scenes"] == 3
     assert validate_pipeline_spec(spec) == []
+
+
+def test_world_cities_example_uses_the_cog_sources() -> None:
+    from planetarble.overlay.orchestrator import planet_attribution
+
+    data = yaml.safe_load((OVERLAY_DIR / "world-cities-example.yaml").read_text(encoding="utf-8"))
+    spec = parse_pipeline_spec(data)
+    assert [o.source for o in spec.overlays] == ["esa-worldcover", "naip", "nz-imagery", "cog"]
+    assert validate_pipeline_spec(spec) == []
+    credits = planet_attribution(spec).split("; ")
+    assert credits[0] == "Image courtesy NASA Earth Observatory"
+    assert any("ESA WorldCover project 2021" in c for c in credits)
+    assert any("USDA Farm Service Agency" in c for c in credits)
+    assert any("Open Government Licence - Canada" in c for c in credits)

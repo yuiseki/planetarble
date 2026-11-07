@@ -85,6 +85,8 @@ class DefaultPlanetExecutor:
             return self._build_naip_cog(overlay, resolved)
         if overlay.source == "nz-imagery":
             return self._build_nz_imagery_cog(overlay, resolved)
+        if overlay.source == "cog":
+            return self._build_generic_cog(overlay, resolved)
         raise NotImplementedError(f"overlay source not wired in executor: {overlay.source}")
 
     def _build_oam_cog(self, overlay: Overlay, resolved) -> Path:
@@ -121,6 +123,13 @@ class DefaultPlanetExecutor:
         if adapter.credit:
             self.overlay_credits[overlay.name] = adapter.credit
         return adapter.build_raster(urls, self._work / f"{overlay.name}_nz_imagery.tif", aoi_bbox=resolved.bbox)
+
+    def _build_generic_cog(self, overlay: Overlay, resolved) -> Path:
+        from .adapters import CogAdapter
+
+        adapter = CogAdapter(**dict(overlay.source_options or {}))
+        urls = adapter.plan(resolved, (overlay.min_zoom, overlay.max_zoom))
+        return adapter.build_raster(urls, self._work / f"{overlay.name}_cog.tif", aoi_bbox=resolved.bbox)
 
     def _build_hls_cog(self, overlay: Overlay, resolved) -> Path:
         from planetarble.acquisition.hls import (

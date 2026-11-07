@@ -115,6 +115,8 @@ planetarble tile --config configs/base/pipeline.yaml --quality 95 --tile-format 
 
 ## 参考
 
+日本以外でも、重ね合わせ (overlay) に、ログイン不要の ESA WorldCover の 10 m 合成画像 (陸域ならどこでも)、米国の NAIP、ニュージーランドの LINZ の画像、OpenAerialMap、URL を指定した任意のオープンな COG を使えます。見本は `configs/overlays/world-cities-example.yaml`、設計は ADR 0003 です。使ったデータソースの出典は、作った PMTiles に書き込まれます。
+
 対応しているデータソースの解像度、最大ズーム、ライセンス、出典表記は [docs/sources/](docs/sources/README.ja.md) にまとめています。
 
 詳細な手順や追加情報は英語版の `README.md` を参照してください。

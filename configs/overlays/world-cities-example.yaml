@@ -1,0 +1,48 @@
+# Example: a global planet sharpened over four cities outside Japan with the
+# login-free COG sources of ADR 0003. Each overlay is composited over its own
+# AOI; everything else stays at the BMNG floor. The published PMTiles carries
+# the credits of every source used (see docs/sources/).
+#
+#   planetarble build --spec configs/overlays/world-cities-example.yaml \
+#     --base-mbtiles <global floor .mbtiles>
+base:
+  source: bmng
+  resolution: "500m"
+  max_zoom: 8
+
+overlays:
+  # 10 m cloud-free context around San Francisco Bay (global, any land AOI)
+  - name: sf_bay_10m
+    source: esa-worldcover
+    aoi: {bbox: [-122.60, 37.60, -122.20, 37.90]}
+    source_options: {year: 2021}
+    max_zoom: 14
+
+  # 0.6 m US aerial imagery over central San Francisco
+  - name: sf_naip
+    source: naip
+    aoi: {bbox: [-122.43, 37.76, -122.39, 37.80]}
+    min_zoom: 15
+    max_zoom: 18
+
+  # 7.5 cm urban survey over central Wellington; the credit names the survey
+  # and its licensor, chosen while building
+  - name: wellington
+    source: nz-imagery
+    aoi: {bbox: [174.76, -41.30, 174.80, -41.27]}
+    min_zoom: 15
+    max_zoom: 20
+
+  # a single openly licensed COG mosaic: Banff National Park 2025, 15 cm
+  - name: banff_town
+    source: cog
+    aoi: {bbox: [-115.59, 51.16, -115.55, 51.19]}
+    attribution: "Contains information licensed under the Open Government Licence - Canada (Natural Resources Canada)"
+    source_options:
+      urls: ["https://aerial-imagery-canada.s3.amazonaws.com/national-parks/banff-national-park/Banff-national-park-2025-15cm-RGBN-mosaic.tif"]
+      nodata: 0
+    min_zoom: 15
+    max_zoom: 20
+
+output:
+  name: planet_world_cities

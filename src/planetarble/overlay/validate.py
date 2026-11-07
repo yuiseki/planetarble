@@ -36,6 +36,11 @@ def validate_pipeline_spec(spec: PipelineSpec) -> List[str]:
                 f"overlay {overlay.name!r} source {overlay.source!r} max_zoom "
                 f"{overlay.max_zoom} exceeds its ceiling z{info.native_max_zoom}"
             )
+        if overlay.source == "cog":
+            if not overlay.attribution:
+                issues.append(f"overlay {overlay.name!r} (source cog) requires an attribution for its imagery")
+            if not (overlay.source_options or {}).get("urls"):
+                issues.append(f"overlay {overlay.name!r} (source cog) requires source_options.urls")
         if overlay.min_zoom > overlay.max_zoom:
             issues.append(
                 f"overlay {overlay.name!r} min_zoom {overlay.min_zoom} > max_zoom {overlay.max_zoom}"

@@ -119,7 +119,7 @@ def resolve_aoi(
 
 
 def _load_geojson_geometry(path: Path) -> object:
-    from osgeo import ogr  # type: ignore
+    from osgeo import ogr
 
     try:
         ogr.UseExceptions()

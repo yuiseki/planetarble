@@ -28,6 +28,25 @@ jobs:
       - name: ruff check
         run: uv run --locked --only-group dev ruff check
 
+  typecheck:
+    name: mypy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          python-version: "3.12"
+
+      - name: Sync dependencies
+        run: uv sync --locked
+
+      - name: mypy
+        run: uv run mypy
+
   gdal:
     # Full suite against the OS GDAL bindings, the same layout as README
     # "Local setup (uv)": ubuntu-24.04 ships python3-gdal 3.8 built against

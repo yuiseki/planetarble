@@ -6,7 +6,7 @@ import math
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Tuple
+from typing import Any, Dict, Iterable, Optional, Tuple
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
@@ -23,7 +23,7 @@ try:  # pragma: no cover - optional dependency availability
         if err is not None
     ) or (Exception,)
 except Exception as exc:  # pragma: no cover
-    Client = None  # type: ignore[assignment]
+    Client = None  # type: ignore[assignment, misc]
     pc_exceptions = None  # type: ignore[assignment]
     _PYSTAC_IMPORT_ERROR = exc
     _PYSTAC_ERRORS = (Exception,)
@@ -183,10 +183,10 @@ def _select_scene(
 
     try:
         client = Client.open(STAC_API_ROOT, timeout=timeout)
-    except (_PYSTAC_ERRORS + (requests.RequestException,)) as exc:  # type: ignore[operator] pragma: no cover - network failure path
+    except (_PYSTAC_ERRORS + (requests.RequestException,)) as exc:  # pragma: no cover - network failure path
         raise MPCError(f"Failed to open MPC STAC client: {exc}") from exc
 
-    search_kwargs: Dict[str, object] = {
+    search_kwargs: Dict[str, Any] = {
         "collections": [DEFAULT_COLLECTION],
         "bbox": list(bbox),
         "max_items": 1,
@@ -200,7 +200,7 @@ def _select_scene(
     try:
         search = client.search(**search_kwargs)
         item_collection = search.item_collection()
-    except (_PYSTAC_ERRORS + (requests.RequestException,)) as exc:  # type: ignore[operator] pragma: no cover - network failure path
+    except (_PYSTAC_ERRORS + (requests.RequestException,)) as exc:  # pragma: no cover - network failure path
         raise MPCError(f"MPC STAC search failed: {exc}") from exc
 
     matches = len(item_collection.items) if item_collection else 0
@@ -296,7 +296,7 @@ def _bbox_from_point(*, lat: float, lon: float, width_m: float, height_m: float)
     return (min_lon, min_lat, max_lon, max_lat)
 
 
-def _safe_float(value: object) -> Optional[float]:
+def _safe_float(value: Any) -> Optional[float]:
     try:
         return float(value) if value is not None else None
     except (TypeError, ValueError):

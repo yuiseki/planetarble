@@ -39,8 +39,8 @@ def clip_land_to_region(
 def write_geometry_geojson(geometry: "ogr.Geometry", path: Path) -> None:
     try:
         from osgeo import (
-            ogr,  # type: ignore
-            osr,  # type: ignore
+            ogr,
+            osr,
         )
     except Exception as exc:  # pragma: no cover - depends on GDAL availability
         raise RuntimeError("GDAL (osgeo.ogr) is required for region clipping") from exc

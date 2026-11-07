@@ -112,7 +112,7 @@ def _handle_process(args: argparse.Namespace) -> int:
         if cfg.sentinel2.plan_regions and not plan_region:
             raise SystemExit("sentinel2.plan_regions is set; pass --plan-region or set sentinel2.plan_region")
         manifest_path = _resolve_sentinel2_scene_manifest_path(cfg, plan_region)
-        scene_manifest: Optional[Path] = None
+        scene_manifest = None
         if _is_valid_sentinel2_scene_manifest(manifest_path, required_assets=cfg.sentinel2.assets) and not args.force:
             log_skip(LOGGER, phase="process", reason="valid Sentinel-2 scene manifest", path=str(manifest_path))
             scene_manifest = manifest_path
@@ -216,7 +216,7 @@ def _handle_process(args: argparse.Namespace) -> int:
             date_code=cfg.viirs.date,
         )
 
-    copernicus_cogs: list[Path] = []
+    copernicus_cogs = []
     if cfg.copernicus.enabled:
         try:
             copernicus_cogs = manager.prepare_copernicus_layers(force=args.dry_run)
@@ -225,12 +225,11 @@ def _handle_process(args: argparse.Namespace) -> int:
         except Exception as exc:
             LOGGER.warning("copernicus processing skipped: %s", exc)
 
-    gsi_summary: dict[str, object] | None = None
+    gsi_summary = None
     gsi_cog_path: Path | None = None
     if cfg.gsi_orthophotos.enabled:
         gsi_summary, gsi_output = _fetch_gsi_clip(cfg, dry_run=args.dry_run)
-        gsi_output_str = gsi_summary.get("output") if gsi_summary else str(gsi_output)
-        gsi_cog_path = Path(gsi_output_str)
+        gsi_cog_path = Path(str((gsi_summary or {}).get("output") or gsi_output))
 
     LOGGER.info("processing outputs", extra={
         "bmng_mosaic": str(bmng_source),

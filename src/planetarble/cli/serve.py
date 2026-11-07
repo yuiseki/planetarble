@@ -52,7 +52,7 @@ def _handle_serve(args: argparse.Namespace) -> int:
         try:
             # Imported only to probe that GDAL is available; the except branch
             # falls back to no centre.
-            from osgeo import ogr  # type: ignore  # noqa: F401
+            from osgeo import ogr  # noqa: F401
 
             from planetarble.acquisition.hls import load_region_geometry
         except Exception:
@@ -122,7 +122,7 @@ def _handle_serve(args: argparse.Namespace) -> int:
         LOGGER.info("serve interrupted; shutting down")
     finally:
         try:
-            httpd.shutdown()  # type: ignore[name-defined]
+            httpd.shutdown()
         except Exception:
             pass
     return 0
@@ -131,7 +131,7 @@ def _handle_serve(args: argparse.Namespace) -> int:
 class _RangeRequestHandler(http.server.SimpleHTTPRequestHandler):
     """Serve files with HTTP range support for PMTiles."""
 
-    def send_head(self):  # type: ignore[override]
+    def send_head(self):
         path = self.translate_path(self.path)
         if not os.path.exists(path):
             return super().send_head()

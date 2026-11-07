@@ -10,7 +10,7 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
@@ -85,7 +85,7 @@ class _RateLimiter:
             finally:
                 fcntl.flock(lock_handle, fcntl.LOCK_UN)
 
-    def _load_state(self) -> Dict[str, object]:
+    def _load_state(self) -> Dict[str, Any]:
         if not self._path.exists():
             return {}
         try:
@@ -292,8 +292,6 @@ def download_tiles(
     session.headers.update({"Authorization": f"Bearer {token}"})
 
     base_url = WMS_ENDPOINT_TEMPLATE.format(instance_id=credentials.instance_id)
-
-    summaries: List[Dict[str, object]] = []
 
     capabilities_path = destination / "capabilities.xml"
     try:

@@ -11,18 +11,19 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, cast
 
 from planetarble.acquisition.mpc import MPCError, fetch_sas_token
-from planetarble.core.models import Sentinel2Config
+from planetarble.core.models import BBox, Sentinel2Config
 from planetarble.logging import get_logger
 
+_PYSTAC_IMPORT_ERROR: Exception | None
 try:
-    from pystac import Item  # type: ignore
-    from pystac_client import Client  # type: ignore
+    from pystac import Item
+    from pystac_client import Client
 except Exception as exc:  # pragma: no cover - optional dependency guard
-    Item = None
-    Client = None
+    Item = None  # type: ignore[assignment, misc]
+    Client = None  # type: ignore[assignment, misc]
     _PYSTAC_IMPORT_ERROR = exc
 else:  # pragma: no cover - import guard
     _PYSTAC_IMPORT_ERROR = None
@@ -220,7 +221,7 @@ class Sentinel2SceneManifestBuilder:
         for item in items:
             if item.bbox is None:
                 continue
-            if not _bbox_covers(tuple(float(v) for v in item.bbox), target_bbox):
+            if not _bbox_covers(cast(BBox, tuple(float(v) for v in item.bbox)), target_bbox):
                 continue
             scene = _build_scene(item, collection=collection, token=token, assets=self._config.assets)
             if scene:
@@ -315,7 +316,7 @@ def _log_search_heartbeat(
 
 
 @contextlib.contextmanager
-def _search_timeout(seconds: int) -> "contextlib.AbstractContextManager[None]":
+def _search_timeout(seconds: int) -> Iterator[None]:
     if seconds <= 0:
         yield
         return

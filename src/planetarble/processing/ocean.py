@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib.resources as resources
 import json
 from pathlib import Path
-from typing import Dict, List, Sequence
+from typing import Any, Dict, List, Sequence
 
 from planetarble.core.models import OceanConfig
 from planetarble.logging import get_logger
@@ -87,7 +87,7 @@ class OceanRenderer:
         return ramp_path
 
 
-def _load_depth_ramp(spec: str) -> List[Dict[str, object]]:
+def _load_depth_ramp(spec: str) -> List[Dict[str, Any]]:
     if spec.startswith("planetarble:"):
         relative = spec.split(":", 1)[1]
         package_path = resources.files("planetarble.data").joinpath(relative)

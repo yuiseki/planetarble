@@ -119,7 +119,7 @@ class MbtilesSink:
 
     def _writer(self) -> None:
         conn = sqlite3.connect(str(self.path))
-        batch = []
+        batch: list[tuple[int, int, int, bytes]] = []
 
         def flush() -> None:
             if not batch:
@@ -526,11 +526,11 @@ def composite_mbtiles(
         min_zoom = conn.execute("SELECT MIN(zoom_level) FROM tiles").fetchone()[0]
         max_zoom = conn.execute("SELECT MAX(zoom_level) FROM tiles").fetchone()[0]
         if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='metadata'").fetchone():
-            for key, value in (("format", tile_format), ("minzoom", min_zoom), ("maxzoom", max_zoom)):
+            for meta_key, value in (("format", tile_format), ("minzoom", min_zoom), ("maxzoom", max_zoom)):
                 if value is None:
                     continue
-                if conn.execute("UPDATE metadata SET value=? WHERE name=?", (str(value), key)).rowcount == 0:
-                    conn.execute("INSERT INTO metadata (name, value) VALUES (?, ?)", (key, str(value)))
+                if conn.execute("UPDATE metadata SET value=? WHERE name=?", (str(value), meta_key)).rowcount == 0:
+                    conn.execute("INSERT INTO metadata (name, value) VALUES (?, ?)", (meta_key, str(value)))
         conn.commit()
         conn.execute("DETACH DATABASE overlay")
     return destination

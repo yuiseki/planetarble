@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
+# (min_lon, min_lat, max_lon, max_lat) in EPSG:4326.
+BBox = Tuple[float, float, float, float]
 
 @dataclass
 class AssetSource:

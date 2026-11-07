@@ -178,6 +178,7 @@ class TilingManager(TileGenerator):
             return False
 
     def _run_gdal2mbtiles(self, input_path: Path, destination: Path, tile_format: str) -> None:
+        assert self._gdal2mbtiles_cmd is not None  # callers check availability first
         command = list(self._gdal2mbtiles_cmd)
         # Only pass format hint when gdal2mbtiles supports the requested encoding.
         format_map = {"JPEG": "jpg", "PNG": "png"}

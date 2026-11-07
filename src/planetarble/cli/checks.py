@@ -7,7 +7,7 @@ import shutil
 import sqlite3
 import subprocess
 from pathlib import Path
-from typing import Iterable, Optional, Sequence
+from typing import Any, Iterable, Optional, Sequence
 
 from planetarble.acquisition.copernicus import copernicus_layer_slug
 from planetarble.config import PipelineConfig
@@ -135,7 +135,7 @@ def _is_valid_mbtiles(path: Path) -> bool:
         conn.close()
 
 
-def _read_mbtiles_metadata(path: Path) -> dict[str, object]:
+def _read_mbtiles_metadata(path: Path) -> dict[str, Any]:
     if not path.exists() or path.stat().st_size == 0:
         return {}
     try:
@@ -147,7 +147,7 @@ def _read_mbtiles_metadata(path: Path) -> dict[str, object]:
         meta_exists = cur.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='metadata'"
         ).fetchone()
-        metadata: dict[str, object] = {}
+        metadata: dict[str, Any] = {}
         if meta_exists:
             for key, value in cur.execute("SELECT name, value FROM metadata"):
                 metadata[str(key)] = value

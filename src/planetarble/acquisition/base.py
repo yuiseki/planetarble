@@ -17,7 +17,9 @@ class DataAcquisition(Protocol):
     def download_gebco(self, year: int = 2024, force: bool = False) -> Path:
         """Download the GEBCO bathymetry grid for the specified year."""
 
-    def download_natural_earth(self, scale: str = "10m", force: bool = False) -> Path:
+    def download_natural_earth(
+        self, scale: str = "10m", *, force: bool = False, include_admin: bool = False
+    ) -> Path:
         """Download Natural Earth coastline and mask data at the given scale."""
 
     def verify_checksums(self, manifest: AssetManifest) -> bool:

@@ -10,7 +10,7 @@ declare the contract and raise ``NotImplementedError`` for now.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple, Type
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 
 from .sources import SOURCE_REGISTRY
 
@@ -79,7 +79,7 @@ class OpenAerialMapAdapter(BaseSourceAdapter):
         max_gsd: Optional[float] = None,
         max_items: int = 1,
         resampling: str = "cubic",
-        fetch: Optional[object] = None,
+        fetch: Optional[Callable[[Any], Any]] = None,
     ) -> None:
         # OAM resolution varies per item, so the real ceiling comes from the
         # selected item's ground sample distance once known; until then the
@@ -100,7 +100,7 @@ class OpenAerialMapAdapter(BaseSourceAdapter):
             return gsd_to_zoom(min(item.gsd for item in self._selected))
         return SOURCE_REGISTRY[self.name].native_max_zoom
 
-    def plan(self, aoi: object, zoom_range: Tuple[int, int]) -> object:
+    def plan(self, aoi: Any, zoom_range: Tuple[int, int]) -> object:
         from planetarble.acquisition.openaerialmap import query_oam, select_items
 
         bbox = getattr(aoi, "bbox", None) or aoi
@@ -113,11 +113,11 @@ class OpenAerialMapAdapter(BaseSourceAdapter):
 
     def build_raster(
         self,
-        plan: object,
+        plan: Any,
         workspace: object,
         *,
-        cache_dir: object = None,
-        aoi_bbox: object = None,
+        cache_dir: Any = None,
+        aoi_bbox: Any = None,
     ) -> object:
         import subprocess
         from pathlib import Path
@@ -180,4 +180,4 @@ def get_adapter(source: str, **kwargs: object) -> BaseSourceAdapter:
         raise ValueError(
             f"no adapter for source {source!r} (known: {sorted(_ADAPTERS)})"
         )
-    return cls(**kwargs)  # type: ignore[arg-type]
+    return cls(**kwargs)

@@ -28,7 +28,24 @@ dependencies = [
 # need neither.
 
 [dependency-groups]
-dev = ["pytest>=8.0", "ruff==0.17.2"]
+dev = [
+  "pytest>=8.0",
+  "ruff==0.17.2",
+  "mypy==2.4.0",
+  "types-requests==2.33.0.20261006",
+  "types-PyYAML==6.0.12.20260906",
+]
+
+[tool.mypy]
+# Gradual typing: default (non-strict) checks over src/. GDAL, numpy, PIL and
+# pyvips are optional system/runtime dependencies without bundled stubs.
+python_version = "3.11"
+files = ["src"]
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["osgeo.*", "pyvips.*", "numpy.*", "PIL.*"]
+ignore_missing_imports = true
 
 [tool.ruff]
 target-version = "py311"

@@ -18,7 +18,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable, Optional, Tuple
+from typing import Any, Callable, Iterable, Optional, Tuple
 
 from planetarble.logging import get_logger
 
@@ -53,7 +53,7 @@ def download_xyz_tiles(
     retries: int = 5,
     cooldown_s: float = 30.0,
     user_agent: str = "planetarble/0.1 (+https://github.com/yuiseki/planetarble)",
-    http_get: Optional[Callable[[str, int], object]] = None,
+    http_get: Optional[Callable[[str, int], Any]] = None,
     on_progress: Optional[Callable[[TileDownloadStats], None]] = None,
     report_every: float = 15.0,
     sleep: Callable[[float], None] = time.sleep,
@@ -75,8 +75,11 @@ def download_xyz_tiles(
         out_dir.mkdir(parents=True, exist_ok=True)
 
     if sink is None:
+        assert out_dir is not None  # guaranteed by the check above
+        tile_dir: Path = out_dir
+
         def sink(z: int, x: int, y: int, content: bytes) -> None:  # noqa: F811
-            p = tile_path(out_dir, z, x, y, ext)
+            p = tile_path(tile_dir, z, x, y, ext)
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_bytes(content)
     if is_cached is None:

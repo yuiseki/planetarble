@@ -122,7 +122,7 @@ class DefaultPlanetExecutor:
         )
         manifest_path = (self._cfg.output_dir / "processing" / f"hls_scene_manifest_{overlay.name}.json").resolve()
         manifest = pmgr.prepare_hls_scene_manifest(plan_path, destination=manifest_path)
-        cog = pmgr.build_hls_mosaic(manifest, plan_region=overlay.name)
+        cog = pmgr.build_hls_mosaic(manifest, plan_region=overlay.name) if manifest else None
         if cog is None:
             raise RuntimeError(f"HLS mosaic produced no output for {overlay.name}")
         return Path(cog)

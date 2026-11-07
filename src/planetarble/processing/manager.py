@@ -7,7 +7,7 @@ import json
 import time
 import zipfile
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, cast
 
 from planetarble.acquisition.copernicus import copernicus_layer_slug
 from planetarble.acquisition.hls import (
@@ -18,6 +18,7 @@ from planetarble.acquisition.hls import (
 from planetarble.acquisition.mpc import append_sas_token, fetch_sas_token
 from planetarble.acquisition.sentinel_2 import Sentinel2SceneManifestBuilder
 from planetarble.core.models import (
+    BBox,
     CopernicusConfig,
     CopernicusLayerConfig,
     HLSConfig,
@@ -172,7 +173,7 @@ class ProcessingManager(DataProcessor):
                 bbox = scene.get("bbox")
                 if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
                     continue
-                if _geom_intersects_bbox(region_geometry, tuple(float(v) for v in bbox)):
+                if _geom_intersects_bbox(region_geometry, cast(BBox, tuple(float(v) for v in bbox))):
                     filtered.append(scene)
             scenes = filtered
         scenes = _refresh_hls_scene_urls(scenes, self._hls)
@@ -667,7 +668,7 @@ class ProcessingManager(DataProcessor):
     def _record_source_hashes(self, meta_path: Path, sources: Dict[str, Path]) -> None:
         if self._dry_run:
             return
-        payload = {"sources": {}}
+        payload: Dict[str, Dict[str, Dict[str, str]]] = {"sources": {}}
         for key, source_path in sources.items():
             resolved = source_path.resolve()
             if not resolved.exists():

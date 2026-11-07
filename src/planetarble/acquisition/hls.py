@@ -11,6 +11,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
+    Any,
     Dict,
     Iterable,
     Iterator,
@@ -18,7 +19,9 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
+    TextIO,
     Tuple,
+    cast,
 )
 
 if TYPE_CHECKING:  # GDAL is optional at runtime; imported lazily where used
@@ -38,12 +41,13 @@ try:  # pragma: no cover - optional dependency availability
         if err is not None
     ) or (Exception,)
 except Exception as exc:  # pragma: no cover - executed when sqlite is missing
-    Client = None  # type: ignore[assignment]
+    Client = None  # type: ignore[assignment, misc]
     pc_exceptions = None  # type: ignore[assignment]
     _PYSTAC_IMPORT_ERROR = exc
     _PYSTAC_ERRORS = (Exception,)
 
 from planetarble.core.models import (
+    BBox,
     HLSConfig,
     HLSPlanRegion,
     HLSSeasonWindow,
@@ -159,7 +163,7 @@ class HLSMosaicTask:
         return mapping
 
     @classmethod
-    def from_mapping(cls, mapping: Mapping[str, object]) -> "HLSMosaicTask":
+    def from_mapping(cls, mapping: Mapping[str, Any]) -> "HLSMosaicTask":
         try:
             z = int(mapping["z"])
             x = int(mapping["x"])
@@ -312,7 +316,7 @@ def load_land_geometry(
 
 def _ogr() -> "ogr":
     try:
-        from osgeo import ogr  # type: ignore
+        from osgeo import ogr
     except Exception as exc:  # pragma: no cover - depends on GDAL availability
         raise RuntimeError("GDAL (osgeo.ogr) is required for regional HLS planning") from exc
     try:
@@ -379,7 +383,7 @@ def _load_geometry_union(
         layer.SetAttributeFilter(where)
     if region_geometry is not None:
         layer.SetSpatialFilter(region_geometry)
-    selected: list["ogr.Geometry"] = []
+    selected: list[Any] = []  # ogr.Geometry
     for feature in layer:
         geom = feature.GetGeometryRef()
         if geom is None:
@@ -722,7 +726,7 @@ def _build_scene(
     cloud_cover = _safe_float(item.properties.get("eo:cloud_cover"))
     acquisition = _parse_date(item.properties.get("datetime"))
     if item.bbox and len(item.bbox) == 4:
-        bbox = tuple(float(v) for v in item.bbox)  # type: ignore[assignment]
+        bbox = cast(BBox, tuple(float(v) for v in item.bbox))
     else:
         bbox = task_bbox
     return HLSScene(
@@ -736,7 +740,7 @@ def _build_scene(
     )
 
 
-def _safe_float(value: object) -> Optional[float]:
+def _safe_float(value: Any) -> Optional[float]:
     try:
         return float(value) if value is not None else None
     except (TypeError, ValueError):
@@ -802,7 +806,7 @@ def split_plan_by_miniplanet(path: Path, out_dir: Path) -> Dict[str, Path]:
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = path.stem
-    handles: Dict[str, "object"] = {}
+    handles: Dict[str, TextIO] = {}
     paths: Dict[str, Path] = {}
     try:
         for task in iter_plan(path):

@@ -518,7 +518,7 @@ def _is_valid_raster(path: Path) -> bool:
     if not path.exists() or path.stat().st_size == 0:
         return False
     try:
-        from osgeo import gdal  # type: ignore
+        from osgeo import gdal
     except Exception:
         return True
     try:

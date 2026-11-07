@@ -335,7 +335,7 @@ def _build_hls_median_rgb(
                 [ds.GetRasterBand(1).ReadAsArray(0, y, xs, rows) for ds in aligned]
             )
             out_band.WriteArray(median_composite(stack, nodata=nodata), 0, y)
-        aligned = None
+        del aligned  # release the warped GDAL datasets before the next band
     out.FlushCache()
     out = None
     return out_path

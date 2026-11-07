@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from planetarble.core.models import (
+    BBox,
     CopernicusConfig,
     CopernicusLayerConfig,
     GSIOrthophotoConfig,
@@ -23,9 +24,9 @@ from planetarble.core.models import (
 )
 
 try:
-    import yaml  # type: ignore
+    import yaml
 except ImportError:  # pragma: no cover - optional dependency guard
-    yaml = None
+    yaml = None  # type: ignore[assignment]
 
 
 def _normalize_miniplanet(value: Any) -> Optional[str]:
@@ -207,7 +208,7 @@ class ConfigLoader:
             if bbox is not None:
                 if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
                     raise ValueError("sentinel2.plan_regions bbox must be a list of four numbers")
-                bbox_tuple = tuple(float(value) for value in bbox)
+                bbox_tuple = cast(BBox, tuple(float(value) for value in bbox))
             region_configs.append(
                 HLSPlanRegion(
                     name=str(region_data.get("name", "")),
@@ -271,7 +272,7 @@ class ConfigLoader:
             if bbox is not None:
                 if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
                     raise ValueError("hls.plan_regions bbox must be a list of four numbers")
-                bbox_tuple = tuple(float(value) for value in bbox)
+                bbox_tuple = cast(BBox, tuple(float(value) for value in bbox))
             region_configs.append(
                 HLSPlanRegion(
                     name=str(region_data.get("name", "")),

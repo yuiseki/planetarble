@@ -6,7 +6,7 @@ import json
 import logging
 from logging import Logger
 from logging.config import dictConfig
-from typing import Optional
+from typing import Any, Dict, Optional
 
 
 def log_step(
@@ -109,7 +109,7 @@ def configure_logging(
 ) -> None:
     """Configure global logging handlers and formatters."""
 
-    formatters = {
+    formatters: Dict[str, Dict[str, Any]] = {
         "standard": {
             "format": "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
             "datefmt": "%Y-%m-%dT%H:%M:%SZ",

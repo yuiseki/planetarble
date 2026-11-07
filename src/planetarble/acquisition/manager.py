@@ -553,7 +553,7 @@ class AcquisitionManager(DataAcquisition):
             sha256=sha256,
             size_bytes=size_bytes,
         )
-        self._downloader._results[asset_id] = result  # type: ignore[attr-defined]
+        self._downloader._results[asset_id] = result
         return result
 
 

@@ -117,7 +117,7 @@ def _handle_serve(args: argparse.Namespace) -> int:
         if args.open:
             import webbrowser
 
-            webbrowser.open(f"{ui_url}?pmtiles={pmtiles_url}")
+            webbrowser.open(viewer_url)
         handler = functools.partial(_RangeRequestHandler, directory=str(distribution_dir))
         httpd = http.server.ThreadingHTTPServer((tiles_host, ui_port), handler)
         LOGGER.info("serve http", extra={"address": f"{tiles_host}:{ui_port}"})

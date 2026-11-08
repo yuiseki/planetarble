@@ -95,3 +95,23 @@ def test_head_with_range_sends_headers_only(server: int) -> None:
 def test_missing_file_is_404(server: int) -> None:
     resp, _ = _request(server, path="/nope.pmtiles", range_header="bytes=0-1")
     assert resp.status == 404
+
+
+@pytest.mark.parametrize("header", [None, "bytes=0-3", "bytes=50-60"])
+def test_every_opened_file_is_closed(server: int, monkeypatch, header) -> None:
+    # A long-running server must not leak a descriptor per request
+    # (the 416 path used to return without closing the file).
+    import builtins
+
+    import planetarble.cli.serve as serve_module
+
+    opened = []
+
+    def tracking_open(*args, **kwargs):
+        handle = builtins.open(*args, **kwargs)
+        opened.append(handle)
+        return handle
+
+    monkeypatch.setattr(serve_module, "open", tracking_open, raising=False)
+    _request(server, range_header=header)
+    assert opened and all(handle.closed for handle in opened)

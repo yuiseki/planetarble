@@ -150,6 +150,7 @@ class _RangeRequestHandler(http.server.SimpleHTTPRequestHandler):
             if range_header:
                 start, end = self._parse_range(range_header, size)
                 if start is None:
+                    f.close()
                     self.send_error(416, "Requested Range Not Satisfiable")
                     return None
                 self.send_response(206)

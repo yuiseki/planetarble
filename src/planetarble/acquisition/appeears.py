@@ -205,7 +205,9 @@ class AppEEARSClient:
         destination.parent.mkdir(parents=True, exist_ok=True)
         with self._session.get(f"{API_ROOT}bundle/{task_id}/{file_id}", stream=True) as response:
             response.raise_for_status()
-            filename = _parse_content_disposition(response.headers.get("Content-Disposition")) or destination.name
+            # keep only the base name: the header must not choose the directory
+            filename = Path(_parse_content_disposition(response.headers.get("Content-Disposition")) or "").name
+            filename = filename or destination.name
             path = destination.parent / filename
             with path.open("wb") as handle:
                 for chunk in response.iter_content(chunk_size=8192):
@@ -231,39 +233,10 @@ def download_mcd43a4_tiles(
         quality = [f"BRDF_Albedo_Band_Mandatory_Quality_Band{i}" for i in range(1, 8)]
         layers = (*reflectance, *quality)
 
-    tasks: Dict[str, str] = {}
-    doy = date_value.timetuple().tm_yday
-    for tile in tiles:
-        polygon = modis_tile_polygon(tile)
-        task_name = f"mcd43a4_{date_value.year}{doy:03d}_{tile}"
-        task_id = client.submit_area_task(
-            task_name=task_name,
-            product=product,
-            start_date=date_value,
-            end_date=date_value,
-            polygon=polygon,
-            layers=layers,
-            output_format="geotiff",
-            projection=projection,
-        )
-        tasks[tile] = task_id
-
-    statuses = client.wait_for_tasks(tasks)
-    failed = [tile for tile, ok in statuses.items() if not ok]
-    if failed:
-        raise AppEEARSDownloadError(f"AppEEARS tasks failed: {', '.join(sorted(failed))}")
-
-    outputs: Dict[str, List[Path]] = {}
-    for tile, task_id in tasks.items():
-        files = client.list_bundle_files(task_id)
-        tile_dir = destination / f"{date_value.year}{doy:03d}" / tile
-        for record in files:
-            file_id = str(record.get("file_id"))
-            if not file_id:
-                continue
-            file_path = client.download_file(task_id, file_id, tile_dir / str(record.get("file_name", file_id)))
-            outputs.setdefault(tile, []).append(file_path)
-    return outputs
+    return _request_tiles(
+        client, task_prefix="mcd43a4", product=product, layers=layers, date_value=date_value,
+        tiles=tiles, destination=destination, projection=projection,
+    )
 
 
 def download_viirs_corrected_reflectance(
@@ -281,22 +254,39 @@ def download_viirs_corrected_reflectance(
     if layers is None:
         layers = _default_viirs_layers(product)
 
+    return _request_tiles(
+        client, task_prefix="viirs", product=product, layers=layers, date_value=date_value,
+        tiles=tiles, destination=destination, projection=projection,
+    )
+
+
+def _request_tiles(
+    client: AppEEARSClient,
+    *,
+    task_prefix: str,
+    product: str,
+    layers: Sequence[str],
+    date_value: date,
+    tiles: Sequence[str],
+    destination: Path,
+    projection: str,
+) -> Dict[str, List[Path]]:
+    """Submit one area task per MODIS-grid tile, wait for all of them, and
+    download each bundle to ``destination/<YYYYDDD>/<tile>/``."""
+
     tasks: Dict[str, str] = {}
     doy = date_value.timetuple().tm_yday
     for tile in tiles:
-        polygon = modis_tile_polygon(tile)
-        task_name = f"viirs_{date_value.year}{doy:03d}_{tile}"
-        task_id = client.submit_area_task(
-            task_name=task_name,
+        tasks[tile] = client.submit_area_task(
+            task_name=f"{task_prefix}_{date_value.year}{doy:03d}_{tile}",
             product=product,
             start_date=date_value,
             end_date=date_value,
-            polygon=polygon,
+            polygon=modis_tile_polygon(tile),
             layers=layers,
             output_format="geotiff",
             projection=projection,
         )
-        tasks[tile] = task_id
 
     statuses = client.wait_for_tasks(tasks)
     failed = [tile for tile, ok in statuses.items() if not ok]
@@ -305,13 +295,12 @@ def download_viirs_corrected_reflectance(
 
     outputs: Dict[str, List[Path]] = {}
     for tile, task_id in tasks.items():
-        files = client.list_bundle_files(task_id)
         tile_dir = destination / f"{date_value.year}{doy:03d}" / tile
-        for record in files:
-            file_id = str(record.get("file_id"))
+        for record in client.list_bundle_files(task_id):
+            file_id = record.get("file_id")
             if not file_id:
                 continue
-            file_path = client.download_file(task_id, file_id, tile_dir / str(record.get("file_name", file_id)))
+            file_path = client.download_file(task_id, str(file_id), tile_dir / str(record.get("file_name", file_id)))
             outputs.setdefault(tile, []).append(file_path)
     return outputs
 

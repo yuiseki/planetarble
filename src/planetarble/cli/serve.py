@@ -84,9 +84,9 @@ def _handle_serve(args: argparse.Namespace) -> int:
     tiles_host = args.host
     ui_port = args.ui_port
     tiles_port = args.tiles_port
-    if tiles_port != ui_port:
+    if tiles_port is not None and tiles_port != ui_port:
         LOGGER.warning(
-            "serve uses a single HTTP server; ignoring tiles-port",
+            "serve uses a single HTTP server on --ui-port; ignoring --tiles-port",
             extra={"tiles_port": tiles_port, "ui_port": ui_port},
         )
 
@@ -106,7 +106,6 @@ def _handle_serve(args: argparse.Namespace) -> int:
         "serve starting",
         extra={"pmtiles": str(pmtiles_path), "viewer": str(viewer_target)},
     )
-    LOGGER.info("serve commands", extra={"ui": f"python -m planetarble serve {tiles_host}:{ui_port}"})
     viewer_url = f"{ui_url}?pmtiles={pmtiles_url}"
     if center is not None:
         viewer_url = f"{viewer_url}#8/{center[1]}/{center[0]}"
@@ -223,8 +222,13 @@ def register_serve(subcommands: argparse._SubParsersAction) -> None:
         help="Path to pipeline configuration file (YAML or JSON) for region resolution",
     )
     serve.add_argument("--host", default="0.0.0.0", help="Host interface to bind (default: 0.0.0.0)")
-    serve.add_argument("--tiles-port", type=int, default=8080, help="Port for pmtiles server")
-    serve.add_argument("--ui-port", type=int, default=8081, help="Port for the viewer UI")
+    serve.add_argument(
+        "--tiles-port",
+        type=int,
+        default=None,
+        help="Deprecated and ignored: one server serves the PMTiles and the viewer on --ui-port",
+    )
+    serve.add_argument("--ui-port", type=int, default=8081, help="Port for the viewer and the PMTiles (default: 8081)")
     serve.add_argument(
         "--viewer-root",
         type=Path,

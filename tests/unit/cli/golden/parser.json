@@ -2060,11 +2060,11 @@
      "dest": "tiles_port",
      "required": false,
      "nargs": null,
-     "default": "8080",
+     "default": "None",
      "type": "int",
      "choices": null,
      "metavar": null,
-     "help": "Port for pmtiles server"
+     "help": "Deprecated and ignored: one server serves the PMTiles and the viewer on --ui-port"
     },
     {
      "kind": "_StoreAction",
@@ -2078,7 +2078,7 @@
      "type": "int",
      "choices": null,
      "metavar": null,
-     "help": "Port for the viewer UI"
+     "help": "Port for the viewer and the PMTiles (default: 8081)"
     },
     {
      "kind": "_StoreAction",

@@ -174,3 +174,36 @@ def test_region_viewer_url_is_centred_on_the_region(tmp_path: Path, use_cfg, ope
 
     assert seen == {"region": "kanto"}
     assert opened[0].endswith("#8/35.5/139.5")
+
+
+@pytest.fixture
+def keep_caplog(patch_cli) -> None:
+    # cli.main() runs dictConfig, which replaces the root handlers caplog uses
+    patch_cli("configure_logging", lambda **kwargs: None)
+
+
+def _serve_warnings(caplog) -> List[str]:
+    return [r.getMessage() for r in caplog.records if r.name == "planetarble.cli.serve" and r.levelname == "WARNING"]
+
+
+def test_default_options_do_not_warn(tmp_path: Path, caplog, keep_caplog) -> None:
+    planet = _pmtiles(tmp_path / "planet.pmtiles")
+    with caplog.at_level("INFO", logger="planetarble.cli.serve"):
+        cli.main(["serve", "--pmtiles", str(planet)])
+    assert _serve_warnings(caplog) == []
+
+
+def test_explicit_tiles_port_is_ignored_with_a_warning(tmp_path: Path, caplog, keep_caplog, fake_server) -> None:
+    planet = _pmtiles(tmp_path / "planet.pmtiles")
+    with caplog.at_level("INFO", logger="planetarble.cli.serve"):
+        cli.main(["serve", "--pmtiles", str(planet), "--tiles-port", "7000", "--ui-port", "9003"])
+    assert len(_serve_warnings(caplog)) == 1
+    assert fake_server.instances[0].address[1] == 9003
+
+
+def test_logs_do_not_suggest_a_command_that_does_not_exist(tmp_path: Path, caplog, keep_caplog) -> None:
+    planet = _pmtiles(tmp_path / "planet.pmtiles")
+    with caplog.at_level("INFO", logger="planetarble.cli.serve"):
+        cli.main(["serve", "--pmtiles", str(planet)])
+    assert not any("python -m planetarble serve " in r.getMessage() + str(getattr(r, "ui", ""))
+                   for r in caplog.records)

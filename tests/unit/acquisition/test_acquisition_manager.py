@@ -239,7 +239,7 @@ def test_modis_asset_ids_are_parsed_and_malformed_ones_skipped(tmp_path: Path) -
         "modis_mcd43a4_2024150_x31y05",  # tile
         "bmng_2004_aug_2km_global",
     )
-    ((asset_id, _record, when, tile, path),) = manager._collect_modis_assets()
+    ((asset_id, _record, when, tile, path),) = manager._collect_appeears_assets("modis_mcd43a4_", "modis")
     assert asset_id == "modis_mcd43a4_2024150_h31v05"
     assert when.date() == date(2024, 5, 29)  # day 150 of a leap year
     assert tile == "h31v05"

@@ -68,8 +68,8 @@ uv run planetarble tiling union-mbtiles \
 
 # convert once, then slice cheaply with pmtiles extract
 pmtiles convert all_z17-18.mbtiles all_z17-18.pmtiles
-pmtiles extract all.pmtiles z18.pmtiles --minzoom 18 --maxzoom 18
-pmtiles extract all.pmtiles tokyo.pmtiles --bbox 139.5,35.5,140.0,35.9
+pmtiles extract all_z17-18.pmtiles z18.pmtiles --minzoom 18 --maxzoom 18
+pmtiles extract all_z17-18.pmtiles tokyo.pmtiles --bbox 139.5,35.5,140.0,35.9
 ```
 
 Receivers can also `pmtiles extract` directly from a remote URL over HTTP range,

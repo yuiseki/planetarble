@@ -29,11 +29,11 @@ hls:
     - name: "osaka"
       natural_earth:
         dataset: "admin_1"
-        where: "adm0_a3='JPN' AND name='Osaka'"
+        where: "adm0_a3='JPN' AND name='Ōsaka'"
       land_only: true
 ```
 
-Note: spellings must match Natural Earth exactly. Use the `ogrinfo` query above to confirm names.
+Note: spellings must match Natural Earth exactly (for example `Ōsaka`, `Kyōto` and `Hyōgo` carry macrons). Use the `ogrinfo` query above to confirm names. `configs/profiles/hls-regional-z11.yaml` already defines the prefectures of Kanto, Chubu and Kinki as `<prefecture>_land` regions.
 
 ## 3) Suggested execution order
 
@@ -56,9 +56,9 @@ This order provides early feedback while steadily increasing coverage.
 ## 5) Operational workflow
 
 ```bash
-planetarble acquire --config configs/base/pipeline.yaml --plan-region tokyo
-planetarble process --config configs/base/pipeline.yaml --plan-region tokyo
-planetarble tile --config configs/base/pipeline.yaml --plan-region tokyo --min-zoom 11 --max-zoom 11
+planetarble acquire --config configs/profiles/hls-regional-z11.yaml --plan-region tokyo_land
+planetarble process --config configs/profiles/hls-regional-z11.yaml --plan-region tokyo_land
+planetarble tile --config configs/profiles/hls-regional-z11.yaml --plan-region tokyo_land --min-zoom 11 --max-zoom 11
 ```
 
 Repeat per prefecture, then merge MBTiles and package.

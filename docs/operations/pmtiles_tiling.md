@@ -10,7 +10,7 @@ This approach avoids the massive in-memory VRT used by the legacy pipeline and k
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - GDAL ≥ 3.11 with the `gdal raster tile` subcommand
 - `mb-util` CLI on the `PATH`
 - `pmtiles` (go-pmtiles) CLI on the `PATH`
@@ -64,14 +64,14 @@ Running the command produces:
 - JPEG is fastest for opaque imagery. Prefer WEBP for sharper visual quality at the cost of encoding time. Use PNG only when transparency is required.
 - For extremely large rasters, mount the temporary directory on fast NVMe storage to minimise I/O stalls.
 - If `pmtiles convert` runs out of memory, retry with `--no-deduplication` (deduplication is the most memory-intensive step).
-- The pipeline retries `gdal raster tile` with `bilinear` resampling if the requested kernel fails; adjust `--resampling` manually for additional control.
+- If `gdal raster tile` fails, the pipeline retries it once serially (`--num-threads 1`) with `bilinear` resampling, which avoids a parallel WEBP overview race at high zooms; adjust `--resampling` manually for additional control.
 
 ## Verification
 
 After conversion, the command automatically executes `pmtiles verify` and prints the PMTiles header (`pmtiles show --header-json`). You can also run:
 
 ```shell
-pmtiles tile output/pmtiles/planet_2024_0-12.pmtiles 2 1 1 > tile.jpg
+pmtiles tile output/pmtiles/planet_blend_2024_0-12.pmtiles 2 1 1 > tile.jpg
 pmtiles serve output/pmtiles
 ```
 

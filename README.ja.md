@@ -2,29 +2,47 @@
 
 [![Image from Gyazo](https://i.gyazo.com/aefeffdeb3c3575ff02037a8509c4d7c.png)](https://pmtiles.io/#url=https%3A%2F%2Fz.yuiseki.net%2Fstatic%2Fplanetarble%2Fplanet.pmtiles&map=1.88/0/0)
 
-Planetarble は、完全にオープンな地球規模のラスター地図タイルを生成し、オフライン配布可能な単一の PMTiles アーカイブにまとめるプロジェクトです。
+Planetarble は、完全にオープンなデータだけから地球規模のラスター地図タイルを作り、オフラインで配布できる単一の PMTiles アーカイブにまとめるプロジェクトです。
 
-プロジェクトは次の 3 つの主要フェーズで構成されます。
+アポロ 17 号が撮影した「The Blue Marble」の写真は、地球が青と白の繊細な渦を持つ美しい惑星であることを世界に示しました。Planetarble はその精神を受け継ぎ、NASA の Blue Marble Next Generation (BMNG) をはじめとするオープンな画像から地球全体のビューを作ります。
 
-1. 必要なデータセット（NASA BMNG 2004、GEBCO 2024 Global Grid、Natural Earth 10 m レイヤー）を整合性チェック付きで取得します。
-2. ラスターを加工し、ズームレベル 0–10 をカバーする Web Mercator タイルピラミッドにブレンドします。
-3. 出力を付属メタデータやライセンス情報とともに `planet_{YYYY}_{max_zoom_level}z.pmtiles` としてパッケージ化します。
+パイプラインは次の 4 段階です。
 
-アポロ 17 号が撮影した「The Blue Marble」の写真は、地球が青と白の繊細な渦を持つ美しい惑星であることを世界に示しました。Planetarble はその精神を受け継ぎ、NASA の Blue Marble Next Generation 画像を活用し、完全にオープンなデータから構築された地球全体のビューを提供します。
+1. acquire: 元データを取得するか、取得の計画を作ります。
+2. process: 画像をモザイクし、海の陰影を作ります。
+3. tile: モザイクを MBTiles のタイルピラミッドに切ります。
+4. package: MBTiles を PMTiles に変換し、TileJSON と出典のファイルを添えて配布用にまとめます。
 
-## ローカル環境の構築（uv）
+どの画像を使うかは `processing.tile_source` で選びます。`hls` (設定しないときの既定。HLS v2 の 30 m 画像)、`bmng` (BMNG と GEBCO と Natural Earth による全球の地図)、`sentinel2` (Microsoft Planetary Computer の Sentinel-2 L2A)、`gsi_orthophotos` (国土地理院のシームレス空中写真) のほか、試験的な `modis`、`viirs`、`copernicus` があります。
 
-Python の依存は [uv](https://docs.astral.sh/uv/) で管理し、`uv.lock` で版を固定しています。ただし GDAL の Python バインディング（`osgeo`）と numpy は OS のパッケージから使います。バインディングはシステムの libgdal と版をそろえる必要があり、`gdal_array` はシステムの numpy に合わせてビルドされているためです。venv はシステムの Python で、system site-packages が見える状態で作ります。
+## 5 分で試す
+
+NASA Blue Marble (2 km) から、小さいけれど全球そろった PMTiles を作ります。テラバイト級のデータは要らず、イメージをビルドしたあとは 1 分もかかりません。
 
 ```bash
-sudo apt install gdal-bin python3-gdal   # GDAL の CLI とバインディング（python3-numpy も入る）
+docker build -t planetarble .
+mkdir -p workspace
+docker run --rm -v "$PWD/workspace:/workspace" --entrypoint bash planetarble -c '
+  curl -sL -o bmng.jpg "https://eoimages.gsfc.nasa.gov/images/imagerecords/73000/73776/world.topo.bathy.200408.3x5400x2700.jpg" &&
+  gdal_translate -q -a_srs EPSG:4326 -a_ullr -180 90 180 -90 bmng.jpg bmng.tif &&
+  planetarble tiling pmtiles --input bmng.tif --out . --min-zoom 0 --max-zoom 5 --format webp --bounds-mode global'
+```
+
+`workspace/bmng_0-5.pmtiles` (約 4 MB、ズーム 0-5、全球) ができます。<https://pmtiles.io> にドロップすると見られます。[必要要件](#必要要件) の道具がそろっていれば、Docker なしでも同じ 3 つのコマンドで動きます。
+
+## ローカル環境の構築 (uv)
+
+Python の依存は [uv](https://docs.astral.sh/uv/) で管理し、`uv.lock` で版を固定しています。ただし GDAL の Python バインディング (`osgeo`) と numpy は OS のパッケージから使います。バインディングはシステムの libgdal と版をそろえる必要があり、`gdal_array` はシステムの numpy に合わせてビルドされているためです。venv はシステムの Python で、system site-packages が見える状態で作ります。
+
+```bash
+sudo apt install gdal-bin python3-gdal   # GDAL の CLI とバインディング (python3-numpy も入る)
 uv venv --python /usr/bin/python3 --system-site-packages
-uv sync                                  # プロジェクトの依存と dev グループ（pytest）
+uv sync                                  # プロジェクトの依存と dev グループ (pytest)
 uv run pytest
 uv run planetarble --help
 ```
 
-地理院タイルの収集だけをするホストでは GDAL も numpy も不要で、`uv sync` だけで動きます（`docs/operations/collection-node.md` を参照）。その場合 GDAL と numpy を使うテストはスキップされます。
+地理院タイルの収集だけをするホストでは GDAL も numpy も不要で、`uv sync` だけで動きます (`docs/operations/collection-node.md` を参照)。その場合 GDAL と numpy を使うテストはスキップされます。
 
 conda の環境が有効になっていると、`GDAL_DATA`、`GDAL_DRIVER_PATH`、`PROJ_DATA` がシステムの GDAL に conda のプラグインとデータを読ませてしまい、GDAL を使うテストが失敗します。先に conda を無効にするか、`env -u GDAL_DATA -u GDAL_DRIVER_PATH -u PROJ_DATA uv run pytest` のように外してください。
 
@@ -46,77 +64,65 @@ uv run pytest
 
 ## クイックスタート
 
+全球の BMNG 地図 (ズーム 0-8、下の配布物と同じもの) を作る例です。`configs/profiles/` のほかのレシピも同じ流れで、各ファイルの冒頭に実行するコマンドが書いてあります。
+
 ```bash
-# 「ローカル環境の構築（uv）」の手順で venv を作ってから有効にする
+# 「ローカル環境の構築 (uv)」の手順で venv を作ってから有効にする
 source .venv/bin/activate
 
-# venv を使わない場合のフォールバック（リポジトリを直接利用）
-PYTHONPATH=src python -m planetarble.cli.main --help
+# data/、tmp/、output/ は今いるディレクトリからの相対パスになる
+mkdir -p workspace && cd workspace
 
-# ソースデータセットをダウンロードし、出力ディレクトリに MANIFEST.json を生成
-planetarble acquire --config configs/base/pipeline.yaml
+# BMNG 500 m、GEBCO、Natural Earth と (ocean.enabled なら) ETOPO を取得し、output/MANIFEST.json を書く
+# (aria2c が PATH にあれば再開できるダウンロードに使う。--no-aria2 で無効にできる)
+planetarble acquire --config ../configs/profiles/bmng-global-z8.yaml
 
-# パッケージをインストールせずに CLI を実行
-PYTHONPATH=src python -m planetarble.cli.main acquire --config configs/base/pipeline.yaml
+# モザイク、陰影、正規化 (--dry-run を付けるとコマンドを表示するだけ)
+planetarble process --config ../configs/profiles/bmng-global-z8.yaml
 
-# aria2c が PATH にある場合は再開可能ダウンロードを自動利用
-# 必要に応じて無効化
-planetarble acquire --config configs/base/pipeline.yaml --no-aria2
+# output/tiling/planet_2024_8z.mbtiles を作る
+planetarble tile --config ../configs/profiles/bmng-global-z8.yaml
 
-# ラスターを前処理（BMNG のモザイク、GEBCO のヒルシェード生成、Natural Earth の展開）
-planetarble process --config configs/base/pipeline.yaml
+# PMTiles に変換し、output/distribution/ にまとめる (PMTiles、TileJSON、出典)
+planetarble package --config ../configs/profiles/bmng-global-z8.yaml
 
-# コマンドを実行せずプレビュー
-planetarble process --config configs/base/pipeline.yaml --dry-run
-
-# MBTiles タイルピラミッドを生成（gdal_translate / gdaladdo が必要）
-planetarble tile --config configs/base/pipeline.yaml
-
-# PMTiles への変換と配布バンドルの組み立て（pmtiles CLI が必要）
-planetarble package --config configs/base/pipeline.yaml
-
-# 品質を上げたい場合は JPEG 品質や WebP に切り替え可能
-planetarble tile --config configs/base/pipeline.yaml --quality 95 --tile-format WEBP
+# 同梱の MapLibre ビューアで見る (http://localhost:8081/viewer/)
+planetarble serve --pmtiles output/distribution/planet_2024_8z.pmtiles --open
 ```
 
-既定の構成では生データは `data/`、一時成果物は `tmp/`、最終成果物は `output/` に保存されます。`configs/base/pipeline.yaml` をコピーして編集することでパスやパラメータを調整できます。初回実行時のダウンロード量は約 4.5 GB（BMNG 500 m パネル、GEBCO netCDF、Natural Earth アーカイブ）で、80 Mbps の回線ではダウンロードフェーズにおおよそ 10 分かかります。
+パッケージを入れずに動かすときは、リポジトリの直下で `PYTHONPATH=src python -m planetarble.cli.main` を使います。
 
-## 品質調整
+用意してあるレシピは `bmng-global-z8.yaml` (全球 BMNG 500 m と GEBCO の海、ズーム 0-8)、`hls-regional-z11.yaml` (都道府県や miniplanet ごとの HLS v2、ズーム 11)、`sentinel2-tokyo-z14.yaml` (東京周辺の Sentinel-2 L2A、ズーム 14) です。コピーして自分の設定を作ってください。`configs/base/pipeline.yaml` は開発者の作業用の設定で、今は国土地理院の空中写真を選んでいるため、全球のパイプラインの出発点には向きません。`ocean.enabled` が true のとき、`planetarble acquire` は NOAA ETOPO 2022 の 15 秒角の GeoTIFF (圧縮で約 9 GB) も取得します。
 
-- `configs/base/pipeline.yaml` の `processing.tile_quality` は既定で 95 に設定されています。ファイルサイズと画質のバランスに応じて値を上げ下げしてください。
-- 実行時に `planetarble tile --quality 95 --tile-format WEBP` のように指定すれば、設定ファイルを変更せずに品質やフォーマットを切り替えられます。
-- パラメータを変えた後は、`planetarble tile` と `planetarble package`（必要に応じて `planetarble process`）を再実行して成果物をリビルドしてください。
+地域ごとの HLS の作り方、AOI ごとに高解像度の画像を重ねる `planetarble build`、画質の調整は、英語版の `README.md` を参照してください。
 
-## キャッシュと再ダウンロード方針
+## キャッシュと再ダウンロード
 
-- 各アセットは `data/` 配下の決定論的なパスに保存されます。再実行時は SHA256 ハッシュ検証後に既存ファイルを再利用します。
-- ファイル破損や上流更新が疑われる場合は `planetarble acquire --force`（または同等の `python -m ... acquire --force`）で再ダウンロードを強制できます。
-- マニフェストには利用した URL、ファイルサイズ、ハッシュが記録され、パイプライン完了後に `planetarble verify_checksums` で整合性を再確認できます。
-- `aria2c` が利用可能な場合は自動的にレジューム機能付きダウンロードを有効化します。見つからない場合は標準の Python ダウンローダーにフォールバックします。また、必要に応じて `--no-aria2` で無効化できます。
-- 数 GB 規模の転送は長時間に及ぶ可能性があるため、`screen` や `tmux` を使用し、SSH 切断でも処理が継続するようにすることを推奨します。
+- 各アセットは `data/` の下の決まった場所に保存し、次の実行では既存のファイルを使います。アセットの目録にチェックサムがあるときは、ファイルの SHA256 がそれと一致しなければなりません。
+- ファイルの破損や上流の更新が疑われるときは、`planetarble acquire --force` で取り直せます。
+- `output/MANIFEST.json` に、使った URL、ファイルサイズ、SHA256 を記録します。
+- 数 GB の転送は時間がかかるため、`screen` や `tmux` の中で動かすと SSH が切れても続きます。
 
 ## ロードマップ
 
-- 再現性を維持しながらグローバルベースマップ全体でより高解像度の成果物をサポートします。
-- Sentinel-2 に進む前段階として、MODIS MCD43A4 (NBAR, 500 m) 合成画像を試験的に取り込み、代替オープン画像の適用性を検証します。
-- Sentinel-2 の検討に先立ち、VIIRS Corrected Reflectance (375–500 m) スウォスで処理パイプラインとスループットを評価します。
-- Copernicus サービスを通じて Sentinel-2 を取得し、ソースデータが許す地域で高ズームを解放します。
-- 優先地域に限定して高ズームタイルを生成し、グローバルバンドルのサイズを抑えます。
-- 更新が必要な地域のみを対象とする領域別リフレッシュワークフローを提供します。
-- BMNG 正規化、GEBCO ヒルシェード生成、Natural Earth マスク展開、Cloud Optimized GeoTIFF 変換を行う前処理パイプライン（`ProcessingManager`）を実装します。
-- タイリング、PMTiles 変換、出力検証のコマンド群を追加します。
+全球の土台に AOI ごとの高解像度の画像を重ねる仕組みはできています (`planetarble build`、[ADR 0001](docs/adr/0001-aoi-overlay-architecture.md))。残っているのは次のことです。
+
+- 再現性を保ったまま、地図全体をより高い解像度にする。
+- 新しい画像が必要な地域だけを更新する仕組みを作る。
+- 見た目の差分を自動で比べる検査を足し、`planetarble tiling pmtiles` と同じように `planetarble package` でも `pmtiles verify` を走らせる。
 
 ## 必要要件
 
-- GDAL 3.x 以上がローカルに必要です（`gdalbuildvrt`、`gdal_translate`、`gdaldem`、`gdalwarp`、`gdaladdo` などを利用します）。
-- 最終的な `planet_{YYYY}_{max_zoom_level}z.pmtiles` を生成するために PMTiles CLI（`pmtiles convert`）が必要です。
-- 既定の取得ワークフローでは aria2c を使ってレジューム付きダウンロードを行う想定です。見つからない場合は Python 標準のダウンローダーにフォールバックしますが、転送中断を避けるためにインストールしておくことを推奨します。
-- Python 依存関係は `pyproject.toml` に記録されています（設定読み込みには PyYAML が必要）。
+同梱の `Dockerfile` には以下がすべて入っています。ホストで動かしたいときだけ手で入れてください。
 
-## 参考
+- GDAL 3.11 以上 (`gdalbuildvrt`、`gdal_translate`、`gdaldem`、`gdalwarp`、`gdaladdo` と、`gdal raster tile` に使う `gdal` コマンド)。
+- 最終的な PMTiles を作る go-pmtiles の CLI (`pmtiles convert`)。
+- XYZ タイルを MBTiles にまとめる `mb-util` (`pip install mbutil`)。
+- 再開できるダウンロードのための `aria2c`。無ければ Python の標準のダウンローダーを使いますが、転送の中断に備えて入れておくことを勧めます。
+- Python の依存は `pyproject.toml` にあります。地域ごとの HLS / Sentinel-2 の計画には GDAL の Python バインディング (`osgeo`) も要ります。
+
+## データソース
 
 日本以外でも、重ね合わせ (overlay) に、ログイン不要の ESA WorldCover の 10 m 合成画像 (陸域ならどこでも)、米国の NAIP、ニュージーランドの LINZ の画像、OpenAerialMap、URL を指定した任意のオープンな COG を使えます。見本は `configs/overlays/world-cities-example.yaml`、設計は ADR 0003 です。使ったデータソースの出典は、作った PMTiles に書き込まれます。
 
 対応しているデータソースの解像度、最大ズーム、ライセンス、出典表記は [docs/sources/](docs/sources/README.ja.md) にまとめています。
-
-詳細な手順や追加情報は英語版の `README.md` を参照してください。

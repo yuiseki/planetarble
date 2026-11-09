@@ -16,7 +16,7 @@ Repository root
 - data/, tmp/, output/ — runtime workspaces (git-ignored)
 
 configs/
-- base/pipeline.yaml — default pipeline configuration
+- base/pipeline.yaml — the configuration used when `--config` is omitted; the maintainer's working config (currently GSI orthophotos), not a recipe
 - base/assets.yaml — asset catalog (download sources and checksums)
 - profiles/ — ready-made recipes (global BMNG z8, regional HLS z11, Sentinel-2 z14)
 - overlays/ — AOI overlay specs for `planetarble build` / `prefetch` (ADR 0001)
@@ -46,6 +46,6 @@ src/planetarble/
 - data/ — packaged data (ocean depth ramps)
 
 tests/unit/
-- mirrors the package layout (acquisition/, cli/, config/, overlay/, processing/, tiling/)
+- mirrors the package layout (acquisition/, cli/, config/, overlay/, packaging/, processing/, tiling/)
 - cli/golden/parser.json — pinned CLI interface; processing/golden/ and tiling/golden/ — pinned GDAL command lines
 - regenerate goldens with `PLANETARBLE_UPDATE_GOLDEN=1` only for an intended change, and review the diff

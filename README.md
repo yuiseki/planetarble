@@ -4,13 +4,14 @@
 
 Planetarble builds a fully open global raster basemap anchored on the NASA/USGS Harmonized Landsat and Sentinel-2 (HLS) v2 archive streamed directly from Microsoft Planetary Computer. Persistent cloud gaps are backfilled with Landsat Collection 2 Level-2 surface reflectance, and oceans are rendered with NOAA’s CC0 ETOPO 2022 bathymetry and hillshade. The entire stack remains effectively license-free (NASA/USGS public domain + NOAA CC0) and is distributed as a single PMTiles artifact for offline use.
 
-When HLS mode is enabled—the new default configuration—the pipeline orchestrates three core phases:
+With `processing.tile_source: hls` (the built-in default when a config does not set it; see `configs/profiles/hls-regional-z11.yaml`) the pipeline runs four stages:
 
 1. **Acquire** — build an `hls_z{zoom}_plan.ndjson` that enumerates every land ZL10 tile, its seasonal window, and fallback collections, without downloading multi-terabyte imagery up front.
-2. **Process** — resolve the plan into a deduplicated, SAS-signed HLS scene manifest and pre-render NOAA ETOPO ocean shading ready for compositing.
-3. **Package** — convert the generated MBTiles into a PMTiles bundle (recommended credits are documented separately).
+2. **Process** — resolve the plan into a deduplicated, SAS-signed HLS scene manifest, mosaic the scenes, and pre-render NOAA ETOPO ocean shading ready for compositing.
+3. **Tile** — cut the mosaic into an MBTiles pyramid.
+4. **Package** — convert the MBTiles into a PMTiles bundle with a TileJSON and a credits file.
 
-The legacy BMNG/GEBCO/Natural Earth workflow remains available by switching `processing.tile_source` back to `bmng`.
+Other values of `processing.tile_source` select the legacy BMNG/GEBCO/Natural Earth workflow (`bmng`), Sentinel-2 L2A from Microsoft Planetary Computer (`sentinel2`), GSI orthophotos for Japan (`gsi_orthophotos`), or the MODIS, VIIRS and Copernicus WMS experiments (`modis`, `viirs`, `copernicus`).
 
 ## Try it in five minutes
 
@@ -100,51 +101,44 @@ Configuration files are validated on load: an unknown section or key, or a value
 
 ## Quickstart
 
+The real pipelines run in four stages. This example builds the global BMNG basemap at z0-8 (the prebuilt artifact below); the other recipes under `configs/profiles/` follow the same pattern.
+
 ```bash
 # Set up the venv as described in "Local setup (uv)", then activate it
 source .venv/bin/activate
 
-# Fallback without the venv (relies on current repo checkout)
-PYTHONPATH=src python -m planetarble.cli.main --help
+# data/, tmp/ and output/ resolve relative to the current directory
+mkdir -p workspace && cd workspace
 
-# Generate the HLS land plan (writes data/plans/hls_z10_plan.ndjson)
-planetarble acquire --config configs/base/pipeline.yaml
+# download BMNG 500m panels, GEBCO, Natural Earth and (with ocean.enabled) the ETOPO grid,
+# and write output/MANIFEST.json
+# (aria2c is used for resumable downloads when it is in PATH; --no-aria2 disables it)
+planetarble acquire --config ../configs/profiles/bmng-global-z8.yaml
 
-# or, without installing the package system-wide
-PYTHONPATH=src python -m planetarble.cli.main acquire --config configs/base/pipeline.yaml
+# mosaic, shade and normalise the rasters (--dry-run prints the commands instead)
+planetarble process --config ../configs/profiles/bmng-global-z8.yaml
 
-# resume-friendly downloads are enabled by default when aria2c is in PATH
-# disable aria2c only if required
-planetarble acquire --config configs/base/pipeline.yaml --no-aria2
+# build output/tiling/planet_2024_8z.mbtiles
+planetarble tile --config ../configs/profiles/bmng-global-z8.yaml
 
-# build the MPC scene manifest and ocean shading (long-running; streams STAC metadata)
-planetarble process --config configs/base/pipeline.yaml
+# convert to PMTiles and assemble output/distribution/ (PMTiles, TileJSON, credits)
+planetarble package --config ../configs/profiles/bmng-global-z8.yaml
 
-# preview commands without executing
-planetarble process --config configs/base/pipeline.yaml --dry-run
-
-# generate MBTiles pyramid once land/ocean rasters are ready (requires gdal_translate/gdaladdo)
-planetarble tile --config configs/base/pipeline.yaml
-
-# convert to PMTiles and assemble distribution bundle (requires pmtiles CLI)
-planetarble package --config configs/base/pipeline.yaml
-
-# increase WEBP quality (default pipeline uses WEBP Q=82)
-planetarble tile --config configs/base/pipeline.yaml --quality 90 --tile-format WEBP
-
-# inspect available Copernicus (Sentinel-2) WMS layers
-planetarble copernicus-layers
+# view it in the bundled MapLibre viewer at http://localhost:8081/viewer/
+planetarble serve --pmtiles output/distribution/planet_2024_8z.pmtiles --open
 ```
 
-The default configuration keeps plan and manifest artefacts under `data/`, scratch working files in `tmp/`, and final outputs in `output/`. Copy `configs/base/pipeline.yaml` to create your own profile and adjust parameters (seasonal windows, cloud thresholds, ocean options) as needed. Ready-made recipes live under `configs/profiles/`: `bmng-global-z8.yaml` (global BMNG 500m + GEBCO ocean, z0-8), `hls-regional-z11.yaml` (HLS v2 land imagery per prefecture or miniplanet, z11), and `sentinel2-tokyo-z14.yaml` (Sentinel-2 L2A around Tokyo, z14); each file's header documents the exact commands. `planetarble acquire` also pulls down the NOAA ETOPO 2022 15 arc-second bedrock GeoTIFF (≈9 GB compressed) whenever `ocean.enabled` is true so ocean shading can run offline. Streaming the full HLS land archive during processing remains a long-running operation—plan on 1.6–2.0 TB of transfer against Microsoft Planetary Computer for a complete ZL10 build, roughly 60–75 % lower than fetching land + ocean pixels.
+`python -m planetarble.cli.main` runs the same CLI without installing the package (`PYTHONPATH=src` from the repository root).
+
+Plan and manifest artefacts live under `data/`, scratch working files in `tmp/`, and final outputs in `output/`. Ready-made recipes live under `configs/profiles/`: `bmng-global-z8.yaml` (global BMNG 500m + GEBCO ocean, z0-8), `hls-regional-z11.yaml` (HLS v2 land imagery per prefecture or miniplanet, z11), and `sentinel2-tokyo-z14.yaml` (Sentinel-2 L2A around Tokyo, z14); each file's header documents the exact commands. Copy one to create your own profile and adjust parameters (seasonal windows, cloud thresholds, ocean options) as needed. `configs/base/pipeline.yaml` is the maintainer's working configuration and currently selects GSI orthophotos, so it is not a starting point for the global pipelines. `planetarble copernicus-layers` lists the Copernicus WMS layers available to your instance. `planetarble acquire` also pulls down the NOAA ETOPO 2022 15 arc-second bedrock GeoTIFF (≈9 GB compressed) whenever `ocean.enabled` is true so ocean shading can run offline. Streaming the full HLS land archive during processing remains a long-running operation—plan on 1.6–2.0 TB of transfer against Microsoft Planetary Computer for a complete ZL10 build, roughly 60–75 % lower than fetching land + ocean pixels.
 
 ## Imagery Options
 
 Outside Japan, overlays can use login-free 10 m ESA WorldCover composites anywhere on land, NAIP aerial imagery in the US, LINZ imagery in New Zealand, OpenAerialMap, or any openly licensed COG by URL; see `configs/overlays/world-cities-example.yaml` and ADR 0003. The credits of every source used are written into the built PMTiles. See [docs/sources/](docs/sources/README.md) for every supported source with its native resolution, maximum Web Mercator zoom, licence and attribution (日本語: [docs/sources/README.ja.md](docs/sources/README.ja.md)).
 
-- **HLS v2 (default)** — `processing.tile_source: hls` activates the new global workflow. `planetarble acquire` writes an `hls_z10_plan.ndjson`; `planetarble process` expands it into `output/processing/hls_scene_manifest.json` with MPC-signed URLs for the required `B02/B03/B04` COGs and QA masks. Seasonal windows default to April–October for the northern hemisphere and October–April for the southern hemisphere. Default collections use `hls2-s30` and `hls2-l30`.
+- **HLS v2 (default)** — `processing.tile_source: hls` activates the new global workflow. `planetarble acquire` writes `data/plans/hls_z10_plan.ndjson` (`hls_z10_plan_<region>.ndjson` per plan region); `planetarble process` expands it into `output/processing/hls_scene_manifest.json` (`hls_scene_manifest_<region>.json`) with MPC-signed URLs for the required `B02/B03/B04` COGs and QA masks. Seasonal windows default to April–October for the northern hemisphere and October–April for the southern hemisphere. Default collections use `hls2-s30` and `hls2-l30`.
 - **Landsat Collection 2 Level-2 SR fallback** — listed in `hls.fallback_collections`. When the primary HLS collections cannot clear clouds, the manifest builder records low-cloud Landsat scenes that align with the same tile footprints and QA masks.
-- **NOAA ETOPO 2022 ocean rendering** — `ocean.enabled: true` combines the CC0 bathymetry grid with a configurable color ramp and lambertian hillshade. `planetarble acquire` downloads the global 15 arc-second bedrock GeoTIFF to `data/etopo/ETOPO_2022_15s_bed.tif`; you can point `ocean.source_id` at a custom path if you maintain your own copy.
+- **NOAA ETOPO 2022 ocean rendering** — `ocean.enabled: true` combines the CC0 bathymetry grid with a configurable color ramp and lambertian hillshade. `planetarble acquire` downloads the global 15 arc-second bedrock GeoTIFF to `data/etopo/ETOPO_2022_15s_bed.tif`. `ocean.source_id` names an asset in `configs/base/assets.yaml`; add an entry there to download from your own mirror.
 - **Legacy BMNG / MODIS / VIIRS / Copernicus** — set `processing.tile_source` back to `bmng` (and toggle the respective blocks) to reuse the historical workflow that mosaics BMNG, optional MODIS/VIIRS reflectance, and Copernicus WMS tiles. All legacy commands remain available for backwards compatibility and regional experiments.
 
 ## Regional HLS Planning
@@ -164,53 +158,53 @@ hls:
       land_only: true
 ```
 
-Generate the plan:
+`configs/profiles/hls-regional-z11.yaml` defines the Japanese prefectures and the 18 global miniplanets as plan regions. Run from your workspace directory:
 
 ```bash
-planetarble acquire --config configs/base/pipeline.yaml --plan-region tokyo_land
+# generate the plan (data/plans/hls_z10_plan_tokyo_land.ndjson)
+planetarble acquire --config ../configs/profiles/hls-regional-z11.yaml --plan-region tokyo_land
+
+# build the scene manifest and the regional HLS mosaic
+planetarble process --config ../configs/profiles/hls-regional-z11.yaml --plan-region tokyo_land
+
+# tile z11 only (output/tiling/planet_hls_tokyo_land_11z.mbtiles)
+planetarble tile --config ../configs/profiles/hls-regional-z11.yaml --plan-region tokyo_land --min-zoom 11 --max-zoom 11
+
+# package under the name that `planetarble serve --region tokyo_land` looks for
+planetarble package --config ../configs/profiles/hls-regional-z11.yaml \
+  --input output/tiling/planet_hls_tokyo_land_11z.mbtiles \
+  --pmtiles-name planet_2024_11z_tokyo_land_hls.pmtiles
+planetarble serve --config ../configs/profiles/hls-regional-z11.yaml --region tokyo_land --open
 ```
 
-Process the plan:
+HLS imagery has about 30 m effective resolution, which maps to about z11 in Web Mercator; deeper zooms are best left to client-side overscaling of the z11 tiles.
 
-```bash
-planetarble process --config configs/base/pipeline.yaml --plan-region tokyo_land
-```
-
-Natural Earth admin boundaries (`ne_10m_admin_0_countries.zip`, `ne_10m_admin_1_states_provinces.zip`) are downloaded on-demand
-when a plan region references them.
+Natural Earth admin boundaries (`ne_10m_admin_0_countries.zip`, `ne_10m_admin_1_states_provinces.zip`) are downloaded on demand when a plan region references them.
 
 For a Japan-wide incremental plan and rate-limit guidance, see `docs/operations/hls-japan-plan.md`.
 
-To generate regional HLS tiles and overlay them onto a BMNG basemap:
+To overlay the regional HLS tiles onto the global BMNG basemap from the quickstart:
 
 ```bash
-# build HLS mosaic (regional) + scene manifest
-planetarble process --config configs/base/pipeline.yaml --plan-region tokyo_land
-
-# tile only z11 for HLS (z12 is oversampled at display time)
-planetarble tile --config configs/base/pipeline.yaml --plan-region tokyo_land --min-zoom 11 --max-zoom 11
-
-# merge HLS tiles onto the BMNG MBTiles
 planetarble tiling merge-mbtiles \
-  --base output/tiling/planet_2024_12z.mbtiles \
-  --overlay output/tiling/planet_hls_tokyo_land_12z.mbtiles \
-  --out output/tiling/planet_2024_tokyo_hls_12z.mbtiles
-
-Note: HLS imagery has ~30 m effective resolution, which maps to about z11 in Web Mercator.
-Serving z12 is typically done via client-side overscaling of z11 tiles rather than generating new data.
+  --base output/tiling/planet_2024_8z.mbtiles \
+  --overlay output/tiling/planet_hls_tokyo_land_11z.mbtiles \
+  --out output/tiling/planet_2024_tokyo_land_hls_11z.mbtiles
 ```
+
+`planetarble build` with an overlay spec (see [Custom AOI planets](#custom-aoi-planets)) does the same in one step and also fills the zooms between the two sources.
 
 ## Quality Tuning
 
-- `processing.tile_quality` defaults to 82 for the HLS workflow; raise or lower this value to trade file size for fidelity.
+- `processing.tile_quality` (with `processing.tile_format`) sets the tile encoding. The built-in default is WEBP at 82; the recipes in `configs/profiles/` use JPEG at 95. Raise or lower it to trade file size for fidelity.
 - Override quality and format per run: `planetarble tile --quality 88 --tile-format WEBP` regenerates MBTiles with WebP tiles at the requested quality.
 - After changing quality-related settings, rerun `planetarble tile` and `planetarble package` (and `planetarble process` if upstream rasters changed) to rebuild artifacts.
 
 ## Caching & Re-download Policy
 
-- Each asset is downloaded to a deterministic location under `data/`. On repeated runs, Planetarble reuses the existing file after validating its SHA256 hash.
+- Each asset is downloaded to a deterministic location under `data/`. On repeated runs, Planetarble reuses the existing file; when the asset catalog lists a checksum, the file's SHA256 must match it.
 - To force a fresh download (for example, if a file was truncated or updated upstream), pass `--force` to the `planetarble acquire` command (or the `python -m ... acquire` fallback). This flag flows through to the downloader and overwrites local copies.
-- The manifest records the exact URLs, file sizes, and hashes that were used; verify integrity later with `planetarble`'s `verify_checksums` helper once the processing pipeline is complete.
+- `output/MANIFEST.json` records the exact URLs, file sizes, and SHA256 hashes that were used, so a later run can be compared against it.
 - When `aria2c` is available it is used automatically to provide resumable downloads. If the binary is not found the CLI falls back to Python's built-in downloader; you can also disable it explicitly with `--no-aria2` if needed.
 - Large transfers (several gigabytes) are long-running—consider wrapping the command in `screen` or `tmux` so the process survives SSH disconnects.
 
@@ -219,10 +213,8 @@ Serving z12 is typically done via client-side overscaling of z11 tiles rather th
 The global floor plus AOI overlay model is implemented (see [Custom AOI planets](#custom-aoi-planets) and [docs/adr/0001-aoi-overlay-architecture.md](docs/adr/0001-aoi-overlay-architecture.md)): a global BMNG base everyone can afford, plus per-area high-resolution overlays from any source declared in a single config (including OpenAerialMap for disaster response), merged into one custom planet via `planetarble build`. The full max-resolution global build stays supported as a special case.
 
 - Support higher-resolution outputs across the entire basemap without compromising reproducibility.
-- Integrate Sentinel-2 acquisitions via Copernicus services to unlock higher zoom levels where source data allows.
-- Offer selective high-zoom coverage so priority regions can receive detailed tiles while keeping the global bundle lean.
 - Provide region-scoped refresh workflows that update only the areas requiring newer imagery.
-- Expand quality assurance with automated visual diffs and `pmtiles verify` integration once long-running workflow orchestration is in place.
+- Expand quality assurance with automated visual diffs, and run `pmtiles verify` in `planetarble package` as `planetarble tiling pmtiles` already does.
 
 ## Requirements
 

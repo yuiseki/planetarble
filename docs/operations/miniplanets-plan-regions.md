@@ -151,13 +151,15 @@ hls:
 
 ### 使い方
 
+`tile_source: hls` の設定で動かします。`configs/profiles/hls-regional-z11.yaml` に都道府県と `mp_00`〜`mp_17` の plan_regions が入っています (`configs/base/pipeline.yaml` は今は国土地理院の空中写真を選んでいるため、このままでは HLS のプランを作りません)。
+
 ```bash
 # 全 miniplanet のプランを生成（region 無指定で plan_regions 全件）
-planetarble acquire --config configs/base/pipeline.yaml
+planetarble acquire --config configs/profiles/hls-regional-z11.yaml
 
 # 単一 miniplanet をインクリメンタル取得
-planetarble acquire --config configs/base/pipeline.yaml --plan-region mp_00
-planetarble process --config configs/base/pipeline.yaml --plan-region mp_00
+planetarble acquire --config configs/profiles/hls-regional-z11.yaml --plan-region mp_00
+planetarble process --config configs/profiles/hls-regional-z11.yaml --plan-region mp_00
 ```
 
 ## 実装状況（Phase 2 進行中）
@@ -172,8 +174,8 @@ planetarble process --config configs/base/pipeline.yaml --plan-region mp_00
 これにより「グローバルプランを1回生成 → miniplanet 単位に分割 → shard ごとに process/tile/package → `tiling merge-mbtiles` で統合」というワークフローが組める。
 
 ```bash
-planetarble acquire --config configs/base/pipeline.yaml            # 全球プラン（各エントリに miniplanet タグ）
-planetarble split-plan --config configs/base/pipeline.yaml         # data/plans/shards/ に分割
+planetarble acquire --config configs/profiles/hls-regional-z11.yaml            # 全球プラン（各エントリに miniplanet タグ）
+planetarble split-plan --config configs/profiles/hls-regional-z11.yaml         # data/plans/shards/ に分割
 # shard ごとに process/tile（--plan-region mp_NN は既存の名前ベース機構で対応）
 ```
 

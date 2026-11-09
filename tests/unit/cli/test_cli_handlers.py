@@ -377,6 +377,35 @@ def test_tile_hls_applies_overrides_and_tiles_region_mosaic(patch_cli, tmp_path,
     ]
 
 
+def _tile_tokyo(patch_cli, tmp_path, use_cfg, fake, regions, *flags):
+    cfg = _cfg(tmp_path, "hls", hls=regions)
+    use_cfg(cfg)
+    _touch(cfg.output_dir / "processing" / "x_normalized_cog.tif")
+    _touch(cfg.output_dir / "processing" / "hls_mosaic_tokyo_land_cog.tif")
+    cls = fake("TilingManager")
+    patch_cli("_is_valid_mbtiles", lambda path: False)
+    set_center = MagicMock()
+    patch_cli("set_center", set_center)
+    assert cli.main(["tile", "--plan-region", "tokyo_land", *flags]) == 0
+    return cls.return_value.create_mbtiles.return_value, set_center
+
+
+def test_tile_writes_the_center_the_plan_region_names(patch_cli, tmp_path, use_cfg, fake) -> None:
+    mbtiles, set_center = _tile_tokyo(patch_cli, tmp_path, use_cfg, fake, _REGIONS)
+    assert set_center.call_args_list == [call(mbtiles, (139.69, 35.69))]
+
+
+def test_tile_leaves_the_center_alone_when_the_region_names_none(patch_cli, tmp_path, use_cfg, fake) -> None:
+    regions = HLSConfig(plan_regions=(HLSPlanRegion(name="tokyo_land", land_only=True),))
+    _, set_center = _tile_tokyo(patch_cli, tmp_path, use_cfg, fake, regions)
+    set_center.assert_not_called()
+
+
+def test_tile_dry_run_writes_no_center(patch_cli, tmp_path, use_cfg, fake) -> None:
+    _, set_center = _tile_tokyo(patch_cli, tmp_path, use_cfg, fake, _REGIONS, "--dry-run")
+    set_center.assert_not_called()
+
+
 def test_tile_bmng_uses_first_normalized_cog(patch_cli, tmp_path, use_cfg, fake, monkeypatch) -> None:
     cfg = _cfg(tmp_path, "bmng")
     use_cfg(cfg)
@@ -541,13 +570,14 @@ def test_bmng_package_credits_gebco_and_natural_earth(patch_cli, tmp_path, use_c
     assert "- Natural Earth 1:10m land/ocean/coastline layers." in license_text
 
 
-def _package_meta(patch_cli, tmp_path, use_cfg, fake, mbtiles_meta):
-    use_cfg(_cfg(tmp_path, "hls"))
+def _package_meta(patch_cli, tmp_path, use_cfg, fake, mbtiles_meta, argv=(), hls=None):
+    use_cfg(_cfg(tmp_path, "hls", **({"hls": hls} if hls else {})))
     _touch(tmp_path / "output" / "tiling" / "planet_2024_10z.mbtiles")
     pkg = fake("PackagingManager").return_value
     patch_cli("_is_valid_pmtiles", lambda path: False)
     patch_cli("_read_mbtiles_metadata", lambda path: mbtiles_meta)
-    assert cli.main(["package"]) == 0
+    assert cli.main(["package", *argv]) == 0
+    assert pkg.set_header_center.call_args.args[1] == pkg.generate_tilejson.call_args.args[1].center
     return pkg.generate_tilejson.call_args.args[1]
 
 
@@ -573,6 +603,46 @@ def test_package_keeps_the_center_the_mbtiles_declares(patch_cli, tmp_path, use_
     meta = _package_meta(patch_cli, tmp_path, use_cfg, fake,
                          {"bounds": [138.9, 24.2, 154.0, 35.9], "center": [139.7, 35.6, 12], "maxzoom": 14})
     assert meta.center == (139.7, 35.6, 12)
+
+
+TOKYO_LAND_META = {"bounds": [138.9, 24.2, 154.0, 35.9], "minzoom": 7, "maxzoom": 11}
+_REGIONS = HLSConfig(plan_regions=(
+    HLSPlanRegion(name="tokyo_land", land_only=True, center=(139.69, 35.69)),
+    HLSPlanRegion(name="chiba_land", land_only=True),
+))
+
+
+def test_package_opens_on_the_center_the_plan_region_names(patch_cli, tmp_path, use_cfg, fake) -> None:
+    # tokyo_land reaches Ogasawara: the middle of its bounds is open sea
+    meta = _package_meta(patch_cli, tmp_path, use_cfg, fake, TOKYO_LAND_META,
+                         argv=["--plan-region", "tokyo_land"], hls=_REGIONS)
+    assert meta.center == (139.69, 35.69, 7)
+
+
+def test_package_region_center_overrides_the_mbtiles_center_but_keeps_its_zoom(
+        patch_cli, tmp_path, use_cfg, fake) -> None:
+    meta = _package_meta(patch_cli, tmp_path, use_cfg, fake, {**TOKYO_LAND_META, "center": [146.45, 30.05, 9]},
+                         argv=["--plan-region", "tokyo_land"], hls=_REGIONS)
+    assert meta.center == (139.69, 35.69, 9)
+
+
+def test_package_region_without_a_center_keeps_the_default(patch_cli, tmp_path, use_cfg, fake) -> None:
+    meta = _package_meta(patch_cli, tmp_path, use_cfg, fake, TOKYO_LAND_META,
+                         argv=["--plan-region", "chiba_land"], hls=_REGIONS)
+    assert meta.center[:2] == pytest.approx((146.45, 30.05))
+
+
+def test_package_rejects_an_unknown_plan_region(patch_cli, tmp_path, use_cfg, fake) -> None:
+    with pytest.raises(SystemExit, match="Unknown HLS plan region: nowhere"):
+        _package_meta(patch_cli, tmp_path, use_cfg, fake, TOKYO_LAND_META,
+                      argv=["--plan-region", "nowhere"], hls=_REGIONS)
+
+
+def test_package_rejects_a_region_center_outside_the_bounds(patch_cli, tmp_path, use_cfg, fake) -> None:
+    chiba_meta = {"bounds": [139.75, 34.9, 140.88, 36.1], "minzoom": 11, "maxzoom": 11}
+    with pytest.raises(SystemExit, match="outside the bounds"):
+        _package_meta(patch_cli, tmp_path, use_cfg, fake, chiba_meta,
+                      argv=["--plan-region", "tokyo_land"], hls=_REGIONS)
 
 
 def test_package_skips_when_outputs_valid(patch_cli, tmp_path, use_cfg, fake, monkeypatch) -> None:

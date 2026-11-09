@@ -11,7 +11,11 @@ from typing import Any, Iterable, Optional, Sequence
 
 from planetarble.acquisition.copernicus import copernicus_layer_slug
 from planetarble.config import PipelineConfig
-from planetarble.core.models import CopernicusLayerConfig, GSIOrthophotoConfig
+from planetarble.core.models import (
+    CopernicusLayerConfig,
+    GSIOrthophotoConfig,
+    HLSPlanRegion,
+)
 
 
 def _resolve_config_path(path: Path | None) -> Path:
@@ -50,6 +54,17 @@ def _resolve_hls_plan_path(cfg: PipelineConfig, plan_region: Optional[str]) -> P
     if region:
         return cfg.data_dir / "plans" / f"hls_z{cfg.hls.target_zoom}_plan_{region}.ndjson"
     return cfg.data_dir / "plans" / f"hls_z{cfg.hls.target_zoom}_plan.ndjson"
+
+
+def _find_hls_plan_region(cfg: PipelineConfig, name: Optional[str]) -> Optional[HLSPlanRegion]:
+    """The ``hls.plan_regions`` entry called ``name``, or None."""
+    return next((region for region in cfg.hls.plan_regions if region.name == name), None)
+
+
+def _hls_region_center(cfg: PipelineConfig, name: Optional[str]) -> Optional[tuple[float, float]]:
+    """The ``center`` the named HLS plan region declares, or None."""
+    region = _find_hls_plan_region(cfg, name)
+    return region.center if region is not None else None
 
 
 def _resolve_hls_scene_manifest_path(cfg: PipelineConfig, plan_region: Optional[str]) -> Path:

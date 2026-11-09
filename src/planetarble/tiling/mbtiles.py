@@ -57,6 +57,43 @@ def ensure_center(path: Path) -> None:
         conn.close()
 
 
+def center_at(
+    lonlat: Tuple[float, float], bounds: Tuple[float, float, float, float], zoom: int
+) -> Tuple[float, float, int]:
+    """``(lon, lat, zoom)``, refusing a point that falls outside ``bounds``."""
+    lon, lat = lonlat
+    if not (bounds[0] <= lon <= bounds[2] and bounds[1] <= lat <= bounds[3]):
+        raise ValueError(f"center {lon},{lat} is outside the bounds {','.join(map(str, bounds))}")
+    return (lon, lat, zoom)
+
+
+def set_center(path: Path, lonlat: Tuple[float, float]) -> None:
+    """Write ``lonlat`` as the archive's center, keeping the zoom it declares.
+
+    Used for a plan region that names its own view, such as tokyo_land, whose
+    bounds reach Ogasawara and put their middle in the open sea. Without a
+    declared center the zoom is the one :func:`default_center` picks.
+    """
+    conn = sqlite3.connect(str(path))
+    try:
+        meta = dict(conn.execute("SELECT name, value FROM metadata"))
+        try:
+            bounds = tuple(float(part) for part in str(meta["bounds"]).split(","))
+            minzoom, maxzoom = int(meta["minzoom"]), int(meta["maxzoom"])
+        except (KeyError, ValueError):
+            raise ValueError(f"{path} has no usable bounds, minzoom and maxzoom") from None
+        if len(bounds) != 4:
+            raise ValueError(f"{path} has no usable bounds")
+        box = (bounds[0], bounds[1], bounds[2], bounds[3])
+        declared = str(meta.get("center") or "").split(",")
+        zoom = int(declared[2]) if len(declared) == 3 else default_center(box, minzoom, maxzoom)[2]
+        lon, lat, zoom = center_at(lonlat, box, zoom)
+        _set_metadata(conn, "center", f"{lon:.7f},{lat:.7f},{zoom}")
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def iter_xyz_dir(tile_dir: Path) -> Iterator[Tuple[int, int, int, str]]:
     """Yield ``(z, x, y, ext)`` for every ``z/x/y.ext`` tile under ``tile_dir``.
 

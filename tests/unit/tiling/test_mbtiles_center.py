@@ -18,7 +18,7 @@ import pytest
 
 import planetarble.tiling.manager as tm
 from planetarble.core.models import ProcessingConfig
-from planetarble.tiling.mbtiles import default_center, ensure_center
+from planetarble.tiling.mbtiles import default_center, ensure_center, set_center
 
 TOKYO_LAND = (138.9228178, 24.2120253, 153.9857603, 35.8788697)
 
@@ -132,3 +132,44 @@ def test_a_gdal_mbtiles_of_japan_converts_with_a_center_inside_its_bounds(tmp_pa
     center_line = next(line for line in shown.splitlines() if line.startswith("center:"))
     lon = float(center_line.split("long:")[1].split(",")[0])
     assert 139.0 <= lon <= 140.0
+
+
+# --- a center the plan region declares ----------------------------------------
+# tokyo_land reaches Ogasawara, so the middle of its bounds is open sea at
+# 146.45 E. A plan region can name the view it should open on instead.
+
+HONSHU_TOKYO = (139.69, 35.69)
+
+
+def test_set_center_overrides_the_bounds_midpoint(tmp_path: Path) -> None:
+    path = _mbtiles(tmp_path / "t.mbtiles", bounds=",".join(map(str, TOKYO_LAND)), minzoom="11", maxzoom="11")
+    ensure_center(path)
+    set_center(path, HONSHU_TOKYO)
+    assert _meta(path)["center"] == "139.6900000,35.6900000,11"
+
+
+def test_set_center_keeps_the_declared_zoom(tmp_path: Path) -> None:
+    path = _mbtiles(tmp_path / "t.mbtiles", bounds=",".join(map(str, TOKYO_LAND)),
+                    minzoom="7", maxzoom="11", center="146.45,30.04,9")
+    set_center(path, HONSHU_TOKYO)
+    assert _meta(path)["center"] == "139.6900000,35.6900000,9"
+
+
+def test_set_center_without_a_zoom_uses_the_default_zoom(tmp_path: Path) -> None:
+    path = _mbtiles(tmp_path / "t.mbtiles", bounds=",".join(map(str, TOKYO_LAND)), minzoom="7", maxzoom="11")
+    set_center(path, HONSHU_TOKYO)
+    assert _meta(path)["center"] == "139.6900000,35.6900000,7"
+
+
+@pytest.mark.parametrize("lonlat", [(-73.98, 40.75), (139.69, 40.0)])
+def test_set_center_refuses_a_point_outside_the_bounds(tmp_path: Path, lonlat) -> None:
+    path = _mbtiles(tmp_path / "t.mbtiles", bounds=",".join(map(str, TOKYO_LAND)), minzoom="11", maxzoom="11")
+    with pytest.raises(ValueError, match="outside the bounds"):
+        set_center(path, lonlat)
+    assert "center" not in _meta(path)
+
+
+def test_set_center_needs_bounds_and_zooms(tmp_path: Path) -> None:
+    path = _mbtiles(tmp_path / "t.mbtiles", minzoom="11", maxzoom="11")
+    with pytest.raises(ValueError, match="bounds"):
+        set_center(path, HONSHU_TOKYO)

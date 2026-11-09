@@ -171,6 +171,8 @@ class HLSPlanRegion:
     natural_earth: Optional[NaturalEarthRegion] = None
     miniplanet: Optional[str] = None
     land_only: bool = False
+    # (lon, lat) the build opens on; the middle of the bounds when omitted
+    center: Optional[Tuple[float, float]] = None
 
 
 @dataclass

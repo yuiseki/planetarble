@@ -8,8 +8,14 @@ from pathlib import Path
 from planetarble.config import load_config
 from planetarble.logging import get_logger, log_skip
 from planetarble.tiling import TilingManager
+from planetarble.tiling.mbtiles import set_center
 
-from .checks import _is_valid_mbtiles, _resolve_config_path, _resolve_copernicus_cog
+from .checks import (
+    _hls_region_center,
+    _is_valid_mbtiles,
+    _resolve_config_path,
+    _resolve_copernicus_cog,
+)
 
 LOGGER = get_logger(__name__)
 
@@ -116,6 +122,10 @@ def _handle_tile(args: argparse.Namespace) -> int:
     if args.force and mbtiles_destination.exists() and not args.dry_run:
         mbtiles_destination.unlink()
     mbtiles_path = manager.create_mbtiles(source_raster, destination=mbtiles_destination)
+    if tile_source == "hls" and not args.dry_run:
+        region_center = _hls_region_center(cfg, args.plan_region or cfg.hls.plan_region)
+        if region_center is not None:
+            set_center(mbtiles_path, region_center)
 
     LOGGER.info("tiling outputs", extra={
         "source": str(source_raster),

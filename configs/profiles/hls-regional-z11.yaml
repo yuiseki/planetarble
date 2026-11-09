@@ -62,6 +62,9 @@ hls:
         dataset: "admin_1"
         where: "adm0_a3='JPN' AND name='Tokyo'"
       land_only: true
+      # Tokyo reaches Ogasawara, so the middle of its bounds is open sea at
+      # 146.45 E; open on Shinjuku instead (tile and package --plan-region).
+      center: [139.69, 35.69]
     - name: "kanagawa_land"
       natural_earth:
         dataset: "admin_1"

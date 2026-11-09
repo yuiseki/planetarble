@@ -158,7 +158,10 @@ hls:
         dataset: "admin_1"
         where: "adm0_a3='JPN' AND name='Tokyo'"
       land_only: true
+      center: [139.69, 35.69]  # optional
 ```
+
+The build opens on the middle of its bounds unless the region names a `center: [lon, lat]`. Tokyo needs one: its bounds reach Ogasawara, so their middle is open sea at 146.45 E. `tile --plan-region` writes the center into the MBTiles, and `package --plan-region` applies it to an MBTiles tiled before the region had one. A center outside the bounds is an error.
 
 `configs/profiles/hls-regional-z11.yaml` defines the Japanese prefectures and the 18 global miniplanets as plan regions. Copy it into your workspace directory and run from there:
 
@@ -177,7 +180,7 @@ planetarble tile --config hls-regional-z11.yaml --plan-region tokyo_land --min-z
 # package under the name that `planetarble serve --region tokyo_land` looks for
 planetarble package --config hls-regional-z11.yaml \
   --input output/tiling/planet_hls_tokyo_land_11z.mbtiles \
-  --pmtiles-name planet_2024_11z_tokyo_land_hls.pmtiles
+  --pmtiles-name planet_2024_11z_tokyo_land_hls.pmtiles --plan-region tokyo_land
 planetarble serve --config hls-regional-z11.yaml --region tokyo_land --open
 ```
 

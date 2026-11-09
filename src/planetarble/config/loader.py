@@ -8,7 +8,7 @@ import types
 import typing
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional, TypeVar, cast
+from typing import Any, Dict, Optional, Tuple, TypeVar, cast
 
 from planetarble.core.models import (
     BBox,
@@ -31,6 +31,21 @@ try:
     import yaml
 except ImportError:  # pragma: no cover - optional dependency guard
     yaml = None  # type: ignore[assignment]
+
+
+def _parse_region_center(value: Any) -> Optional[Tuple[float, float]]:
+    """A plan region's ``center: [lon, lat]``, or None when it names none."""
+    if value is None:
+        return None
+    try:
+        if isinstance(value, (str, bytes)) or len(value) != 2:
+            raise TypeError
+        lon, lat = (float(part) for part in value)
+    except (TypeError, ValueError):
+        raise ValueError(f"hls.plan_regions center must be [lon, lat], got {value!r}") from None
+    if not (-180.0 <= lon <= 180.0 and -90.0 <= lat <= 90.0):
+        raise ValueError(f"hls.plan_regions center is not a longitude and latitude: {value!r}")
+    return (lon, lat)
 
 
 def _normalize_miniplanet(value: Any) -> Optional[str]:
@@ -355,6 +370,7 @@ class ConfigLoader:
                     natural_earth=ne_config,
                     miniplanet=_normalize_miniplanet(region_data.get("miniplanet")),
                     land_only=bool(region_data.get("land_only", False)),
+                    center=_parse_region_center(region_data.get("center")),
                 )
             )
         if region_configs:

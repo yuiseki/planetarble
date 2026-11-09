@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from planetarble.config import load_config
 
 
@@ -73,3 +75,27 @@ def test_load_config_parses_hls_miniplanet_plan_regions(tmp_path: Path) -> None:
     assert first.miniplanet == "00"  # integer 0 normalized to zero-padded string
     assert first.land_only is True
     assert cfg.hls.plan_regions[1].miniplanet == "17"
+
+
+def _region_config(tmp_path: Path, center_line: str) -> Path:
+    config_path = tmp_path / "pipeline.yaml"
+    config_path.write_text(
+        "hls:\n  plan_regions:\n    - name: tokyo_land\n      land_only: true\n" + center_line,
+        encoding="utf-8",
+    )
+    return config_path
+
+
+def test_a_plan_region_may_name_the_center_it_opens_on(tmp_path: Path) -> None:
+    cfg = load_config(_region_config(tmp_path, "      center: [139.69, 35.69]\n"))
+    assert cfg.hls.plan_regions[0].center == (139.69, 35.69)
+
+
+def test_a_plan_region_center_is_optional(tmp_path: Path) -> None:
+    assert load_config(_region_config(tmp_path, "")).hls.plan_regions[0].center is None
+
+
+@pytest.mark.parametrize("value", ["[139.69]", "[139.69, 35.69, 11]", "[200, 35.69]", "[139.69, -95]", "tokyo"])
+def test_a_plan_region_center_is_a_longitude_and_latitude(tmp_path: Path, value: str) -> None:
+    with pytest.raises(ValueError, match="center"):
+        load_config(_region_config(tmp_path, f"      center: {value}\n"))

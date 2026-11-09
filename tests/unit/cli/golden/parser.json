@@ -1946,6 +1946,20 @@
      "help": "Path to an MBTiles archive to package (defaults to the latest tiling output)"
     },
     {
+     "kind": "_StoreAction",
+     "options": [
+      "--plan-region"
+     ],
+     "dest": "plan_region",
+     "required": false,
+     "nargs": null,
+     "default": "None",
+     "type": "str",
+     "choices": null,
+     "metavar": null,
+     "help": "HLS plan region whose configured center the archive opens on"
+    },
+    {
      "kind": "_StoreTrueAction",
      "options": [
       "--dry-run"

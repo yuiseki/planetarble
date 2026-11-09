@@ -9,9 +9,10 @@ from planetarble.config import load_config
 from planetarble.core.models import TileMetadata
 from planetarble.logging import get_logger, log_skip
 from planetarble.packaging import PackagingManager
-from planetarble.tiling.mbtiles import default_center
+from planetarble.tiling.mbtiles import center_at, default_center
 
 from .checks import (
+    _find_hls_plan_region,
     _is_valid_pmtiles,
     _is_valid_tilejson,
     _read_mbtiles_metadata,
@@ -24,6 +25,13 @@ LOGGER = get_logger(__name__)
 def _handle_package(args: argparse.Namespace) -> int:
     config_path = _resolve_config_path(args.config)
     cfg = load_config(config_path)
+
+    region_center = None
+    if args.plan_region is not None:
+        region = _find_hls_plan_region(cfg, args.plan_region)
+        if region is None:
+            raise SystemExit(f"Unknown HLS plan region: {args.plan_region}")
+        region_center = region.center
 
     tiling_dir = (cfg.output_dir / "tiling").resolve()
     if not tiling_dir.exists():
@@ -93,6 +101,13 @@ def _handle_package(args: argparse.Namespace) -> int:
         # MBTiles from before the tile stage wrote a center: open on the middle
         # of the bounds, at a zoom that has tiles (z2 for a global build).
         center = default_center(bounds, minzoom, maxzoom)
+    if region_center is not None:
+        # the plan region names its own view: tokyo_land's bounds reach
+        # Ogasawara and put their middle in the open sea
+        try:
+            center = center_at(region_center, bounds, int(center[2]))
+        except ValueError as exc:
+            raise SystemExit(f"{args.plan_region}: {exc}") from None
     tile_format = str(mbtiles_meta.get("format") or cfg.processing.tile_format)
 
     # Only the BMNG pipeline composites GEBCO bathymetry and Natural Earth
@@ -188,6 +203,12 @@ def register_package(subcommands: argparse._SubParsersAction) -> None:
         type=Path,
         default=None,
         help="Path to an MBTiles archive to package (defaults to the latest tiling output)",
+    )
+    package.add_argument(
+        "--plan-region",
+        type=str,
+        default=None,
+        help="HLS plan region whose configured center the archive opens on",
     )
     package.add_argument(
         "--dry-run",

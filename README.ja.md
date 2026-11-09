@@ -84,7 +84,7 @@ planetarble process --config bmng-global-z8.yaml
 # output/tiling/planet_2024_8z.mbtiles を作る
 planetarble tile --config bmng-global-z8.yaml
 
-# PMTiles に変換し、output/distribution/ にまとめる (PMTiles、TileJSON、出典)
+# PMTiles に変換し、output/distribution/ にまとめる (PMTiles、TileJSON、出典の <名前>.LICENSE_AND_CREDITS.txt)
 planetarble package --config bmng-global-z8.yaml
 
 # 同梱の MapLibre ビューアで見る (http://localhost:8081/viewer/)

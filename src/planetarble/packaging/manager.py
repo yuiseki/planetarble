@@ -116,6 +116,9 @@ class PackagingManager(PackagingProtocol):
             shutil.copy2(tilejson_path, package_dir / tilejson_path.name)
             if manifest_path.exists():
                 shutil.copy2(manifest_path, package_dir / manifest_path.name)
-            license_path = package_dir / "LICENSE_AND_CREDITS.txt"
+            # one file per archive: a distribution directory collects archives
+            # from different sources, and a shared file would credit only
+            # whichever was packaged last
+            license_path = package_dir / f"{pmtiles_path.stem}.LICENSE_AND_CREDITS.txt"
             license_path.write_text(license_text, encoding="utf-8")
         return package_dir

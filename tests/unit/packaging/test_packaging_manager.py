@@ -88,9 +88,29 @@ def test_distribution_package(tmp_path: Path, ran) -> None:
     )
     assert out == tmp_path / "dist"
     assert sorted(p.name for p in out.iterdir()) == [
-        "LICENSE_AND_CREDITS.txt", "MANIFEST.json", "planet.pmtiles", "planet.tilejson.json",
+        "MANIFEST.json", "planet.LICENSE_AND_CREDITS.txt", "planet.pmtiles", "planet.tilejson.json",
     ]
-    assert (out / "LICENSE_AND_CREDITS.txt").read_text(encoding="utf-8") == "credits"
+    assert (out / "planet.LICENSE_AND_CREDITS.txt").read_text(encoding="utf-8") == "credits"
+
+
+def test_each_archive_in_a_distribution_keeps_its_own_credits(tmp_path: Path, ran) -> None:
+    # one distribution/ holds archives from different sources (BMNG, GSI,
+    # HLS); a single shared credits file named whichever was packaged last
+    def package(name: str, credits: str) -> Path:
+        pmtiles = tmp_path / f"{name}.pmtiles"
+        pmtiles.write_bytes(b"pm")
+        tilejson = tmp_path / f"{name}.tilejson.json"
+        tilejson.write_text("{}", encoding="utf-8")
+        return pkg.PackagingManager().create_distribution_package(
+            pmtiles, tilejson_path=tilejson, manifest_path=tmp_path / "missing.json",
+            license_text=credits, destination=tmp_path / "dist",
+        )
+
+    package("planet_2024_18z_taito_gsi", "Imagery: GSI")
+    out = package("planet_2024_11z_tokyo_land_hls", "Imagery: HLS")
+    assert (out / "planet_2024_18z_taito_gsi.LICENSE_AND_CREDITS.txt").read_text(encoding="utf-8") == "Imagery: GSI"
+    assert (out / "planet_2024_11z_tokyo_land_hls.LICENSE_AND_CREDITS.txt").read_text(encoding="utf-8") == "Imagery: HLS"
+    assert not (out / "LICENSE_AND_CREDITS.txt").exists()
 
 
 def test_distribution_without_manifest_and_default_destination(tmp_path: Path, ran) -> None:

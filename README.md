@@ -123,7 +123,7 @@ planetarble process --config bmng-global-z8.yaml
 # build output/tiling/planet_2024_8z.mbtiles
 planetarble tile --config bmng-global-z8.yaml
 
-# convert to PMTiles and assemble output/distribution/ (PMTiles, TileJSON, credits)
+# convert to PMTiles and assemble output/distribution/ (PMTiles, TileJSON, <name>.LICENSE_AND_CREDITS.txt)
 planetarble package --config bmng-global-z8.yaml
 
 # view it in the bundled MapLibre viewer at http://localhost:8081/viewer/

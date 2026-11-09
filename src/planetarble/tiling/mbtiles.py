@@ -13,6 +13,50 @@ from typing import Callable, Dict, Iterable, Iterator, Mapping, Optional, Set, T
 _PIL_SAVE_FORMAT = {"webp": "WEBP", "png": "PNG", "jpg": "JPEG", "jpeg": "JPEG"}
 
 
+def default_center(
+    bounds: Tuple[float, float, float, float], minzoom: int, maxzoom: int
+) -> Tuple[float, float, int]:
+    """The middle of ``bounds``, at z2 clamped into ``[minzoom, maxzoom]``.
+
+    A global build gets ``(0, 0, 2)``; a regional z11 build opens at z11.
+    """
+    return (
+        (bounds[0] + bounds[2]) / 2.0,
+        (bounds[1] + bounds[3]) / 2.0,
+        max(minzoom, min(maxzoom, 2)),
+    )
+
+
+def ensure_center(path: Path) -> None:
+    """Add a ``center`` row derived from ``bounds`` when the archive has none.
+
+    GDAL's MBTiles driver writes ``bounds`` but no ``center`` unless asked, and
+    ``pmtiles convert`` (go-pmtiles <= 1.31.2) then derives one with an int32
+    overflow for bounds east of ~107.4 E or west of ~107.4 W
+    (https://github.com/protomaps/go-pmtiles/issues/297). An archive without
+    ``bounds`` or zoom levels is left alone, and so is a missing file.
+    """
+    if not Path(path).is_file():
+        return
+    conn = sqlite3.connect(str(path))
+    try:
+        meta = dict(conn.execute("SELECT name, value FROM metadata"))
+        if meta.get("center"):
+            return
+        try:
+            bounds = tuple(float(part) for part in str(meta["bounds"]).split(","))
+            minzoom, maxzoom = int(meta["minzoom"]), int(meta["maxzoom"])
+        except (KeyError, ValueError):
+            return
+        if len(bounds) != 4:
+            return
+        lon, lat, zoom = default_center(bounds, minzoom, maxzoom)
+        _set_metadata(conn, "center", f"{lon:.7f},{lat:.7f},{zoom}")
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def iter_xyz_dir(tile_dir: Path) -> Iterator[Tuple[int, int, int, str]]:
     """Yield ``(z, x, y, ext)`` for every ``z/x/y.ext`` tile under ``tile_dir``.
 

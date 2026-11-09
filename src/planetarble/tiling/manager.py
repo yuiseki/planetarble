@@ -13,6 +13,7 @@ from planetarble.core.models import ProcessingConfig
 from planetarble.logging import get_logger, log_step
 
 from .base import TileGenerator
+from .mbtiles import ensure_center
 
 LOGGER = get_logger(__name__)
 
@@ -137,6 +138,7 @@ class TilingManager(TileGenerator):
                         "max_zoom": self._config.max_zoom,
                     },
                 )
+                ensure_center(mbtiles_path)
                 return mbtiles_path
             except TileCommandError:
                 if preferred:
@@ -150,6 +152,8 @@ class TilingManager(TileGenerator):
             reprojected_path = self.reproject_to_webmercator(source_path)
         self._run_gdal_translate(reprojected_path, mbtiles_path, tile_format, quality_value)
         self.optimize_overviews(mbtiles_path)
+        if not self._dry_run:
+            ensure_center(mbtiles_path)
         return mbtiles_path
 
     def _should_use_gdal2mbtiles(self, tile_format: str, auto_mode: bool, preferred: bool) -> bool:

@@ -9,6 +9,7 @@ from planetarble.config import load_config
 from planetarble.core.models import TileMetadata
 from planetarble.logging import get_logger, log_skip
 from planetarble.packaging import PackagingManager
+from planetarble.tiling.mbtiles import default_center
 
 from .checks import (
     _is_valid_pmtiles,
@@ -89,13 +90,9 @@ def _handle_package(args: argparse.Namespace) -> int:
     if mbtiles_meta.get("center"):
         center = tuple(mbtiles_meta["center"])
     else:
-        # A regional build carries bounds but no center; open on its middle,
-        # at a zoom that has tiles (z2 for a global build).
-        center = (
-            (bounds[0] + bounds[2]) / 2.0,
-            (bounds[1] + bounds[3]) / 2.0,
-            max(minzoom, min(maxzoom, 2)),
-        )
+        # MBTiles from before the tile stage wrote a center: open on the middle
+        # of the bounds, at a zoom that has tiles (z2 for a global build).
+        center = default_center(bounds, minzoom, maxzoom)
     tile_format = str(mbtiles_meta.get("format") or cfg.processing.tile_format)
 
     # Only the BMNG pipeline composites GEBCO bathymetry and Natural Earth

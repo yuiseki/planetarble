@@ -447,11 +447,14 @@ def test_package_converts_and_writes_distribution(patch_cli, tmp_path, use_cfg, 
     assert cli.main(["package"]) == 0
 
     assert cls.call_args == call(dry_run=False)
-    assert _names(pkg) == ["convert_to_pmtiles", "generate_tilejson", "create_distribution_package"]
+    assert _names(pkg) == ["convert_to_pmtiles", "set_header_center", "generate_tilejson",
+                           "create_distribution_package"]
     assert pkg.convert_to_pmtiles.call_args == call(mbtiles, destination=tiling / "planet_2024_10z.pmtiles")
 
     pmtiles = pkg.convert_to_pmtiles.return_value
     meta = pkg.generate_tilejson.call_args.args[1]
+    # the PMTiles header gets the same center as the TileJSON
+    assert pkg.set_header_center.call_args == call(pmtiles, meta.center)
     assert pkg.generate_tilejson.call_args.args[0] is pmtiles
     assert meta.name == "Planetarble 2024"
     assert meta.bounds == (-180.0, -85.0511, 180.0, 85.0511)

@@ -108,6 +108,8 @@ def _handle_package(args: argparse.Namespace) -> int:
         description = f"Basemap composed from {imagery_label}."
         attribution = imagery_attribution
 
+    packaging.set_header_center(pmtiles_path, center)
+
     metadata = TileMetadata(
         name=f"Planetarble {cfg.processing.gebco_year}",
         description=description,

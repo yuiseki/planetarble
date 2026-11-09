@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Optional, Protocol, Tuple
 
 from planetarble.core.models import TileMetadata
 
@@ -13,6 +13,9 @@ class PackagingManager(Protocol):
 
     def convert_to_pmtiles(self, mbtiles_path: Path) -> Path:
         """Return the generated PMTiles archive path."""
+
+    def set_header_center(self, pmtiles_path: Path, center: Tuple[float, float, int]) -> None:
+        """Write ``center`` (lon, lat, zoom) into the PMTiles header."""
 
     def generate_tilejson(self, pmtiles_path: Path, metadata: TileMetadata) -> Path:
         """Return the TileJSON metadata file associated with the PMTiles archive."""

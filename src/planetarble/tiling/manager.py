@@ -32,18 +32,18 @@ class TileRunner:
         if self._dry_run:
             return
         try:
-           proc = subprocess.run(command, check=True, text=True, capture_output=True)
-           if proc.stdout:
-               LOGGER.debug(proc.stdout.strip())
-           if proc.stderr:
-               LOGGER.debug(proc.stderr.strip())
-        except subprocess.CalledProcessError as exc:  # pragma: no cover - depends on GDAL runtime
-           msg = f"Command failed: {' '.join(command)}"
-           if exc.stdout:
-               msg += f"\n--- stdout ---\n{exc.stdout}"
-           if exc.stderr:
-               msg += f"\n--- stderr ---\n{exc.stderr}"
-           raise TileCommandError(msg) from exc
+            proc = subprocess.run(command, check=True, text=True, capture_output=True)
+            if proc.stdout:
+                LOGGER.debug(proc.stdout.strip())
+            if proc.stderr:
+                LOGGER.debug(proc.stderr.strip())
+        except subprocess.CalledProcessError as exc:
+            msg = f"Command failed: {' '.join(command)}"
+            if exc.stdout:
+                msg += f"\n--- stdout ---\n{exc.stdout}"
+            if exc.stderr:
+                msg += f"\n--- stderr ---\n{exc.stderr}"
+            raise TileCommandError(msg) from exc
 
 
 class TilingManager(TileGenerator):

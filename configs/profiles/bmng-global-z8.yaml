@@ -1,10 +1,12 @@
 # Recipe: global BMNG 500m basemap, z0-8 (native resolution limit), GEBCO ocean hillshade.
 # Requires: BMNG 500m panels, GEBCO grid, Natural Earth (acquire downloads all).
-# Run from your data workspace directory (data/tmp/output resolve relative to CWD):
-#   planetarble acquire --config ../profiles/bmng-global-z8.yaml --bmng-resolution 500m
-#   planetarble process --config ../profiles/bmng-global-z8.yaml
-#   planetarble tile    --config ../profiles/bmng-global-z8.yaml
-#   planetarble package --config ../profiles/bmng-global-z8.yaml
+# data/tmp/output resolve relative to the directory that holds this file, not
+# the current directory, so copy it into your workspace and run it from there:
+#   cp configs/profiles/bmng-global-z8.yaml workspace/ && cd workspace
+#   planetarble acquire --config bmng-global-z8.yaml --bmng-resolution 500m
+#   planetarble process --config bmng-global-z8.yaml
+#   planetarble tile    --config bmng-global-z8.yaml
+#   planetarble package --config bmng-global-z8.yaml
 data_dir: data
 temp_dir: tmp
 output_dir: output

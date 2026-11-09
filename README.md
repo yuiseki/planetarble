@@ -60,12 +60,13 @@ The bundled `Dockerfile` packages the complete toolchain (GDAL 3.11 with the uni
 ```bash
 docker build -t planetarble .
 
-# data/, tmp/, and output/ resolve relative to /workspace inside the container
+# data/, tmp/ and output/ resolve beside the config file, so keep the config in the mounted workspace
+mkdir -p workspace && cp configs/profiles/bmng-global-z8.yaml workspace/
 docker run --rm -v "$PWD/workspace:/workspace" planetarble --help
-docker run --rm -v "$PWD/workspace:/workspace" planetarble acquire --config /opt/planetarble/configs/profiles/bmng-global-z8.yaml
+docker run --rm -v "$PWD/workspace:/workspace" planetarble acquire --config /workspace/bmng-global-z8.yaml
 ```
 
-Mount a host directory at `/workspace` to keep downloaded data and generated tiles between runs.
+Mount a host directory at `/workspace` to keep downloaded data and generated tiles between runs. A config under `/opt/planetarble/configs/` would write its outputs inside the container, where they are lost when it exits.
 
 ## Local setup (uv)
 
@@ -107,22 +108,23 @@ The real pipelines run in four stages. This example builds the global BMNG basem
 # Set up the venv as described in "Local setup (uv)", then activate it
 source .venv/bin/activate
 
-# data/, tmp/ and output/ resolve relative to the current directory
-mkdir -p workspace && cd workspace
+# data/, tmp/ and output/ resolve relative to the directory that holds the config file
+# (not the current directory), so copy the profile into the workspace and run it there
+mkdir -p workspace && cp configs/profiles/bmng-global-z8.yaml workspace/ && cd workspace
 
 # download BMNG 500m panels, GEBCO, Natural Earth and (with ocean.enabled) the ETOPO grid,
 # and write output/MANIFEST.json
 # (aria2c is used for resumable downloads when it is in PATH; --no-aria2 disables it)
-planetarble acquire --config ../configs/profiles/bmng-global-z8.yaml
+planetarble acquire --config bmng-global-z8.yaml
 
 # mosaic, shade and normalise the rasters (--dry-run prints the commands instead)
-planetarble process --config ../configs/profiles/bmng-global-z8.yaml
+planetarble process --config bmng-global-z8.yaml
 
 # build output/tiling/planet_2024_8z.mbtiles
-planetarble tile --config ../configs/profiles/bmng-global-z8.yaml
+planetarble tile --config bmng-global-z8.yaml
 
 # convert to PMTiles and assemble output/distribution/ (PMTiles, TileJSON, credits)
-planetarble package --config ../configs/profiles/bmng-global-z8.yaml
+planetarble package --config bmng-global-z8.yaml
 
 # view it in the bundled MapLibre viewer at http://localhost:8081/viewer/
 planetarble serve --pmtiles output/distribution/planet_2024_8z.pmtiles --open
@@ -158,23 +160,25 @@ hls:
       land_only: true
 ```
 
-`configs/profiles/hls-regional-z11.yaml` defines the Japanese prefectures and the 18 global miniplanets as plan regions. Run from your workspace directory:
+`configs/profiles/hls-regional-z11.yaml` defines the Japanese prefectures and the 18 global miniplanets as plan regions. Copy it into your workspace directory and run from there:
 
 ```bash
+cp ../configs/profiles/hls-regional-z11.yaml .
+
 # generate the plan (data/plans/hls_z10_plan_tokyo_land.ndjson)
-planetarble acquire --config ../configs/profiles/hls-regional-z11.yaml --plan-region tokyo_land
+planetarble acquire --config hls-regional-z11.yaml --plan-region tokyo_land
 
 # build the scene manifest and the regional HLS mosaic
-planetarble process --config ../configs/profiles/hls-regional-z11.yaml --plan-region tokyo_land
+planetarble process --config hls-regional-z11.yaml --plan-region tokyo_land
 
 # tile z11 only (output/tiling/planet_hls_tokyo_land_11z.mbtiles)
-planetarble tile --config ../configs/profiles/hls-regional-z11.yaml --plan-region tokyo_land --min-zoom 11 --max-zoom 11
+planetarble tile --config hls-regional-z11.yaml --plan-region tokyo_land --min-zoom 11 --max-zoom 11
 
 # package under the name that `planetarble serve --region tokyo_land` looks for
-planetarble package --config ../configs/profiles/hls-regional-z11.yaml \
+planetarble package --config hls-regional-z11.yaml \
   --input output/tiling/planet_hls_tokyo_land_11z.mbtiles \
   --pmtiles-name planet_2024_11z_tokyo_land_hls.pmtiles
-planetarble serve --config ../configs/profiles/hls-regional-z11.yaml --region tokyo_land --open
+planetarble serve --config hls-regional-z11.yaml --region tokyo_land --open
 ```
 
 HLS imagery has about 30 m effective resolution, which maps to about z11 in Web Mercator; deeper zooms are best left to client-side overscaling of the z11 tiles.

@@ -1,9 +1,11 @@
 # Recipe: Sentinel-2 L2A (10m) regional imagery around Tokyo, up to z14.
 # Scene search and assets come from Microsoft Planetary Computer; the mosaic
 # uses the lowest-cloud scenes (sentinel2.mosaic_max_scenes).
-# Run from your data workspace directory (data/tmp/output resolve relative to CWD):
-#   planetarble process --config ../profiles/sentinel2-tokyo-z14.yaml --plan-region tokyo_bbox
-#   planetarble tile    --config ../profiles/sentinel2-tokyo-z14.yaml --plan-region tokyo_bbox
+# data/tmp/output resolve relative to the directory that holds this file, not
+# the current directory, so copy it into your workspace and run it from there:
+#   cp configs/profiles/sentinel2-tokyo-z14.yaml workspace/ && cd workspace
+#   planetarble process --config sentinel2-tokyo-z14.yaml --plan-region tokyo_bbox
+#   planetarble tile    --config sentinel2-tokyo-z14.yaml --plan-region tokyo_bbox
 data_dir: data
 temp_dir: tmp
 output_dir: output

@@ -70,21 +70,22 @@ uv run pytest
 # 「ローカル環境の構築 (uv)」の手順で venv を作ってから有効にする
 source .venv/bin/activate
 
-# data/、tmp/、output/ は今いるディレクトリからの相対パスになる
-mkdir -p workspace && cd workspace
+# data/、tmp/、output/ は、今いるディレクトリでなく設定ファイルのあるディレクトリからの相対パスになる
+# そのため、プロファイルを作業ディレクトリにコピーしてから使う
+mkdir -p workspace && cp configs/profiles/bmng-global-z8.yaml workspace/ && cd workspace
 
 # BMNG 500 m、GEBCO、Natural Earth と (ocean.enabled なら) ETOPO を取得し、output/MANIFEST.json を書く
 # (aria2c が PATH にあれば再開できるダウンロードに使う。--no-aria2 で無効にできる)
-planetarble acquire --config ../configs/profiles/bmng-global-z8.yaml
+planetarble acquire --config bmng-global-z8.yaml
 
 # モザイク、陰影、正規化 (--dry-run を付けるとコマンドを表示するだけ)
-planetarble process --config ../configs/profiles/bmng-global-z8.yaml
+planetarble process --config bmng-global-z8.yaml
 
 # output/tiling/planet_2024_8z.mbtiles を作る
-planetarble tile --config ../configs/profiles/bmng-global-z8.yaml
+planetarble tile --config bmng-global-z8.yaml
 
 # PMTiles に変換し、output/distribution/ にまとめる (PMTiles、TileJSON、出典)
-planetarble package --config ../configs/profiles/bmng-global-z8.yaml
+planetarble package --config bmng-global-z8.yaml
 
 # 同梱の MapLibre ビューアで見る (http://localhost:8081/viewer/)
 planetarble serve --pmtiles output/distribution/planet_2024_8z.pmtiles --open

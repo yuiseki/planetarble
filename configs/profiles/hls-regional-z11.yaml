@@ -2,10 +2,12 @@
 # Plan regions cover Japanese prefectures plus the 18 global miniplanets
 # (mp_00..mp_17); pick one with --plan-region, or split a global plan with
 # `planetarble split-plan`.
-# Run from your data workspace directory (data/tmp/output resolve relative to CWD):
-#   planetarble acquire --config ../profiles/hls-regional-z11.yaml --plan-region tokyo_land
-#   planetarble process --config ../profiles/hls-regional-z11.yaml --plan-region tokyo_land
-#   planetarble tile    --config ../profiles/hls-regional-z11.yaml --plan-region tokyo_land --min-zoom 11 --max-zoom 11
+# data/tmp/output resolve relative to the directory that holds this file, not
+# the current directory, so copy it into your workspace and run it from there:
+#   cp configs/profiles/hls-regional-z11.yaml workspace/ && cd workspace
+#   planetarble acquire --config hls-regional-z11.yaml --plan-region tokyo_land
+#   planetarble process --config hls-regional-z11.yaml --plan-region tokyo_land
+#   planetarble tile    --config hls-regional-z11.yaml --plan-region tokyo_land --min-zoom 11 --max-zoom 11
 data_dir: data
 temp_dir: tmp
 output_dir: output

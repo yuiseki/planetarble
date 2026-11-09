@@ -55,10 +55,13 @@ This order provides early feedback while steadily increasing coverage.
 
 ## 5) Operational workflow
 
+Relative directories in a config resolve beside the config file, so copy the profile into your workspace first and run from there.
+
 ```bash
-planetarble acquire --config configs/profiles/hls-regional-z11.yaml --plan-region tokyo_land
-planetarble process --config configs/profiles/hls-regional-z11.yaml --plan-region tokyo_land
-planetarble tile --config configs/profiles/hls-regional-z11.yaml --plan-region tokyo_land --min-zoom 11 --max-zoom 11
+cp configs/profiles/hls-regional-z11.yaml workspace/ && cd workspace
+planetarble acquire --config hls-regional-z11.yaml --plan-region tokyo_land
+planetarble process --config hls-regional-z11.yaml --plan-region tokyo_land
+planetarble tile --config hls-regional-z11.yaml --plan-region tokyo_land --min-zoom 11 --max-zoom 11
 ```
 
 Repeat per prefecture, then merge MBTiles and package.

@@ -15,6 +15,10 @@ configs/base/output/
 configs/base/data
 configs/base/tmp
 configs/base/output
+# A profile run in place writes beside itself; keep that out of git too.
+configs/profiles/data
+configs/profiles/tmp
+configs/profiles/output
 # ...but the package's own data (e.g. ocean/depth_ramp.json, loaded via
 # importlib.resources as planetarble.data) must be committed.
 !src/planetarble/data/

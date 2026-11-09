@@ -72,6 +72,12 @@ def _handle_package(args: argparse.Namespace) -> int:
     elif tile_source == "gsi_orthophotos":
         imagery_label = "GSI Seamless Orthophoto"
         imagery_attribution = "Imagery: Geospatial Information Authority of Japan (GSI) Seamless Orthophotography."
+    elif tile_source == "hls":
+        imagery_label = "Harmonized Landsat and Sentinel-2 (HLS) v2"
+        imagery_attribution = "Imagery: HLS v2.0 (NASA/USGS)."
+        if "landsat-c2-l2" in cfg.hls.fallback_collections:
+            # the mosaic fills cloud gaps from the Landsat fallback collection
+            imagery_attribution += " Landsat imagery courtesy of the U.S. Geological Survey."
     else:
         imagery_label = "NASA Blue Marble Next Generation (2004)"
         imagery_attribution = "Imagery: NASA Blue Marble (2004)."
@@ -83,17 +89,25 @@ def _handle_package(args: argparse.Namespace) -> int:
     maxzoom = int(mbtiles_meta.get("maxzoom") or cfg.processing.max_zoom)
     tile_format = str(mbtiles_meta.get("format") or cfg.processing.tile_format)
 
+    # Only the BMNG pipeline composites GEBCO bathymetry and Natural Earth
+    # masks into the tiled raster; every other source is tiled on its own.
+    bmng_composite = tile_source not in {"modis", "viirs", "copernicus", "sentinel2", "gsi_orthophotos", "hls"}
+    if bmng_composite:
+        description = f"Global basemap composed from {imagery_label} and GEBCO bathymetry."
+        attribution = f"{imagery_attribution} Bathymetry: GEBCO 2024. Masks: Natural Earth 10m."
+    else:
+        description = f"Basemap composed from {imagery_label}."
+        attribution = imagery_attribution
+
     metadata = TileMetadata(
         name=f"Planetarble {cfg.processing.gebco_year}",
-        description=f"Global basemap composed from {imagery_label} and GEBCO bathymetry.",
+        description=description,
         version=str(cfg.processing.gebco_year),
         bounds=bounds,
         center=center,
         minzoom=minzoom,
         maxzoom=maxzoom,
-        attribution=(
-            f"{imagery_attribution} Bathymetry: GEBCO 2024. Masks: Natural Earth 10m."
-        ),
+        attribution=attribution,
         format=tile_format,
     )
     tilejson_path = packaging.generate_tilejson(pmtiles_path, metadata)
@@ -105,18 +119,30 @@ def _handle_package(args: argparse.Namespace) -> int:
         "copernicus": "- Copernicus Sentinel-2 Level-2A (European Space Agency).",
         "sentinel2": "- Copernicus Sentinel-2 Level-2A via Microsoft Planetary Computer.",
         "gsi_orthophotos": "- Geospatial Information Authority of Japan Seamless Orthophotography.",
+        "hls": "- NASA/USGS Harmonized Landsat and Sentinel-2 (HLS) v2.0 via Microsoft Planetary Computer.",
     }.get(tile_source, "- NASA Blue Marble Next Generation (2004).")
+    if tile_source == "hls" and "landsat-c2-l2" in cfg.hls.fallback_collections:
+        imagery_line += "\n- USGS Landsat Collection 2 Level-2 surface reflectance (cloud-gap fallback)."
 
-    license_text = (
-        "Planetarble Distribution\n\n"
-        "Data Sources:\n"
-        f"{imagery_line}\n"
-        "- GEBCO 2024 Global Bathymetry Grid.\n"
-        "- Natural Earth 1:10m land/ocean/coastline layers.\n\n"
-        "Attribution:\n"
-        f"{imagery_attribution} Bathymetry courtesy of GEBCO Compilation Group. "
-        "Natural Earth data is in the public domain."
-    )
+    if bmng_composite:
+        license_text = (
+            "Planetarble Distribution\n\n"
+            "Data Sources:\n"
+            f"{imagery_line}\n"
+            "- GEBCO 2024 Global Bathymetry Grid.\n"
+            "- Natural Earth 1:10m land/ocean/coastline layers.\n\n"
+            "Attribution:\n"
+            f"{imagery_attribution} Bathymetry courtesy of GEBCO Compilation Group. "
+            "Natural Earth data is in the public domain."
+        )
+    else:
+        license_text = (
+            "Planetarble Distribution\n\n"
+            "Data Sources:\n"
+            f"{imagery_line}\n\n"
+            "Attribution:\n"
+            f"{imagery_attribution}"
+        )
     package_dir = packaging.create_distribution_package(
         pmtiles_path,
         tilejson_path=tilejson_path,

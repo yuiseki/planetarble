@@ -32,6 +32,13 @@ def _handle_acquire(args: argparse.Namespace) -> int:
         use_aria2=not args.no_aria2,
     )
     generation_params: dict[str, object] = {}
+    if cfg.processing.tile_source.lower() == "gsi_orthophotos":
+        # `planetarble process` fetches the GSI tiles itself; none of the
+        # global datasets (BMNG, GEBCO, ETOPO, Natural Earth) are used.
+        LOGGER.info("GSI orthophotos are fetched by the process stage; nothing to acquire")
+        manager.generate_manifest(generation_params=None)
+        return 0
+
     etopo_path: Path | None = None
     if cfg.ocean.enabled:
         try:

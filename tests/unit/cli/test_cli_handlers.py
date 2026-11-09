@@ -135,6 +135,16 @@ def test_acquire_ocean_downloads_etopo_first(tmp_path, use_cfg, fake) -> None:
     assert params["etopo_path"] == str(tmp_path / "etopo.tif")
 
 
+def test_acquire_gsi_orthophotos_downloads_nothing(tmp_path, use_cfg, fake) -> None:
+    # process fetches the GSI tiles itself; BMNG, GEBCO and ETOPO are never used
+    use_cfg(_cfg(tmp_path, "gsi_orthophotos", ocean=OceanConfig(enabled=True)))
+    acq = fake("AcquisitionManager").return_value
+
+    assert cli.main(["acquire"]) == 0
+
+    assert acq.method_calls == [call.generate_manifest(generation_params=None)]
+
+
 def test_acquire_hls_without_regions_builds_global_plan(tmp_path, use_cfg, fake) -> None:
     cfg = _cfg(tmp_path, "hls")
     use_cfg(cfg)
@@ -478,6 +488,54 @@ def test_package_labels_follow_tile_source(patch_cli, tmp_path, use_cfg, fake, m
     meta = pkg.generate_tilejson.call_args.args[1]
     assert label in meta.description
     assert meta.bounds == (1.0, 2.0, 3.0, 4.0)
+
+
+def _package_texts(patch_cli, tmp_path, use_cfg, fake, cfg) -> tuple:
+    use_cfg(cfg)
+    _touch(cfg.output_dir / "tiling" / "planet_2024_10z.mbtiles")
+    pkg = fake("PackagingManager").return_value
+    patch_cli("_is_valid_pmtiles", lambda path: False)
+    patch_cli("_read_mbtiles_metadata", lambda path: {})
+    assert cli.main(["package"]) == 0
+    meta = pkg.generate_tilejson.call_args.args[1]
+    return meta.description, meta.attribution, pkg.create_distribution_package.call_args.kwargs["license_text"]
+
+
+def test_hls_package_credits_hls_and_its_landsat_fallback(patch_cli, tmp_path, use_cfg, fake) -> None:
+    cfg = _cfg(tmp_path, "hls", hls=HLSConfig(fallback_collections=("landsat-c2-l2",)))
+    description, attribution, license_text = _package_texts(patch_cli, tmp_path, use_cfg, fake, cfg)
+    for text in (description, attribution, license_text):
+        assert "HLS" in text
+        assert "Blue Marble" not in text
+    assert "HLS v2.0 (NASA/USGS)" in attribution
+    assert "U.S. Geological Survey" in attribution and "Landsat Collection 2" in license_text
+
+
+def test_hls_package_without_fallback_does_not_credit_landsat(patch_cli, tmp_path, use_cfg, fake) -> None:
+    cfg = _cfg(tmp_path, "hls", hls=HLSConfig(fallback_collections=()))
+    _, attribution, license_text = _package_texts(patch_cli, tmp_path, use_cfg, fake, cfg)
+    assert "U.S. Geological Survey" not in attribution + license_text
+    assert "Landsat Collection 2" not in license_text
+
+
+@pytest.mark.parametrize("tile_source", ["hls", "sentinel2", "gsi_orthophotos", "copernicus", "modis", "viirs"])
+def test_only_the_bmng_composite_credits_gebco_and_natural_earth(patch_cli, tmp_path, use_cfg, fake,
+                                                                  tile_source) -> None:
+    # every source except bmng is tiled from its own raster alone
+    description, attribution, license_text = _package_texts(
+        patch_cli, tmp_path, use_cfg, fake, _cfg(tmp_path, tile_source))
+    for text in (description, attribution, license_text):
+        assert "GEBCO" not in text
+        assert "Natural Earth" not in text
+
+
+def test_bmng_package_credits_gebco_and_natural_earth(patch_cli, tmp_path, use_cfg, fake) -> None:
+    description, attribution, license_text = _package_texts(
+        patch_cli, tmp_path, use_cfg, fake, _cfg(tmp_path, "bmng"))
+    assert "GEBCO" in description
+    assert "Bathymetry: GEBCO 2024" in attribution and "Natural Earth" in attribution
+    assert "- GEBCO 2024 Global Bathymetry Grid." in license_text
+    assert "- Natural Earth 1:10m land/ocean/coastline layers." in license_text
 
 
 def test_package_skips_when_outputs_valid(patch_cli, tmp_path, use_cfg, fake, monkeypatch) -> None:

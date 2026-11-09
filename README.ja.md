@@ -92,7 +92,7 @@ planetarble serve --pmtiles output/distribution/planet_2024_8z.pmtiles --open
 
 パッケージを入れずに動かすときは、リポジトリの直下で `PYTHONPATH=src python -m planetarble.cli.main` を使います。
 
-用意してあるレシピは `bmng-global-z8.yaml` (全球 BMNG 500 m と GEBCO の海、ズーム 0-8)、`hls-regional-z11.yaml` (都道府県や miniplanet ごとの HLS v2、ズーム 11)、`sentinel2-tokyo-z14.yaml` (東京周辺の Sentinel-2 L2A、ズーム 14) です。コピーして自分の設定を作ってください。`configs/base/pipeline.yaml` は開発者の作業用の設定で、今は国土地理院の空中写真を選んでいるため、全球のパイプラインの出発点には向きません。`ocean.enabled` が true のとき、`planetarble acquire` は NOAA ETOPO 2022 の 15 秒角の GeoTIFF (圧縮で約 9 GB) も取得します。
+用意してあるレシピは `bmng-global-z8.yaml` (全球 BMNG 500 m と GEBCO の海、ズーム 0-8)、`hls-regional-z11.yaml` (都道府県や miniplanet ごとの HLS v2、ズーム 11)、`sentinel2-tokyo-z14.yaml` (東京周辺の Sentinel-2 L2A、ズーム 14) です。コピーして自分の設定を作ってください。`configs/base/pipeline.yaml` は開発者の作業用の設定で、今は国土地理院の空中写真を選んでいるため、全球のパイプラインの出発点には向きません。`ocean.enabled` が true のとき、`planetarble acquire` は NOAA ETOPO 2022 の 15 秒角の GeoTIFF (圧縮で約 9 GB) も取得します。`gsi_orthophotos` のときは何も取得しません。国土地理院のタイルは `planetarble process` が直接取りに行くためです。
 
 地域ごとの HLS の作り方、AOI ごとに高解像度の画像を重ねる `planetarble build`、画質の調整は、英語版の `README.md` を参照してください。
 

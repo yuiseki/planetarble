@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
+from typing import Optional
 
-from planetarble.config import load_config
+from planetarble.config import PipelineConfig, load_config
 from planetarble.core.models import TileMetadata
 from planetarble.logging import get_logger, log_skip
 from planetarble.packaging import PackagingManager
@@ -17,6 +19,7 @@ from .checks import (
     _is_valid_tilejson,
     _read_mbtiles_metadata,
     _resolve_config_path,
+    _resolve_hls_scene_manifest_path,
 )
 
 LOGGER = get_logger(__name__)
@@ -84,8 +87,9 @@ def _handle_package(args: argparse.Namespace) -> int:
     elif tile_source == "hls":
         imagery_label = "Harmonized Landsat and Sentinel-2 (HLS) v2"
         imagery_attribution = "Imagery: HLS v2.0 (NASA/USGS)."
-        if "landsat-c2-l2" in cfg.hls.fallback_collections:
-            # the mosaic fills cloud gaps from the Landsat fallback collection
+        landsat_fallback = _hls_used_landsat_fallback(cfg, args.plan_region)
+        if landsat_fallback:
+            # the mosaic filled cloud gaps from the Landsat fallback collection
             imagery_attribution += " Landsat imagery courtesy of the U.S. Geological Survey."
     else:
         imagery_label = "NASA Blue Marble Next Generation (2004)"
@@ -144,7 +148,7 @@ def _handle_package(args: argparse.Namespace) -> int:
         "gsi_orthophotos": "- Geospatial Information Authority of Japan Seamless Orthophotography.",
         "hls": "- NASA/USGS Harmonized Landsat and Sentinel-2 (HLS) v2.0 via Microsoft Planetary Computer.",
     }.get(tile_source, "- NASA Blue Marble Next Generation (2004).")
-    if tile_source == "hls" and "landsat-c2-l2" in cfg.hls.fallback_collections:
+    if tile_source == "hls" and landsat_fallback:
         imagery_line += "\n- USGS Landsat Collection 2 Level-2 surface reflectance (cloud-gap fallback)."
 
     if bmng_composite:
@@ -181,6 +185,26 @@ def _handle_package(args: argparse.Namespace) -> int:
         "distribution": str(package_dir),
     })
     return 0
+
+
+def _hls_used_landsat_fallback(cfg: PipelineConfig, plan_region: Optional[str]) -> bool:
+    """Whether the HLS mosaic drew any scene from the Landsat fallback.
+
+    The scene manifest records what the mosaic used; the config only says
+    what it was allowed to use, and the 2026-01 Kanto mosaics used no
+    fallback scene although their profile allowed one. Without a manifest
+    the config decides, so a fallback that may have been used is credited.
+    """
+    manifest_path = _resolve_hls_scene_manifest_path(cfg, plan_region)
+    try:
+        scenes = json.loads(manifest_path.read_text(encoding="utf-8")).get("scenes") or []
+    except (OSError, ValueError, AttributeError):
+        LOGGER.warning(
+            "no readable HLS scene manifest; crediting the configured Landsat fallback",
+            extra={"manifest": str(manifest_path)},
+        )
+        return "landsat-c2-l2" in cfg.hls.fallback_collections
+    return any(isinstance(scene, dict) and scene.get("collection_id") == "landsat-c2-l2" for scene in scenes)
 
 
 def register_package(subcommands: argparse._SubParsersAction) -> None:

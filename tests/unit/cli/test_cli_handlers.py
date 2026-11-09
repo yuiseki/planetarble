@@ -522,13 +522,13 @@ def test_package_labels_follow_tile_source(patch_cli, tmp_path, use_cfg, fake, m
     assert meta.bounds == (1.0, 2.0, 3.0, 4.0)
 
 
-def _package_texts(patch_cli, tmp_path, use_cfg, fake, cfg) -> tuple:
+def _package_texts(patch_cli, tmp_path, use_cfg, fake, cfg, argv=()) -> tuple:
     use_cfg(cfg)
     _touch(cfg.output_dir / "tiling" / "planet_2024_10z.mbtiles")
     pkg = fake("PackagingManager").return_value
     patch_cli("_is_valid_pmtiles", lambda path: False)
     patch_cli("_read_mbtiles_metadata", lambda path: {})
-    assert cli.main(["package"]) == 0
+    assert cli.main(["package", *argv]) == 0
     meta = pkg.generate_tilejson.call_args.args[1]
     return meta.description, meta.attribution, pkg.create_distribution_package.call_args.kwargs["license_text"]
 
@@ -548,6 +548,43 @@ def test_hls_package_without_fallback_does_not_credit_landsat(patch_cli, tmp_pat
     _, attribution, license_text = _package_texts(patch_cli, tmp_path, use_cfg, fake, cfg)
     assert "U.S. Geological Survey" not in attribution + license_text
     assert "Landsat Collection 2" not in license_text
+
+
+def _scene_manifest(cfg, region: str, *collections: str) -> None:
+    scenes = [{"collection_id": collection, "item_id": f"scene-{i}"} for i, collection in enumerate(collections)]
+    _touch(cfg.output_dir / "processing" / f"hls_scene_manifest_{region}.json",
+           json.dumps({"scenes": scenes, "summary": {}}))
+
+
+_FALLBACK_HLS = HLSConfig(fallback_collections=("landsat-c2-l2",),
+                          plan_regions=(HLSPlanRegion(name="kanagawa_land", land_only=True),))
+
+
+def test_hls_package_credits_landsat_only_when_the_mosaic_used_it(patch_cli, tmp_path, use_cfg, fake) -> None:
+    # the 2026-01 Kanto mosaics drew only HLS scenes although the profile
+    # allows the Landsat fallback; crediting the fallback was false
+    cfg = _cfg(tmp_path, "hls", hls=_FALLBACK_HLS)
+    _scene_manifest(cfg, "kanagawa_land", "hls2-l30", "hls2-s30")
+    _, attribution, license_text = _package_texts(patch_cli, tmp_path, use_cfg, fake, cfg,
+                                                  argv=["--plan-region", "kanagawa_land"])
+    assert "HLS v2.0 (NASA/USGS)" in attribution
+    assert "U.S. Geological Survey" not in attribution + license_text
+    assert "Landsat Collection 2" not in license_text
+
+
+def test_hls_package_credits_the_landsat_scenes_the_mosaic_used(patch_cli, tmp_path, use_cfg, fake) -> None:
+    cfg = _cfg(tmp_path, "hls", hls=_FALLBACK_HLS)
+    _scene_manifest(cfg, "kanagawa_land", "hls2-l30", "landsat-c2-l2")
+    _, attribution, license_text = _package_texts(patch_cli, tmp_path, use_cfg, fake, cfg,
+                                                  argv=["--plan-region", "kanagawa_land"])
+    assert "U.S. Geological Survey" in attribution and "Landsat Collection 2" in license_text
+
+
+def test_hls_package_reads_the_manifest_of_the_configured_region(patch_cli, tmp_path, use_cfg, fake) -> None:
+    cfg = _cfg(tmp_path, "hls", hls=HLSConfig(fallback_collections=("landsat-c2-l2",), plan_region="kanagawa_land"))
+    _scene_manifest(cfg, "kanagawa_land", "hls2-l30")
+    _, attribution, _ = _package_texts(patch_cli, tmp_path, use_cfg, fake, cfg)
+    assert "U.S. Geological Survey" not in attribution
 
 
 @pytest.mark.parametrize("tile_source", ["hls", "sentinel2", "gsi_orthophotos", "copernicus", "modis", "viirs"])

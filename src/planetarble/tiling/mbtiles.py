@@ -349,13 +349,36 @@ def ingest_xyz_dir(
     return written
 
 
+def _sniff_tile_format(data: bytes) -> Optional[str]:
+    """``jpeg``, ``png`` or ``webp`` from a tile's magic bytes, else None."""
+    if data[:3] == b"\xff\xd8\xff":
+        return "jpeg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
 def merge_mbtiles(
     base_path: Path,
     overlay_path: Path,
     *,
     destination: Optional[Path] = None,
+    quality: int = 90,
+    chunk_size: int = 1000,
 ) -> Path:
-    """Copy base MBTiles and overlay tiles from another MBTiles archive."""
+    """Copy base MBTiles and lay the tiles of another archive over it.
+
+    An opaque overlay tile in the base's format replaces the base tile as is.
+    Any other overlay tile (another format, or with transparent nodata) is
+    alpha-composited over the base tile at the same address and re-encoded in
+    the base's format, so the archive keeps one tile format and the base shows
+    through the overlay's nodata. Base tiles the overlay does not cover are
+    left byte for byte; unlike :func:`composite_mbtiles`, nothing else is
+    decoded, so a multi-gigabyte base stays cheap. Blobs that are not JPEG,
+    PNG or WebP are copied as is.
+    """
 
     if not base_path.exists():
         raise FileNotFoundError(f"Base MBTiles not found: {base_path}")
@@ -368,22 +391,27 @@ def merge_mbtiles(
     shutil.copy2(base_path, output_path)
 
     with sqlite3.connect(str(output_path)) as conn:
-        conn.execute(f"ATTACH DATABASE '{overlay_path}' AS overlay")
-        conn.execute(
-            """
-            DELETE FROM tiles
-            WHERE (zoom_level, tile_column, tile_row) IN (
-                SELECT zoom_level, tile_column, tile_row FROM overlay.tiles
-            )
-            """
-        )
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO tiles (zoom_level, tile_column, tile_row, tile_data)
-            SELECT zoom_level, tile_column, tile_row, tile_data
-            FROM overlay.tiles
-            """
-        )
+        first = conn.execute("SELECT tile_data FROM tiles LIMIT 1").fetchone()
+        base_format = _sniff_tile_format(first[0]) if first else None
+        overlay_conn = sqlite3.connect(f"file:{overlay_path}?mode=ro", uri=True)
+        try:
+            rows = overlay_conn.execute("SELECT zoom_level, tile_column, tile_row, tile_data FROM tiles")
+            while True:
+                chunk = rows.fetchmany(chunk_size)
+                if not chunk:
+                    break
+                merged = [
+                    (z, x, y, _merge_tile(conn, z, x, y, data, base_format, quality)) for z, x, y, data in chunk
+                ]
+                conn.executemany(
+                    "DELETE FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?",
+                    [(z, x, y) for z, x, y, _ in merged],
+                )
+                conn.executemany(
+                    "INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?, ?, ?, ?)", merged
+                )
+        finally:
+            overlay_conn.close()
         min_zoom = conn.execute("SELECT MIN(zoom_level) FROM tiles").fetchone()[0]
         max_zoom = conn.execute("SELECT MAX(zoom_level) FROM tiles").fetchone()[0]
         meta_exists = conn.execute(
@@ -403,8 +431,33 @@ def merge_mbtiles(
                         (key, str(value)),
                     )
         conn.commit()
-        conn.execute("DETACH DATABASE overlay")
     return output_path
+
+
+def _merge_tile(
+    conn: sqlite3.Connection, z: int, x: int, y: int, data: bytes, base_format: Optional[str], quality: int
+) -> bytes:
+    """The overlay tile ``data`` as it should land on the base at z/x/y."""
+    overlay_format = _sniff_tile_format(data)
+    if base_format is None or overlay_format is None:
+        return data
+    from PIL import Image  # local import; Pillow only needed for compositing
+
+    overlay = Image.open(io.BytesIO(data)).convert("RGBA")
+    if overlay_format == base_format and overlay.getchannel("A").getextrema()[0] == 255:
+        return data
+    row = conn.execute(
+        "SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?", (z, x, y)
+    ).fetchone()
+    if row is not None:
+        under = Image.open(io.BytesIO(row[0])).convert("RGBA")
+        if overlay.size != under.size:
+            overlay = overlay.resize(under.size, Image.Resampling.LANCZOS)
+        overlay = Image.alpha_composite(under, overlay)
+    buf = io.BytesIO()
+    pil_format = _PIL_SAVE_FORMAT[base_format]
+    (overlay.convert("RGB") if pil_format == "JPEG" else overlay).save(buf, format=pil_format, quality=quality)
+    return buf.getvalue()
 
 
 def union_mbtiles(

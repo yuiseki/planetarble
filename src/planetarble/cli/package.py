@@ -84,9 +84,18 @@ def _handle_package(args: argparse.Namespace) -> int:
 
     mbtiles_meta = _read_mbtiles_metadata(mbtiles_path)
     bounds = tuple(mbtiles_meta.get("bounds") or (-180.0, -85.0511, 180.0, 85.0511))
-    center = tuple(mbtiles_meta.get("center") or (0.0, 0.0, 2))
     minzoom = int(mbtiles_meta.get("minzoom") or 0)
     maxzoom = int(mbtiles_meta.get("maxzoom") or cfg.processing.max_zoom)
+    if mbtiles_meta.get("center"):
+        center = tuple(mbtiles_meta["center"])
+    else:
+        # A regional build carries bounds but no center; open on its middle,
+        # at a zoom that has tiles (z2 for a global build).
+        center = (
+            (bounds[0] + bounds[2]) / 2.0,
+            (bounds[1] + bounds[3]) / 2.0,
+            max(minzoom, min(maxzoom, 2)),
+        )
     tile_format = str(mbtiles_meta.get("format") or cfg.processing.tile_format)
 
     # Only the BMNG pipeline composites GEBCO bathymetry and Natural Earth

@@ -538,6 +538,40 @@ def test_bmng_package_credits_gebco_and_natural_earth(patch_cli, tmp_path, use_c
     assert "- Natural Earth 1:10m land/ocean/coastline layers." in license_text
 
 
+def _package_meta(patch_cli, tmp_path, use_cfg, fake, mbtiles_meta):
+    use_cfg(_cfg(tmp_path, "hls"))
+    _touch(tmp_path / "output" / "tiling" / "planet_2024_10z.mbtiles")
+    pkg = fake("PackagingManager").return_value
+    patch_cli("_is_valid_pmtiles", lambda path: False)
+    patch_cli("_read_mbtiles_metadata", lambda path: mbtiles_meta)
+    assert cli.main(["package"]) == 0
+    return pkg.generate_tilejson.call_args.args[1]
+
+
+def test_package_centres_a_regional_build_inside_its_bounds_and_zooms(patch_cli, tmp_path, use_cfg, fake) -> None:
+    # e.g. planet_hls_tokyo_land_11z.mbtiles carries bounds and z11 but no center
+    meta = _package_meta(patch_cli, tmp_path, use_cfg, fake,
+                         {"bounds": [138.9, 24.2, 154.0, 35.9], "minzoom": 11, "maxzoom": 11})
+    lon, lat, zoom = meta.center
+    assert (lon, lat) == pytest.approx((146.45, 30.05))
+    assert zoom == 11
+
+
+def test_package_keeps_the_global_default_view(patch_cli, tmp_path, use_cfg, fake) -> None:
+    assert _package_meta(patch_cli, tmp_path, use_cfg, fake, {}).center == (0.0, 0.0, 2)
+
+
+def test_package_caps_the_default_zoom_at_maxzoom(patch_cli, tmp_path, use_cfg, fake) -> None:
+    meta = _package_meta(patch_cli, tmp_path, use_cfg, fake, {"minzoom": 0, "maxzoom": 1})
+    assert meta.center[2] == 1
+
+
+def test_package_keeps_the_center_the_mbtiles_declares(patch_cli, tmp_path, use_cfg, fake) -> None:
+    meta = _package_meta(patch_cli, tmp_path, use_cfg, fake,
+                         {"bounds": [138.9, 24.2, 154.0, 35.9], "center": [139.7, 35.6, 12], "maxzoom": 14})
+    assert meta.center == (139.7, 35.6, 12)
+
+
 def test_package_skips_when_outputs_valid(patch_cli, tmp_path, use_cfg, fake, monkeypatch) -> None:
     cfg = _cfg(tmp_path, "bmng")
     use_cfg(cfg)

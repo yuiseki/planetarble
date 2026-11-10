@@ -44,11 +44,7 @@ def _handle_tile(args: argparse.Namespace) -> int:
     if not processing_dir.exists():
         raise SystemExit(f"Processing directory not found: {processing_dir}")
 
-    source_candidates = sorted(processing_dir.glob("*_normalized_cog.tif"))
-    if not source_candidates:
-        raise SystemExit("No normalized COG raster found; run the process stage first")
-    source_raster = source_candidates[0]
-
+    source_raster: Path
     tile_source = (cfg.processing.tile_source or cfg.modis.tile_source or "bmng").lower()
 
     if tile_source == "modis":
@@ -99,7 +95,14 @@ def _handle_tile(args: argparse.Namespace) -> int:
         source_raster = (cfg.output_dir / "processing" / f"hls_mosaic_{region}_cog.tif").resolve()
         if not source_raster.exists():
             raise SystemExit(f"HLS mosaic COG not found: {source_raster}")
-    elif tile_source != "bmng":
+    elif tile_source == "bmng":
+        # only the BMNG composite is tiled from the normalized raster; other
+        # sources must not depend on one being left over from an earlier run
+        source_candidates = sorted(processing_dir.glob("*_normalized_cog.tif"))
+        if not source_candidates:
+            raise SystemExit("No normalized COG raster found; run the process stage first")
+        source_raster = source_candidates[0]
+    else:
         raise SystemExit(f"Unsupported tile_source value: {cfg.processing.tile_source}")
 
     mbtiles_destination = None

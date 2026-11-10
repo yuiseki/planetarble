@@ -351,7 +351,7 @@ def test_process_legacy_bmng_missing_inputs(tmp_path, use_cfg, fake, missing, me
 def test_tile_hls_requires_region(tmp_path, use_cfg, fake) -> None:
     cfg = _cfg(tmp_path, "hls")
     use_cfg(cfg)
-    _touch(cfg.output_dir / "processing" / "x_normalized_cog.tif")
+    (cfg.output_dir / "processing").mkdir(parents=True)
     fake("TilingManager")
     with pytest.raises(SystemExit, match="requires --plan-region"):
         cli.main(["tile"])
@@ -360,7 +360,6 @@ def test_tile_hls_requires_region(tmp_path, use_cfg, fake) -> None:
 def test_tile_hls_applies_overrides_and_tiles_region_mosaic(patch_cli, tmp_path, use_cfg, fake, monkeypatch) -> None:
     cfg = _cfg(tmp_path, "hls")
     use_cfg(cfg)
-    _touch(cfg.output_dir / "processing" / "x_normalized_cog.tif")
     mosaic = _touch(cfg.output_dir / "processing" / "hls_mosaic_tokyo_cog.tif").resolve()
     cls = fake("TilingManager")
     patch_cli("_is_valid_mbtiles", lambda path: False)
@@ -380,7 +379,6 @@ def test_tile_hls_applies_overrides_and_tiles_region_mosaic(patch_cli, tmp_path,
 def _tile_tokyo(patch_cli, tmp_path, use_cfg, fake, regions, *flags):
     cfg = _cfg(tmp_path, "hls", hls=regions)
     use_cfg(cfg)
-    _touch(cfg.output_dir / "processing" / "x_normalized_cog.tif")
     _touch(cfg.output_dir / "processing" / "hls_mosaic_tokyo_land_cog.tif")
     cls = fake("TilingManager")
     patch_cli("_is_valid_mbtiles", lambda path: False)
@@ -450,6 +448,29 @@ def test_tile_source_errors(tmp_path, use_cfg, fake, tile_source, message) -> No
     _touch(cfg.output_dir / "processing" / "a_normalized_cog.tif")
     fake("TilingManager")
     with pytest.raises(SystemExit, match=message):
+        cli.main(["tile"])
+
+
+def test_tile_hls_needs_no_bmng_raster(patch_cli, tmp_path, use_cfg, fake) -> None:
+    # an HLS-only output dir (the 2026-11 Tokyo rebuild) has no *_normalized_cog.tif
+    cfg = _cfg(tmp_path, "hls")
+    use_cfg(cfg)
+    mosaic = _touch(cfg.output_dir / "processing" / "hls_mosaic_tokyo_cog.tif").resolve()
+    tiler = fake("TilingManager").return_value
+    patch_cli("_is_valid_mbtiles", lambda path: False)
+
+    assert cli.main(["tile", "--plan-region", "tokyo", "--dry-run"]) == 0
+    assert tiler.method_calls == [
+        call.create_mbtiles(mosaic, destination=cfg.output_dir / "tiling" / "planet_hls_tokyo_10z.mbtiles")
+    ]
+
+
+def test_tile_bmng_without_normalized_cog_is_an_error(tmp_path, use_cfg, fake) -> None:
+    cfg = _cfg(tmp_path, "bmng")
+    use_cfg(cfg)
+    (cfg.output_dir / "processing").mkdir(parents=True)
+    fake("TilingManager")
+    with pytest.raises(SystemExit, match="No normalized COG raster found"):
         cli.main(["tile"])
 
 

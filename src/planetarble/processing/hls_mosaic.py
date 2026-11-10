@@ -270,18 +270,38 @@ def _read_source_list(list_path: Path) -> List[str]:
     return [line for line in list_path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+# Peak bytes per scene-pixel while a block is medianed: the uint16 reads and
+# their np.stack copy (2 + 2), the float32 working copy (4), the nodata mask
+# (1), and nanmedian's own float32 copy and NaN mask (4 + 1), rounded up.
+MEDIAN_BYTES_PER_SAMPLE = 16
+MEDIAN_MEMORY_BUDGET = 1 << 30  # 1 GiB per block
+MEDIAN_MAX_BLOCK_ROWS = 512
+
+
+def _median_block_rows(scenes: int, width: int, *, memory_budget: int = MEDIAN_MEMORY_BUDGET) -> int:
+    """Rows per median block so the stacked block stays inside ``memory_budget``.
+
+    The stack grows with the scene count and the grid width, and a region can
+    be wide and deep in time at once: tokyo_land's 148 scenes over a 13,660 px
+    grid need about 32 MB per row.
+    """
+    per_row = max(1, scenes) * max(1, width) * MEDIAN_BYTES_PER_SAMPLE
+    return max(1, min(MEDIAN_MAX_BLOCK_ROWS, memory_budget // per_row))
+
+
 def _build_hls_median_rgb(
     band_lists: Dict[str, Path],
     temp_dir: Path,
     *,
     nodata: int = 0,
-    block_rows: int = 512,
+    memory_budget: int = MEDIAN_MEMORY_BUDGET,
 ) -> Path:
     """Composite per-scene band rasters into one RGB GeoTIFF by temporal median.
 
     For each band the scenes are warped onto a single reference grid (each warp
     is independent, so scenes from different UTM zones co-register fine) and
-    streamed through ``median_composite`` in row blocks to bound memory. The
+    streamed through ``median_composite`` in row blocks sized by
+    ``_median_block_rows`` to keep each block inside ``memory_budget``. The
     median rejects residual cloud/haze/shadow that Fmask missed and fills gaps
     where at least one scene saw the ground. Output band order is R, G, B to
     match the legacy RGB VRT.
@@ -327,6 +347,7 @@ def _build_hls_median_rgb(
     )
     for band_index, label in enumerate(order, start=1):
         aligned = [gdal.Warp("", src, options=warp_opts) for src in sources[label]]
+        block_rows = _median_block_rows(len(aligned), xs, memory_budget=memory_budget)
         out_band = out.GetRasterBand(band_index)
         out_band.SetNoDataValue(nodata)
         for y in range(0, ys, block_rows):
@@ -361,8 +382,8 @@ def _translate_hls_rgb(
             "gdalwarp",
             "-cutline",
             str(cutline),
-            "-cutline_srs",
-            "EPSG:4326",
+            # the GeoJSON cutline is EPSG:4326 by definition; -cutline_srs
+            # is GDAL 3.9+ and Ubuntu 24.04 ships 3.8
             "-t_srs",
             "EPSG:4326",
             "-crop_to_cutline",

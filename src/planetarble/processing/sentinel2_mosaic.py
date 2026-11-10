@@ -253,8 +253,8 @@ def _translate_sentinel2_rgb(
             "gdalwarp",
             "-cutline",
             str(cutline),
-            "-cutline_srs",
-            "EPSG:4326",
+            # the GeoJSON cutline is EPSG:4326 by definition; -cutline_srs
+            # is GDAL 3.9+ and Ubuntu 24.04 ships 3.8
             "-t_srs",
             "EPSG:4326",
             "-crop_to_cutline",

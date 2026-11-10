@@ -8,6 +8,7 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
+from urllib.error import HTTPError
 from urllib.request import urlopen
 
 from planetarble.acquisition.mpc import append_sas_token, fetch_sas_token
@@ -42,6 +43,8 @@ def _cache_hls_assets(
     cache_hits = 0
     downloads = 0
     redownloads = 0
+    # collection -> a token fetched during this run, replacing the manifest's
+    tokens: Dict[str, str] = {}
     updated: List[Dict[str, object]] = []
     for scene in scenes:
         collection = scene.get("collection_id")
@@ -55,8 +58,10 @@ def _cache_hls_assets(
         for band, href in bands.items():
             if not isinstance(href, str) or not href:
                 continue
-            local_path, status = _cache_hls_asset(
+            local_path, status = _cache_signed_hls_asset(
                 href,
+                collection=collection,
+                tokens=tokens,
                 cache_dir=cache_dir / collection / item_id,
                 timeout=timeout,
             )
@@ -89,8 +94,10 @@ def _cache_hls_assets(
         qa_href = scene.get("qa_asset")
         if isinstance(qa_href, str) and qa_href:
             try:
-                qa_path, _ = _cache_hls_asset(
+                qa_path, _ = _cache_signed_hls_asset(
                     qa_href,
+                    collection=collection,
+                    tokens=tokens,
                     cache_dir=cache_dir / collection / item_id,
                     timeout=timeout,
                 )
@@ -113,6 +120,35 @@ def _cache_hls_assets(
             },
         )
     return updated
+
+
+def _cache_signed_hls_asset(
+    href: str,
+    *,
+    collection: str,
+    tokens: Dict[str, str],
+    cache_dir: Path,
+    timeout: int,
+) -> tuple[Path, str]:
+    """Cache one HLS asset, renewing the SAS token once if it was refused.
+
+    The manifest's hrefs carry the token issued when it was built, which MPC
+    may hand out close to its expiry; caching a region takes hours, longer
+    than one token lasts. On a 403 a fresh token is fetched for the
+    collection and used for this asset and every later one in the run, so a
+    long run renews as often as it needs. A 403 with the fresh token is raised.
+    """
+    token = tokens.get(collection)
+    url = append_sas_token(_strip_query(href), token) if token else href
+    try:
+        return _cache_hls_asset(url, cache_dir=cache_dir, timeout=timeout)
+    except HTTPError as exc:
+        if exc.code != 403:
+            raise
+    tokens[collection] = fetch_sas_token(collection, timeout=timeout)
+    LOGGER.info("hls sas token refused; renewed", extra={"collection": collection})
+    url = append_sas_token(_strip_query(href), tokens[collection])
+    return _cache_hls_asset(url, cache_dir=cache_dir, timeout=timeout)
 
 
 def _cache_sentinel2_assets(

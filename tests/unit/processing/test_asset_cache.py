@@ -262,3 +262,90 @@ def test_aria2_command_resumes_and_keeps_the_control_file(tmp_path: Path, monkey
     assert "--continue=true" in cmd and "--remove-control-file=false" in cmd and "--timeout=30" in cmd
     assert cmd[cmd.index("--dir") + 1] == str(tmp_path / "d")
     assert cmd[-1] == "https://s/B04.tif?sig"
+
+
+# --- HLS scenes and expired SAS tokens ----------------------------------------
+# The manifest's hrefs carry the token issued when it was built. MPC hands out
+# a token that may already be near its expiry, and caching a region takes
+# hours: on 2026-11-10 the Tokyo run got 403 on asset 85 of 447.
+
+
+def _forbidden_unless_signed(monkeypatch, valid_sig: str) -> List[str]:
+    requested: List[str] = []
+
+    def fake_urlopen(url, timeout):
+        requested.append(url)
+        if valid_sig not in url:
+            raise HTTPError(url, 403, "Server failed to authenticate the request", {}, None)  # type: ignore[arg-type]
+        return FakeResponse(VALID)
+
+    monkeypatch.setattr(assets, "urlopen", fake_urlopen)
+    return requested
+
+
+def _hls_scene(item_id: str, *bands: str) -> Dict[str, object]:
+    return {
+        "collection_id": "hls2-s30",
+        "item_id": item_id,
+        "bands": {band: f"https://h/{item_id}/{band}.tif?se=past&sig=stale" for band in bands},
+    }
+
+
+def test_an_expired_hls_token_is_renewed_once_for_the_rest_of_the_run(
+    tmp_path: Path, remote, tokens, monkeypatch
+) -> None:
+    requested = _forbidden_unless_signed(monkeypatch, "sig=1")
+    scenes = [_hls_scene("A", "B04", "B03"), _hls_scene("B", "B04")]
+
+    updated = assets._cache_hls_assets(scenes, cache_dir=tmp_path, timeout=5)
+
+    assert tokens == ["hls2-s30"]
+    assert requested == [
+        "https://h/A/B04.tif?se=past&sig=stale",
+        "https://h/A/B04.tif?sig=1",
+        "https://h/A/B03.tif?sig=1",
+        "https://h/B/B04.tif?sig=1",
+    ]
+    assert [sorted(s["bands"]) for s in updated] == [["B03", "B04"], ["B04"]]
+
+
+def test_hls_fmask_is_renewed_like_the_bands(tmp_path: Path, remote, tokens, monkeypatch) -> None:
+    _forbidden_unless_signed(monkeypatch, "sig=1")
+    scene = _hls_scene("A", "B04")
+    scene["qa_asset"] = "https://h/A/Fmask.tif?sig=stale"
+
+    (updated,) = assets._cache_hls_assets([scene], cache_dir=tmp_path, timeout=5)
+
+    assert updated["qa_local"] == str(tmp_path / "hls2-s30" / "A" / "Fmask.tif")
+
+
+def test_a_403_with_a_fresh_hls_token_still_fails(tmp_path: Path, remote, tokens, monkeypatch) -> None:
+    _forbidden_unless_signed(monkeypatch, "never")
+    with pytest.raises(HTTPError, match="authenticate"):
+        assets._cache_hls_assets([_hls_scene("A", "B04")], cache_dir=tmp_path, timeout=5)
+    assert tokens == ["hls2-s30"]
+
+
+def test_other_hls_http_errors_do_not_renew_the_token(tmp_path: Path, remote, tokens) -> None:
+    with pytest.raises(HTTPError, match="not found"):
+        assets._cache_hls_assets([_hls_scene("A", "B04")], cache_dir=tmp_path, timeout=5)
+    assert tokens == []
+
+
+def test_a_long_hls_run_renews_each_time_the_token_expires(tmp_path: Path, remote, tokens, monkeypatch) -> None:
+    accepted = {"sig": "sig=1"}
+
+    def fake_urlopen(url, timeout):
+        if accepted["sig"] not in url:
+            raise HTTPError(url, 403, "Server failed to authenticate the request", {}, None)  # type: ignore[arg-type]
+        if "/B/" in url:
+            accepted["sig"] = "sig=2"  # the renewed token expires after scene B
+        return FakeResponse(VALID)
+
+    monkeypatch.setattr(assets, "urlopen", fake_urlopen)
+    scenes = [_hls_scene("A", "B04"), _hls_scene("B", "B04"), _hls_scene("C", "B04")]
+
+    updated = assets._cache_hls_assets(scenes, cache_dir=tmp_path, timeout=5)
+
+    assert tokens == ["hls2-s30", "hls2-s30"]
+    assert len(updated) == 3

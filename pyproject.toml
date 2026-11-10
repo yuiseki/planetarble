@@ -30,10 +30,10 @@ dependencies = [
 [dependency-groups]
 dev = [
   "pytest>=8.0",
-  "ruff==0.17.2",
-  "mypy==2.4.0",
-  "types-requests==2.33.0.20261006",
-  "types-PyYAML==6.0.12.20260906",
+  "ruff==0.17.4",
+  "mypy==2.4.1",
+  "types-requests==2.33.0.20261030",
+  "types-PyYAML==6.0.12.20261103",
 ]
 
 [tool.pytest.ini_options]
